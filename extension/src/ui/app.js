@@ -4560,6 +4560,7 @@
       mismatch: 'X Pro’s composer didn’t take the text. Nothing was posted.',
       disabled: 'X Pro didn’t enable its Post button. Nothing was posted.',
       unsent: 'X Pro didn’t confirm the post. Check X Pro before trying again.',
+      xerror: 'X didn’t accept the post. Nothing was posted; your text is still here.',
       upload: 'X Pro didn’t finish uploading the media. Nothing was posted.',
       nofileinput: 'X Pro’s composer has no place for media here. Nothing was posted.',
       noreply: 'X Pro’s reply setting didn’t open. Nothing was posted.',
@@ -4592,7 +4593,8 @@
         xpro.closePanel();
       }
       if (native) native.log('compose failed: ' + c.kind + ' ' + (r.reason || 'unknown'));
-      const failMsg = COMPOSE_FAIL[r.reason] || 'X Pro didn’t post it. Your text is still here.';
+      // X's own words, when it gave a reason (xerror), or X Pro's message.
+      const failMsg = (COMPOSE_FAIL[r.reason] || 'X Pro didn’t post it. Your text is still here.') + (r.detail ? ' X says: “' + r.detail + '”' : '');
       // Shown in the compose window, not a toast: Report a Problem needs it
       // too, with the step that failed.
       lastProblem = { msg: failMsg + ' [' + c.kind + ': ' + (r.reason || 'unknown') + ']', at: Date.now() };

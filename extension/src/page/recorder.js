@@ -22,6 +22,11 @@
     'Likes',
     'Bookmarks',
     'TweetDetail',
+    // X Pro's answer when the reader posts (CreateTweet, or CreateNoteTweet
+    // for a long post): only the new post's id or X's error is passed on,
+    // never the text (see trim).
+    'CreateTweet',
+    'CreateNoteTweet',
     // A profile X Pro opens as a stack (verified 2026-09-28): the person,
     // then their posts.
     'UserByScreenName',
@@ -44,7 +49,15 @@
   // The deck sync carries more than Sweeter needs (onboarding state, each
   // column creator’s full record): pass on only the deck model, with the
   // creator’s handle alone.
-  function trim(op, json) {
+  const POSTING = new Set(['CreateTweet', 'CreateNoteTweet']);
+  function trim(op, json, status) {
+    if (POSTING.has(op)) {
+      const d = (json && json.data) || {};
+      const r = d.create_tweet || d.notetweet_create || d.create_note_tweet || null;
+      const id = r && r.tweet_results && r.tweet_results.result && r.tweet_results.result.rest_id;
+      const err = json && Array.isArray(json.errors) ? json.errors[0] : null;
+      return { status: status || 0, id: id ? String(id) : null, error: err ? { code: err.code || null, message: String(err.message || '').slice(0, 300) } : !id && status !== 200 ? { code: null, message: 'HTTP ' + status } : null };
+    }
     if (op !== 'ViewerAccountSync') return json;
     try {
       const v = json.data.viewer_v2;
@@ -97,8 +110,8 @@
   // come back in the other order, and the later request is the one X keeps.
   let sent = 0;
 
-  function emit(op, vars, body, seq) {
-    body = trim(op, body);
+  function emit(op, vars, body, seq, status) {
+    body = trim(op, body, status);
     if (!body) return;
     try {
       window.postMessage({ __sweeter: 1, op, vars: vars || {}, body, seq }, location.origin);
@@ -144,12 +157,16 @@
         const url = this.__sweeterUrl;
         const seq = ++sent;
         this.addEventListener('load', function () {
+          // A post's answer counts even when X refuses it (403 with errors).
+          const posting = POSTING.has(op);
+          if (this.status !== 200 && !posting) return;
+          let json = null;
           try {
-            if (this.status !== 200) return;
-            let json = null;
             if (this.responseType === '' || this.responseType === 'text') json = JSON.parse(this.responseText);
             else if (this.responseType === 'json') json = this.response;
-            if (json) emit(op, varsOf(url, body), json, seq);
+          } catch (e) {}
+          try {
+            if (json || posting) emit(op, posting ? {} : varsOf(url, body), json || {}, seq, this.status);
           } catch (e) {}
         });
       }
@@ -166,10 +183,11 @@
       if (op && OPS.has(op)) {
         const seq = ++sent;
         p.then((r) => {
-          if (r.status !== 200) return;
+          const posting = POSTING.has(op);
+          if (r.status !== 200 && !posting) return;
           r.clone()
             .json()
-            .then((json) => emit(op, varsOf(url, init && init.body), json, seq), () => {});
+            .then((json) => emit(op, posting ? {} : varsOf(url, init && init.body), json, seq, r.status), () => posting && emit(op, {}, {}, seq, r.status));
         }, () => {});
       }
       return p;

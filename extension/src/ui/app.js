@@ -1828,9 +1828,15 @@
           if (s.kind === 'notifications') notes += n;
           else posts += n;
         }
-        if (native) native.counts({ notifications: notes, posts, columns: perCol });
+        // Only a change goes to the Dock and the menu bar.
+        const sig = JSON.stringify([notes, posts, perCol]);
+        if (native && sig !== lastCounts) {
+          lastCounts = sig;
+          native.counts({ notifications: notes, posts, columns: perCol });
+        }
       }, 800);
     }
+    let lastCounts = '';
 
     // Native app: a system notification for each new notification-column
     // item (at most three per refresh; nothing on the first load).
@@ -2123,6 +2129,12 @@
         if (el === nocolsEl) continue;
         el.style.setProperty('--d', i++ * 70 + 'ms');
         el.classList.add('arrive');
+        // The arrival plays once: a column moved later must not replay it.
+        el.addEventListener('animationend', function done(e) {
+          if (e.target !== el || e.animationName !== 'sweeter-col') return;
+          el.classList.remove('arrive');
+          el.removeEventListener('animationend', done);
+        });
       }
       bootEl.classList.add('done');
       setTimeout(() => bootEl.remove(), 600);
@@ -4252,6 +4264,7 @@
 
     function toggle(show) {
       settings.visible = show == null ? !settings.visible : !!show;
+      if (settings.visible) setTimeout(() => refreshStamps(true), 0);
       if (!settings.visible) {
         closePalette();
         closePicker(true);
@@ -6533,26 +6546,50 @@
 
     // ---------- timers ----------
 
-    setInterval(() => {
+    // Timestamps: only where someone can see them, and only labels that
+    // changed (each write re-lays-out its post). Absolute dates change at
+    // midnight only.
+    let stampDay = '';
+    function refreshStamps(force) {
       const now = Date.now();
-      const stamps = Array.from(shadow.querySelectorAll('.tm[data-ts]'));
-      for (const rec of popouts.values()) if (!rec.w.closed) stamps.push(...rec.root.querySelectorAll('.tm[data-ts]'));
-      for (const el of stamps) {
-        const ms = Number(el.dataset.ts);
-        if (ms) el.textContent = R.timeLabel(ms, { settings, now });
+      const today = new Date(now).toDateString();
+      if (settings.dateFormat === 'absolute' && !force && today === stampDay) return;
+      stampDay = today;
+      const roots = [];
+      if (settings.visible && !document.hidden) roots.push(shadow);
+      for (const rec of popouts.values()) if (!rec.w.closed && !rec.w.document.hidden) roots.push(rec.root);
+      for (const root of roots) {
+        for (const el of root.querySelectorAll('.tm[data-ts]')) {
+          const ms = Number(el.dataset.ts);
+          if (!ms) continue;
+          const label = R.timeLabel(ms, { settings, now });
+          if (el.textContent !== label) el.textContent = label;
+        }
       }
-    }, 30000);
+    }
+    setInterval(() => refreshStamps(false), 30000);
     setInterval(() => {
       if (settings.visible && remap(false)) for (const c of cols.values()) renderColumn(c, false);
       paintMe();
       checkNewAlerts();
     }, 3000);
     setInterval(paintStale, 5000);
-    const bootTimer = setInterval(() => {
+    let bootTimer = setInterval(bootTick, 500);
+    function bootTick() {
       if (!booting) return clearInterval(bootTimer);
       remap(false);
       checkBoot();
-    }, 500);
+      // X Pro shows no columns (an error page, signed out, rate limited):
+      // stop the animation, say so, and look less often. A slow X Pro still
+      // finishes loading through checkBoot.
+      if (booting && Date.now() - bootStart > 20000 && !mapping.length && !(store.decks && store.decks.ready()) && !bootEl.classList.contains('stuck')) {
+        bootEl.classList.add('stuck');
+        const st = bootEl.querySelector('.boot-s');
+        if (st) st.innerHTML = 'X Pro hasn’t shown any columns yet. <button class="lnk" type="button" data-cmd="xpro">Show X Pro</button> <button class="lnk" type="button" data-cmd="reload">Reload</button>';
+        clearInterval(bootTimer);
+        bootTimer = setInterval(bootTick, 2000);
+      }
+    }
 
     applySettings();
     remap(true);

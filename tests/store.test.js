@@ -158,3 +158,19 @@ test('a post answer from the recorder (CreateTweet) passes through the store har
   s.ingest({ op: 'CreateNoteTweet', vars: {}, body: { status: 403, id: null, error: { code: 226, message: 'automated' } } });
   ok(true);
 });
+
+test('a quiet poll (cursors only) updates the clock but emits nothing; new posts emit', () => {
+  const F = require('./fixtures');
+  const s = globalThis.Sweeter.createStore();
+  const seen = [];
+  s.subscribe((k) => seen.push(k));
+  s.ingest({ op: 'HomeLatestTimeline', vars: {}, body: F.home([F.tweetEntry(F.tweet({ text: 'one' }), '5')]) });
+  eq(seen.length, 1, 'first load emits');
+  const key = seen[0];
+  const before = s.get(key).updated;
+  s.ingest({ op: 'HomeLatestTimeline', vars: {}, body: F.home([F.cursor('Top', 'c1', '9')]) });
+  eq(seen.length, 1, 'a poll with nothing new does not emit');
+  ok(s.get(key).updated >= before, 'the stale clock still moves');
+  s.ingest({ op: 'HomeLatestTimeline', vars: {}, body: F.home([F.tweetEntry(F.tweet({ text: 'two' }), '6')]) });
+  eq(seen.length, 2, 'a new post emits');
+});

@@ -105,7 +105,16 @@
       const v = body && body.data && body.data.viewer_v2;
       if (!v || !Array.isArray(v.decks)) return false;
       const cfg = v.accountsync_client_config || {};
-      state = { active: cfg.active_deck_id ? String(cfg.active_deck_id) : null, decks: v.decks.map(deck).filter(Boolean), synced: Date.now(), viewer: state.viewer };
+      const active = cfg.active_deck_id ? String(cfg.active_deck_id) : null;
+      const decks = v.decks.map(deck).filter(Boolean);
+      // X Pro re-syncs every few minutes; an identical sync changes nothing.
+      // (Compared with the current state, so a sync that undoes a local
+      // write still counts.)
+      if (state.synced && JSON.stringify({ active, decks }) === JSON.stringify({ active: state.active, decks: state.decks })) {
+        state.synced = Date.now();
+        return false;
+      }
+      state = { active, decks, synced: Date.now(), viewer: state.viewer };
       return true;
     }
 

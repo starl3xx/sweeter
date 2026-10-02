@@ -162,14 +162,21 @@
       }
       const src = N.sourceFor(msg.op, msg.vars);
       if (!src) return null;
+      const isNew = !sources.has(src.key);
       const s = ensure(src);
       const firstLoad = s.blocks.size === 0;
+      const readBefore = s.readSort;
+      // X Pro polls every column every ~30 s, and most answers carry
+      // nothing new: only a change redraws (and wakes) anything.
+      let changed = isNew;
       for (const ins of N.timeline(msg.body)) {
         switch (ins.type) {
           case 'clear':
+            if (s.blocks.size) changed = true;
             s.blocks.clear();
             break;
           case 'add':
+            if (ins.blocks.length) changed = true;
             for (const b of ins.blocks) s.blocks.set(b.key, b);
             if (ins.cursors.top && (!s.cursors.top || firstLoad)) s.cursors.top = ins.cursors.top;
             if (ins.cursors.bottom) s.cursors.bottom = ins.cursors.bottom;
@@ -178,6 +185,7 @@
             // A profile’s pinned post: shown first, but outside time order.
             ins.block.pinned = true;
             s.blocks.set(ins.block.key, ins.block);
+            changed = true;
             break;
           case 'cursor':
             s.cursors[ins.cursorType] = ins.value;
@@ -199,8 +207,10 @@
         if (s.readAt) s.readSort = sortAt(s, s.readAt);
         else s.readSort = s.kind === 'notifications' && s.xUnreadAbove ? s.xUnreadAbove : s.sorted[0].sortIndex;
       }
+      if (s.readSort !== readBefore) changed = true;
+      // Always: the stale clock reads it.
       s.updated = Date.now();
-      emit(s.key);
+      if (changed) emit(s.key);
       return s.key;
     }
 

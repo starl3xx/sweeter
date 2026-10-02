@@ -37,7 +37,7 @@
   }
 
   function time(ms, url, ctx) {
-    return '<a class="tm" href="' + h(safeUrl(url)) + '" target="_blank" rel="noopener noreferrer" data-ts="' + (isFinite(ms) ? ms : '') + '" title="' + h(isFinite(ms) ? new Date(ms).toLocaleString() : '') + '">' + h(timeLabel(ms, ctx)) + '</a>';
+    return '<a class="tm" href="' + h(safeUrl(url)) + '" target="_blank" rel="noopener noreferrer" data-ts="' + (isFinite(ms) ? ms : '') + '" title="' + h(Sweeter.util.fullTime(ms)) + '">' + h(timeLabel(ms, ctx)) + '</a>';
   }
 
   function duration(ms) {

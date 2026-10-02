@@ -46,14 +46,22 @@
     return Math.floor(h / 24) + 'd';
   }
 
+  // Formatters are made once: building them per label cost more than the
+  // labels (thousands every 30 s in absolute mode).
+  const fmt = {};
+  const formatter = (k, o) => fmt[k] || (fmt[k] = new Intl.DateTimeFormat([], o));
   function absoluteTime(ms, now) {
     if (!isFinite(ms)) return '';
     const d = new Date(ms);
     const n = new Date(now || Date.now());
-    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const time = formatter('t', { hour: 'numeric', minute: '2-digit' }).format(d);
     if (d.toDateString() === n.toDateString()) return time;
     const sameYear = d.getFullYear() === n.getFullYear();
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: sameYear ? undefined : 'numeric' }) + ', ' + time;
+    return formatter(sameYear ? 'd' : 'dy', { month: 'short', day: 'numeric', year: sameYear ? undefined : 'numeric' }).format(d) + ', ' + time;
+  }
+  // A post's full date and time (a timestamp's tooltip).
+  function fullTime(ms) {
+    return isFinite(ms) ? formatter('full', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).format(new Date(ms)) : '';
   }
 
   function compactCount(n) {
@@ -68,6 +76,6 @@
     return /^https?:\/\//i.test(String(u || '')) ? String(u) : '#';
   }
 
-  Sweeter.util = { escapeHtml, unescapeEntities, compareSort, snowflakeMs, relativeTime, absoluteTime, compactCount, safeUrl };
+  Sweeter.util = { escapeHtml, unescapeEntities, compareSort, snowflakeMs, relativeTime, absoluteTime, compactCount, safeUrl, fullTime };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.util;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

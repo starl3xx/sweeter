@@ -104,8 +104,11 @@ img{display:block}
 .round.post svg{width:22px;height:22px}
 
 /* columns */
-.cols{flex:1 1 auto;display:flex;gap:1px;overflow-x:auto;overflow-y:hidden;min-width:0;scrollbar-width:thin}
-.col{flex:1 0 var(--colw,345px);max-width:520px;display:flex;flex-direction:column;background:var(--bg);min-width:0;position:relative;contain:layout paint}
+/* Sizes come from flex-basis, never from content: with flex:1 1 auto the
+   browser measured the max-content width of every post each time a cell
+   changed (most of Sweeter's idle CPU, measured 2026-10-02). */
+.cols{flex:1 1 0;display:flex;gap:1px;overflow-x:auto;overflow-y:hidden;min-width:0;scrollbar-width:thin}
+.col{flex:1 0 var(--colw,345px);max-width:520px;display:flex;flex-direction:column;background:var(--bg);min-width:0;position:relative;contain:layout paint;contain:layout paint inline-size}
 .col:nth-last-child(1 of .col){max-width:none}
 /* A column the person sized (drag its right edge; Sweeter only). */
 .col.sized{flex:0 0 var(--w);max-width:none}
@@ -152,7 +155,7 @@ img{display:block}
 .ch .find:focus{border-color:var(--accent-solid);box-shadow:0 0 0 2px var(--accent-hl)}
 .ch .fnum{font-size:10.5px;font-weight:500;color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap}
 ::highlight(sweeter-find){background-color:rgba(255,204,0,.5);color:inherit}
-.scroll{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
+.scroll{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
 .scroll::-webkit-scrollbar,.dscroll::-webkit-scrollbar{display:none;width:0;height:0}
 /* Overlay scroll bar: drawn over the column so the posts keep the full
    width. It appears while scrolling or hovering, and the thumb drags. */
@@ -372,7 +375,7 @@ img{display:block}
 .prof{position:relative;width:min(600px,100%);height:min(720px,100%);display:flex;flex-direction:column;background:var(--bg);color:var(--t2);border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px rgba(0,0,0,.12);overflow:hidden;animation:sweeter-sheet .22s cubic-bezier(.2,.85,.25,1)}
 .pf-close{position:absolute;right:10px;top:10px;z-index:3;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.45);color:#fff;display:grid;place-items:center;padding:0;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .pf-close svg{width:13px;height:13px}
-.pf-scroll{flex:1 1 auto;overflow-y:auto;outline:none;overscroll-behavior:contain}
+.pf-scroll{flex:1 1 0;min-height:0;overflow-y:auto;outline:none;overscroll-behavior:contain}
 .pf-banner{height:150px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent-solid) 55%,#000),var(--accent-solid)) center/cover no-repeat}
 .pf-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:0 16px;margin-top:-44px;position:relative;z-index:1}
 .pf-av{width:88px;height:88px;flex:0 0 auto;border-radius:50%;border:4px solid var(--bg);background:var(--sub);object-fit:cover}
@@ -533,7 +536,7 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .dhead{height:28px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 8px;border-bottom:1px solid var(--div);background:var(--sub);color:var(--t1);font-weight:600;font-size:13px}
 .dback{display:flex;align-items:center;gap:2px;border:0;background:none;color:var(--accent);font-weight:600;font-size:13px;cursor:pointer;padding:4px 6px;border-radius:6px}
 .dtitle{margin:0 auto;padding-right:52px}
-.dscroll{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;position:relative;scrollbar-width:none}
+.dscroll{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;position:relative;scrollbar-width:none}
 .dfoot{padding:14px;text-align:center;color:var(--t3);font-size:.86em}
 .dfoot a{color:var(--accent)}
 .cell.focal{background:var(--bg);border-bottom:1px solid var(--div);padding-top:12px}
@@ -656,7 +659,7 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .app[data-skin="winamp"] .ipsw{--sw:var(--cd)}
 .tab[data-tint]{color:var(--cd)}
 .tab.off{opacity:.38}
-.app.popout .col{flex:1 1 auto;max-width:none;min-width:0}
+.app.popout .col{flex:1 1 0;max-width:none;min-width:0}
 .app.popout .ch{cursor:default}
 .ask-back,.ov-back,.ip-back,.nt-back{position:absolute;inset:0;background:rgba(0,0,0,.28);display:grid;place-items:center;z-index:6;padding:24px}
 .ask-back[hidden],.ov-back[hidden],.ip-back[hidden],.nt-back[hidden]{display:none}
@@ -787,6 +790,7 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .app[data-skin="winamp"] .boot{font-family:ui-monospace,Menlo,monospace}
 /* columns arrive one after another once all have loaded */
 .cols.hold{visibility:hidden}
+.boot.stuck .vu i{animation:none}
 .col.arrive{animation:sweeter-col .55s cubic-bezier(.2,.85,.25,1) both;animation-delay:var(--d,0ms)}
 @keyframes sweeter-col{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 

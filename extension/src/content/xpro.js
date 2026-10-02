@@ -656,7 +656,10 @@
     const answer = () => (lastPostResult && lastPostResult.at >= t0 ? lastPostResult : null);
     const closed = () => !composerOpen() || (norm(editor().innerText) === '' && !postEnabled());
     const done = await waitFor(() => answer() || closed(), 45000);
-    const res = answer();
+    // X's answer decides. The composer emptying is ambiguous (a photo-only
+    // post starts empty), so when it comes first the answer gets a moment
+    // more before the fallback counts it as sent.
+    const res = answer() || (done ? await waitFor(answer, 8000) : null);
     if (res && !res.id) {
       const e = res.error || {};
       return { ok: false, reason: 'xerror', detail: (e.message || 'HTTP ' + res.status) + (e.code ? ' (code ' + e.code + ')' : '') };

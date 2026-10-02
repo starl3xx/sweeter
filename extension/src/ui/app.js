@@ -404,6 +404,7 @@
     const bootEl = shadow.querySelector('.boot');
     const bootStart = Date.now();
     let booting = true;
+    const ntChecked = new Set(); // view ids whose alerts were checked (checkNewAlerts)
     const toastEl = shadow.querySelector('.toast');
     const utoast = shadow.querySelector('.utoast');
     const addBack = shadow.querySelector('.add-back');
@@ -715,6 +716,7 @@
       c.el.dataset.vid = to;
       cols.set(to, c);
       if (focusVid === from) focusVid = to;
+      if (ntChecked.delete(from)) ntChecked.add(to);
       let changed = false;
       for (const n of OWN) {
         if (settings[n] && from in settings[n]) {
@@ -3413,10 +3415,9 @@
       ntBack.hidden = false;
       ntBack.querySelector('[data-cmd="nt-go"]').focus({ preventScroll: true });
     }
-    // Columns that alert, checked once each: after loading, then as they
-    // arrive (a notifications column alerts by default, and its kind is
-    // known only once its posts are).
-    const ntChecked = new Set();
+    // Columns that alert, checked once each (ntChecked, by view id): after
+    // loading, then as they arrive (a notifications column alerts by
+    // default, and its kind is known only once its posts are).
     function checkNewAlerts() {
       if (booting || !native || !native.notifyStatus) return;
       const fresh = alertCols().filter((c) => !ntChecked.has(c.vid));

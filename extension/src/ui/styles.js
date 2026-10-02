@@ -309,7 +309,7 @@ img{display:block}
 .tkc-l,.tok .tk-l{flex:none;align-self:center;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 16%,var(--sub));color:var(--accent);font-size:11px;font-weight:700;font-style:normal;line-height:1}
 .tok .tk-l{width:28px;height:28px;font-size:14px}
 .tkc-l.has-logo,.tok .tk-l.has-logo{background:var(--logo) center/cover no-repeat;color:transparent}
-.tok .tk-h{align-items:center}
+.pop .tok .tk-h{align-items:center}
 .tkc-s{color:var(--t1);font-weight:600}
 .tkc-n{color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tkc-p{color:var(--t1);font-weight:600;font-variant-numeric:tabular-nums}

@@ -17,7 +17,7 @@
     } catch (e) {
       return false;
     }
-    if (u.protocol !== 'https:' || !/(^|\.)dexscreener\.com$/.test(u.hostname)) return false;
+    if (u.protocol !== 'https:' || !/^(cdn|dd)\.dexscreener\.com$/.test(u.hostname)) return false;
     fetch(u.toString(), { credentials: 'omit' })
       .then((r) => (r.ok && /^image\//.test(r.headers.get('content-type') || '') ? r.arrayBuffer().then((b) => ({ b, type: r.headers.get('content-type').split(';')[0] })) : Promise.reject(new Error('HTTP ' + r.status))))
       .then(({ b, type }) => {

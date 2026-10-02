@@ -591,7 +591,8 @@
     function logoUrl(u) {
       try {
         const x = new URL(u);
-        if (x.protocol !== 'https:' || !/(^|\.)dexscreener\.com$/.test(x.hostname)) return '';
+        // DexScreener's two image servers (both in the Safari manifest).
+        if (x.protocol !== 'https:' || !/^(cdn|dd)\.dexscreener\.com$/.test(x.hostname)) return '';
         x.searchParams.set('width', '64');
         x.searchParams.set('height', '64');
         return x.toString();

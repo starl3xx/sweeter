@@ -263,7 +263,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         // images only, small.
         case "dexLogo":
             guard let url = URL(string: body["url"] as? String ?? ""), url.scheme == "https",
-                  let host = url.host, host == "dexscreener.com" || host.hasSuffix(".dexscreener.com") else {
+                  let host = url.host, host == "cdn.dexscreener.com" || host == "dd.dexscreener.com" else {
                 replyHandler(nil, "bad url")
                 return
             }

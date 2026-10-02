@@ -1133,8 +1133,15 @@
     const keys = [[32, ' ']];
     for (let i = 0; i < Math.abs(delta); i++) keys.push(delta > 0 ? [39, 'ArrowRight'] : [37, 'ArrowLeft']);
     keys.push([32, ' ']);
+    const t0 = Date.now();
     window.postMessage({ __sweeterKeys: 1, column: id, keys }, location.origin);
     const moved = await waitFor(() => order() !== before, 1500 + keys.length * 160);
+    // X Pro's order changes at the first arrow, but the rest of the keys and
+    // the drop still follow, 150 ms apart (recorder.js). Return only after
+    // they have all gone out: the caller's lift (X Pro visible, so the
+    // handle keeps focus) must cover the whole drag.
+    const rest = keys.length * 150 + 100 - (Date.now() - t0);
+    if (rest > 0) await wait(rest);
     if (!moved) {
       window.postMessage({ __sweeterKeys: 1, column: id, keys: [[27, 'Escape']] }, location.origin); // cancel a drag X Pro did not finish
       return { ok: false, reason: 'nomove' };

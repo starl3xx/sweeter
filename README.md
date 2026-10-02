@@ -12,6 +12,4 @@ Updated 2026-10-02 by `.github/workflows/stats.yml` on main. The CSV files here 
 | v0.17.1 | Sweeter-0.17.1.zip | 0 |
 | v0.17.0 | Sweeter-0.17.0.zip | 1 |
 
-## Repo traffic, last 14 days
-
-0 views; daily unique visitors peak at 0. History: `views.csv`, `clones.csv`, `referrers.csv`.
+Repo traffic is not recorded yet: it needs the TRAFFIC_TOKEN secret (see `scripts/stats.mjs`).

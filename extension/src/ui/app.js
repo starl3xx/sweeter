@@ -23,6 +23,8 @@
     repostLabel: 'above',
     actions: 'hover',
     round: true,
+    tokenLookup: true, // a click on a contract address shows DexScreener's numbers
+    tickerPrices: true, // ticker cards on screen show DexScreener's price
     dateFormat: 'relative',
     pinToTop: true,
     counts: true,
@@ -225,7 +227,7 @@
   ];
   // What a layout holds: Sweeter’s own arrangement, never X Pro’s decks.
   const LAYOUT_KEYS = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
-  const REBUILD = new Set(['muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
+  const REBUILD = new Set(['tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
   const REPLY_OPTIONS = ['Everyone', 'Accounts you follow', 'Accounts you follow and who they follow', 'Only accounts you mention', 'Verified accounts'];
   const EMOJI = '😂 ❤️ 🔥 👀 🙏 😭 🫡 💯 🚀 ✅ 👍 👏 🤝 🎉 😅 🤔 🙌 😎 🥲 😬 💀 🤯 🫠 ✨ ⚡️ 🧠 📈 📉 💰 🪙 🎯 🛠️ 🤖 🙃 ☕️ 🍿 ⚾️ 🏈 🐐 👋'.split(' ');
   const ACCEPT = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime'];
@@ -525,6 +527,175 @@
       toastEl.hidden = false;
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => (toastEl.hidden = true), 1800);
+    }
+
+    // ---------- contract addresses ----------
+    // A click on an address (text.js links them) opens a card from
+    // DexScreener's public API: fetched only then, cached two minutes.
+    const dexCache = new Map(); // address -> { at, body: { pairs } }
+    const DEX_FRESH = 180000;
+    const dexFresh = (a) => {
+      const hit = dexCache.get(a);
+      return hit && Date.now() - hit.at < DEX_FRESH ? hit.body : null;
+    };
+    // Up to 30 addresses in one request; each address keeps its own pairs.
+    async function dexLookupMany(list) {
+      const want = [...new Set(list)].filter((a) => !dexFresh(a)).slice(0, 30);
+      if (want.length) {
+        let body;
+        if (native && native.dex) body = await native.dex(want.join(','));
+        else if (opts.dex) body = await opts.dex(want.join(','));
+        else throw new Error('no lookup');
+        if (typeof body === 'string') body = JSON.parse(body);
+        const pairs = (body && body.pairs) || [];
+        const at = Date.now();
+        for (const a of want) {
+          const key = (x) => (a.startsWith('0x') ? String(x || '').toLowerCase() === a.toLowerCase() : x === a);
+          dexCache.set(a, { at, body: { pairs: pairs.filter((pr) => pr && ((pr.baseToken && key(pr.baseToken.address)) || (pr.quoteToken && key(pr.quoteToken.address)))) } });
+        }
+      }
+      return list.map((a) => dexFresh(a) || (dexCache.get(a) || {}).body || { pairs: [] });
+    }
+    async function dexLookup(a) {
+      return (await dexLookupMany([a]))[0];
+    }
+    // The most liquid pair where the address is the token itself (else one
+    // where it is the quote side, with no price of its own).
+    function dexPick(body, a, chain) {
+      let pairs = (body && body.pairs) || [];
+      // A ticker card names its chain: the same address can be on several.
+      if (chain && pairs.some((x) => x && x.chainId === chain)) pairs = pairs.filter((x) => x && x.chainId === chain);
+      const same = (x) => !!x && (a.startsWith('0x') ? x.toLowerCase() === a.toLowerCase() : x === a);
+      const base = pairs.filter((p) => p && p.baseToken && same(p.baseToken.address));
+      const pool = base.length ? base : pairs.filter((p) => p && p.quoteToken && same(p.quoteToken.address));
+      pool.sort((x, y) => ((y.liquidity || {}).usd || 0) - ((x.liquidity || {}).usd || 0));
+      return pool[0] ? { pair: pool[0], token: base.length ? pool[0].baseToken : pool[0].quoteToken, priced: base.length > 0 } : null;
+    }
+    const CHAIN_NAMES = { ethereum: 'Ethereum', base: 'Base', solana: 'Solana', arbitrum: 'Arbitrum', optimism: 'Optimism', polygon: 'Polygon', bsc: 'BNB Chain', avalanche: 'Avalanche', blast: 'Blast', linea: 'Linea', zksync: 'zkSync', hyperevm: 'HyperEVM', unichain: 'Unichain', abstract: 'Abstract', sonic: 'Sonic' };
+    const EXPLORERS = { ethereum: 'https://etherscan.io/token/', base: 'https://basescan.org/token/', arbitrum: 'https://arbiscan.io/token/', optimism: 'https://optimistic.etherscan.io/token/', polygon: 'https://polygonscan.com/token/', bsc: 'https://bscscan.com/token/', avalanche: 'https://snowtrace.io/token/', blast: 'https://blastscan.io/token/', linea: 'https://lineascan.build/token/', solana: 'https://solscan.io/token/' };
+    function explorerUrl(a, chain) {
+      if (EXPLORERS[chain]) return EXPLORERS[chain] + a;
+      return a.startsWith('0x') ? 'https://blockscan.com/address/' + a : 'https://solscan.io/account/' + a;
+    }
+    // A pair's age: 40m, 5h, 12d, 4mo, 3y.
+    function ageLabel(ms) {
+      const m = Math.max(0, (Date.now() - ms) / 60000);
+      if (m < 60) return Math.round(m) + 'm';
+      if (m < 1440) return Math.round(m / 60) + 'h';
+      if (m < 1440 * 60) return Math.round(m / 1440) + 'd';
+      if (m < 1440 * 730) return Math.round(m / 43800) + 'mo';
+      return Math.round(m / 525600) + 'y';
+    }
+    function usd(n) {
+      if (n == null || !isFinite(n)) return '–';
+      const v = Number(n);
+      if (v >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
+      if (v >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
+      if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
+      if (v >= 1) return '$' + v.toFixed(2);
+      return '$' + Number(v.toPrecision(3)).toString();
+    }
+    function tokenCard(a, state, data) {
+      const short = a.slice(0, 6) + '…' + a.slice(-4);
+      const foot = '<div class="tk-b">' +
+        '<button type="button" data-cmd="tk-open" data-v="' + h(data && data.pair ? data.pair.url : 'https://dexscreener.com/search?q=' + encodeURIComponent(a)) + '">' + icon('open') + 'Open on DexScreener</button>' +
+        '<button type="button" data-cmd="tk-scan" data-v="' + h(explorerUrl(a, data && data.pair ? data.pair.chainId : '')) + '">' + icon('search') + 'Block Explorer</button>' +
+        '<button type="button" data-cmd="tk-copy" data-v="' + h(a) + '">' + icon('link') + 'Copy Address</button></div>';
+      let body;
+      if (state === 'loading') body = '<div class="tk-msg">Looking up ' + h(short) + ' on DexScreener…</div>';
+      else if (state === 'error') body = '<div class="tk-msg">DexScreener didn’t answer. Try again, or open it there.</div>';
+      else if (!data) body = '<div class="tk-msg">DexScreener has no trading pairs for ' + h(short) + '. It may be a wallet or an unlisted token.</div>';
+      else {
+        const p = data.pair;
+        const chg = p.priceChange && p.priceChange.h24 != null ? Number(p.priceChange.h24) : null;
+        const age = p.pairCreatedAt ? ageLabel(p.pairCreatedAt) : '';
+        const dex = p.dexId ? String(p.dexId).replace(/(^|[-_ ])([a-z])/g, (x, s, c) => (s ? ' ' : '') + c.toUpperCase()) : '';
+        body = '<div class="tk-h"><b>' + h(data.token.name || 'Token') + '</b><span class="tk-sym">$' + h(data.token.symbol || '') + '</span></div>' +
+          '<div class="tk-sub">' + h([CHAIN_NAMES[p.chainId] || p.chainId, dex, age ? 'pair ' + age + ' old' : ''].filter(Boolean).join(' · ')) + '</div>' +
+          (data.priced ? '<div class="tk-price">' + h(usd(p.priceUsd)) + (chg != null ? ' <span class="' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% 24h</span>' : '') + '</div>' : '') +
+          '<div class="tk-grid"><span>Market cap</span><b>' + h(usd(p.marketCap != null ? p.marketCap : p.fdv)) + '</b><span>Liquidity</span><b>' + h(usd((p.liquidity || {}).usd)) + '</b><span>24h volume</span><b>' + h(usd((p.volume || {}).h24)) + '</b></div>';
+      }
+      return '<div class="tok" role="dialog" aria-label="Token ' + h(short) + '">' + body + '<div class="tk-a" title="' + h(a) + '">' + h(a) + '</div>' + foot + '<div class="tk-src">Data from DexScreener, fetched when you clicked.</div></div>';
+    }
+    let tokenFor = null;
+    async function openToken(el) {
+      const a = el.dataset.ca;
+      const chain = el.dataset.chain || '';
+      closePop();
+      tokenFor = a;
+      pop.innerHTML = tokenCard(a, 'loading');
+      placePop(el);
+      let html;
+      try {
+        html = tokenCard(a, 'done', dexPick(await dexLookup(a), a, chain));
+      } catch (e) {
+        html = tokenCard(a, 'error');
+      }
+      // Still showing this address: fill it in (and keep it on screen).
+      if (tokenFor !== a || pop.hidden) return;
+      pop.innerHTML = html;
+      placePop(el);
+    }
+
+    // Ticker cards: filled from DexScreener once on screen (if the reader
+    // allows it), batched and cached, in the main window and pop-outs.
+    const tkWant = new Set();
+    let tkTimer = 0;
+    const tkIO = 'IntersectionObserver' in window
+      ? new IntersectionObserver((entries) => {
+          for (const en of entries) {
+            if (!en.isIntersecting) continue;
+            tkIO.unobserve(en.target);
+            tkWant.add(en.target.dataset.ca);
+          }
+          if (tkWant.size && !tkTimer) tkTimer = setTimeout(fillTickers, 250);
+        })
+      : null;
+    function paintTicker(el) {
+      const a = el.dataset.ca;
+      const hit = dexFresh(a);
+      if (!hit) return false;
+      const d = dexPick(hit, a, el.dataset.chain);
+      el.dataset.filled = '1';
+      if (!d) return true;
+      if (d.token.symbol) el.querySelector('.tkc-s').textContent = '$' + d.token.symbol;
+      el.querySelector('.tkc-n').textContent = d.token.name || '';
+      if (d.priced) {
+        el.querySelector('.tkc-p').textContent = usd(d.pair.priceUsd);
+        const chg = d.pair.priceChange && d.pair.priceChange.h24 != null ? Number(d.pair.priceChange.h24) : null;
+        const c = el.querySelector('.tkc-c');
+        c.textContent = chg != null ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '';
+        c.className = 'tkc-c' + (chg == null ? '' : chg >= 0 ? ' up' : ' down');
+      }
+      return true;
+    }
+    function tickerRoots() {
+      const roots = [shadow];
+      for (const rec of popouts.values()) if (!rec.w.closed) roots.push(rec.root);
+      return roots;
+    }
+    // eager: a pop-out window (this window's observer can't see its
+    // viewport): every card it shows loads at once.
+    function watchTickers(root, eager) {
+      if (!settings.tickerPrices || !root) return;
+      for (const el of root.querySelectorAll('.tkc:not([data-filled]):not([data-obs])')) {
+        if (paintTicker(el)) continue;
+        el.dataset.obs = '1';
+        if (eager || !tkIO) tkWant.add(el.dataset.ca);
+        else tkIO.observe(el);
+      }
+      if (tkWant.size && !tkTimer) tkTimer = setTimeout(fillTickers, 250);
+    }
+    async function fillTickers() {
+      tkTimer = 0;
+      const list = [...tkWant];
+      tkWant.clear();
+      try {
+        await dexLookupMany(list);
+      } catch (e) {
+        return;
+      }
+      for (const root of tickerRoots()) for (const el of root.querySelectorAll('.tkc:not([data-filled])')) if (list.includes(el.dataset.ca)) paintTicker(el);
     }
 
     function openUrl(url) {
@@ -1423,6 +1594,7 @@
       else if (s.sorted.length) c.foot.innerHTML = 'Your mute filters hide every post here.<br><button class="more" type="button" data-cmd="edit-mutes">Edit mute filters</button>';
       else c.foot.innerHTML = 'No posts here yet. X Pro checks for new ones every 30 seconds.<br><button class="more" type="button" data-cmd="reload">Reload X Pro</button>';
       reselect(c);
+      watchTickers(c.el);
       checkRead(c);
       updatePill(c);
       observeVideos(c.list);
@@ -1472,6 +1644,7 @@
       c.el.classList.toggle('pinned', !!c.pinned);
       c.rendered = true;
       reselect(c);
+      watchTickers(c.el);
       updatePill(c);
     }
 
@@ -2281,6 +2454,7 @@
       const keep = c.dscroll.scrollTop;
       const sel = d.selId;
       c.dlist.innerHTML = html;
+      watchTickers(c.dlist);
       c.dfoot.dataset.reason = d.failed || '';
       const dcol = c.dpane.querySelector('.dcol');
       if (dcol) dcol.disabled = !!d.failed;
@@ -4745,6 +4919,15 @@
         case 'ov-close':
           closeOverview();
           break;
+        case 'tk-open':
+        case 'tk-scan':
+          closePop();
+          openUrl(el.dataset.v);
+          break;
+        case 'tk-copy':
+          closePop();
+          copyText(el.dataset.v, 'Address copied');
+          break;
         case 'me':
           paintMe();
           if (viewer && viewer.handle) openProfile(viewer.handle);
@@ -4912,6 +5095,13 @@
           return;
         }
       }
+      // A contract address: the token card (⌘-click opens DexScreener).
+      const ca = t.closest('a.ca, .tkc');
+      if (ca && settings.tokenLookup && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        return openToken(ca);
+      }
+      if (ca && ca.classList.contains('tkc')) return openUrl('https://dexscreener.com/search?q=' + encodeURIComponent(ca.dataset.ca));
       if (t.closest('a[href]')) return; // links open in a new tab by themselves
       const prof = t.closest('[data-profile]');
       if (prof) return openUrl('https://x.com/' + encodeURIComponent(prof.dataset.profile));
@@ -5428,6 +5618,7 @@
         const n = Array.from(rec.list.children).find((x) => x.dataset.key === anchor);
         if (n) rec.scroll.scrollTop = n.offsetTop - delta;
       } else rec.scroll.scrollTop = 0;
+      watchTickers(rec.root, true);
     }
     // The main window comes forward (the Mac app raises its window).
     function showMain() {
@@ -5691,6 +5882,8 @@
         row('Post action buttons:', select('actions', [['always', 'Show always'], ['hover', 'Show on mouseover']]), null, 'actions') +
         '<div class="sep"></div>' +
         row('Avatars:', check('round', 'Round avatars')) +
+        row('Contract addresses:', check('tokenLookup', 'Show token details on click'), 'Asks DexScreener only when you click an address or ticker card. Off: they open DexScreener.', 'tokenLookup') +
+        row('Ticker cards:', check('tickerPrices', 'Show prices'), 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most.', 'tickerPrices') +
         row('Checkmarks:', check('badges', 'Show verified checkmarks and organization badges')) +
         row('Counts:', check('counts', 'Show reply, repost and like counts')) +
         row('Timeline:', check('pinToTop', 'Pin timeline to top when at top'), 'Clicking a column header also jumps to the newest post and keeps it pinned.') +

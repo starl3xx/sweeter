@@ -159,6 +159,22 @@
   }
 
   // depth 0 = a timeline post; depth 1 = its quote (quotes of quotes are not expanded).
+  // The token cards X attaches to a ticker (verified 2026-10-02): the text
+  // holds "ethereum:0x3206…" with a smart tag giving its name and ticker;
+  // cashtag_attachments lists the same ids. Native coins ("ripple:native")
+  // and stocks ("$CRCL") have no contract, so no card. Price comes later.
+  function tickers(r, entities) {
+    const ID = /^([a-z0-9_-]+):(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$/;
+    const out = [];
+    const add = (id, info) => {
+      const m = ID.exec(String(id || ''));
+      if (m && !out.some((t) => t.address === m[2])) out.push({ chain: m[1], address: m[2], symbol: String(info.ticker || ''), name: String(info.name || '') });
+    };
+    for (const st of entities.smarttags || []) add(st.text, (st.tag && st.tag.info && st.tag.info.info) || {});
+    for (const a of r.cashtag_attachments || []) add(a && a.rest_id, {});
+    return out.slice(0, 4);
+  }
+
   function post(result, depth) {
     const r = unwrap(result);
     if (!r) return null;
@@ -200,7 +216,7 @@
       author,
       createdMs: isFinite(createdMs) ? createdMs : Date.parse(legacy.created_at),
       html: richText(text, entities, range, { hideUrls }),
-      plain: plainText(text, range),
+      plain: plainText(text, range, entities),
       lang: legacy.lang || '',
       source: sourceName(r.source),
       replyTo: legacy.in_reply_to_screen_name || null,
@@ -222,6 +238,7 @@
       sensitive: !!legacy.possibly_sensitive,
       media: media(legacy),
       card: card(r, (legacy.entities || {}).urls),
+      tickers: tickers(r, entities),
       article: art,
       quote: quoted,
       repostedBy: null,

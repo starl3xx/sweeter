@@ -131,13 +131,21 @@
       '<div class="tx">' + (q.html || (q.media.length ? '<span class="gone">Media</span>' : '')) + '</div></div>';
   }
 
+  // Token cards for a post's cashtags: the symbol now, the name, price and
+  // 24-hour change once DexScreener answers (app.js fills them in).
+  function tickerCards(list) {
+    if (!list || !list.length) return '';
+    return '<div class="tkcs">' + list.map((t) => '<button type="button" class="tkc" data-ca="' + h(t.address) + '" data-chain="' + h(t.chain) + '" title="' + h(t.chain + ' ' + t.address) + '"><b class="tkc-s">' + h(t.symbol ? '$' + t.symbol : t.address.slice(0, 6) + '…' + t.address.slice(-4)) + '</b><span class="tkc-n">' + h(t.name || '') + '</span><span class="tkc-p"></span><span class="tkc-c"></span></button>').join('') + '</div>';
+  }
+
   // What sits between the name line and the buttons. With small thumbnails
   // the text and the thumbnail share one row, side by side.
   function body(p, ctx, bare, reply, context) {
     const rest = articleCard(p.article, ctx) + (p.article ? '' : card(p.card, ctx)) + quote(p.quote, ctx) + context;
     const pics = media(p.media, p.sensitive, ctx, p.author.handle, bare);
-    if (ctx.settings.media === 'small' && pics && !bare) return '<div class="sm"><div class="smt">' + reply + text(p, ctx) + rest + '</div>' + pics + '</div>';
-    return reply + text(p, ctx) + pics + rest;
+    const tk = tickerCards(p.tickers);
+    if (ctx.settings.media === 'small' && pics && !bare) return '<div class="sm"><div class="smt">' + reply + text(p, ctx) + tk + rest + '</div>' + pics + '</div>';
+    return reply + text(p, ctx) + tk + pics + rest;
   }
 
   // Posts longer than 280 characters fold to a few lines, with “Show more”.

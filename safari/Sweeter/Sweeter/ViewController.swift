@@ -180,6 +180,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             save: (f) => { post({ type: 'save', name: String(f.name || 'Sweeter.json'), text: String(f.text || '') }); },
             allowPopup: () => post({ type: 'allowPopup' }),
             show: () => post({ type: 'show' }),
+            dex: (a) => post({ type: 'dex', address: String(a || '') }),
             notifyStatus: () => post({ type: 'notifyStatus' }),
             notifyRequest: () => post({ type: 'notifyRequest' }),
             notifySettings: () => post({ type: 'notifySettings' }),
@@ -236,6 +237,25 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 NotificationCenter.default.post(name: .sweeterState, object: nil)
             }
             replyHandler(nil, nil)
+        // Tokens' pairs from DexScreener's public API, for a contract address
+        // the reader clicked or ticker cards on screen (up to 30 addresses,
+        // comma-separated). Only valid addresses, only that host.
+        case "dex":
+            let address = body["address"] as? String ?? ""
+            let one = "(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})"
+            guard address.range(of: "^" + one + "(," + one + "){0,29}$", options: .regularExpression) != nil,
+                  let url = URL(string: "https://api.dexscreener.com/latest/dex/tokens/" + address) else {
+                replyHandler(nil, "bad address")
+                return
+            }
+            Task {
+                guard let (data, response) = try? await URLSession.shared.data(from: url),
+                      let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    replyHandler(nil, "lookup failed")
+                    return
+                }
+                replyHandler(String(data: data, encoding: .utf8), nil)
+            }
         // Notification permission, asked for when the reader turns alerts on
         // (never at launch, out of context): "on", "off" or "ask".
         case "notifyStatus":

@@ -299,6 +299,32 @@ img{display:block}
 .acts button.busy{opacity:.45;pointer-events:none}
 
 /* repost menu */
+.tkcs{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px}
+.tkc{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:baseline;gap:8px;width:100%;max-width:440px;box-sizing:border-box;border:1px solid var(--div);border-radius:10px;background:var(--quote);padding:8px 12px;font:inherit;font-size:13px;color:var(--t2);text-align:left;cursor:pointer}
+.tkc:hover{background:var(--sub)}
+.tkc-s{color:var(--t1);font-weight:600}
+.tkc-n{color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkc-p{color:var(--t1);font-weight:600;font-variant-numeric:tabular-nums}
+.tkc-c{font-weight:600;font-variant-numeric:tabular-nums}
+.tkc-c.up{color:#2B8F48}
+.tkc-c.down{color:#D9443A}
+.tx a.ca{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:var(--sub);border-radius:5px;padding:0 4px;white-space:nowrap}
+/* A ticker X tagged ($RSR) reads as a cashtag link, not an address chip. */
+.tx a.ca.tkl{font-family:inherit;font-size:inherit;background:none;border-radius:0;padding:0}
+.pop .tok{width:280px;padding:8px 8px 4px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--t2)}
+.tok .tk-h{display:flex;align-items:baseline;gap:6px;color:var(--t1)}
+.tok .tk-h b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tok .tk-sym{color:var(--t3);font-size:12px}
+.tok .tk-sub,.tok .tk-src{font-size:11.5px;color:var(--t3)}
+.tok .tk-price{font-size:18px;font-weight:600;color:var(--t1);font-variant-numeric:tabular-nums}
+.tok .tk-price span{font-size:12px;font-weight:600}
+.tok .up{color:#2B8F48}
+.tok .down{color:#D9443A}
+.tok .tk-grid{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-variant-numeric:tabular-nums}
+.tok .tk-grid b{text-align:right;font-weight:600;color:var(--t1)}
+.tok .tk-a{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--t3);word-break:break-all}
+.tok .tk-msg{line-height:1.4}
+.tok .tk-b{display:flex;flex-direction:column;margin:0 -4px}
 .pop{position:fixed;z-index:7;min-width:170px;background:var(--sheet);border-radius:8px;box-shadow:0 0 0 1px var(--ring),0 2px 6px var(--ring),0 10px 30px var(--shadow);padding:4px;display:flex;flex-direction:column}
 .pop[hidden]{display:none}
 .pop button{display:flex;align-items:center;gap:8px;background:none;border:0;border-radius:4px;padding:7px 10px;text-align:left;font-size:13px;color:var(--t1);cursor:pointer}

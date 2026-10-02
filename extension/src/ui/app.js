@@ -4592,8 +4592,12 @@
         xpro.closePanel();
       }
       if (native) native.log('compose failed: ' + c.kind + ' ' + (r.reason || 'unknown'));
+      const failMsg = COMPOSE_FAIL[r.reason] || 'X Pro didn’t post it. Your text is still here.';
+      // Shown in the compose window, not a toast: Report a Problem needs it
+      // too, with the step that failed.
+      lastProblem = { msg: failMsg + ' [' + c.kind + ': ' + (r.reason || 'unknown') + ']', at: Date.now() };
       if (compose === c) {
-        cmpStatus.textContent = COMPOSE_FAIL[r.reason] || 'X Pro didn’t post it. Your text is still here.';
+        cmpStatus.textContent = failMsg;
         updateCount();
       }
     }

@@ -314,7 +314,7 @@
       '<div class="ptitle">Sweeter preferences<button class="x" type="button" data-cmd="close" aria-label="Close preferences">×</button></div>' +
       '<div class="ptabs" role="tablist">' + TABS.map(([id, label, ic]) => '<button class="ptab" type="button" role="tab" data-tab="' + id + '">' + icon(ic) + label + '</button>').join('') + '</div>' +
       '<div class="pbody"></div>' +
-      '<div class="pfoot"><span>Sweeter' + (version ? ' ' + h(version) : '') + ' reads what X Pro loads and acts only through X Pro’s own buttons.</span><button class="done" type="button" data-cmd="close">Close</button></div>' +
+      '<div class="pfoot"><span>Sweeter' + (version ? ' ' + h(version) : '') + ' reads what X Pro loads and acts only through X Pro’s own buttons. <button class="lnk" type="button" data-cmd="report">Report a problem</button></span><button class="done" type="button" data-cmd="close">Close</button></div>' +
       '</div></div>' +
       '<div class="prof-back" hidden><div class="prof" role="dialog" aria-modal="true" aria-label="Profile">' +
       '<button class="x pf-close" type="button" data-cmd="prof-close" aria-label="Close profile (Esc)" title="Close (Esc)">' + icon('x') + '</button>' +
@@ -519,9 +519,13 @@
       meEl.title = 'Your profile (@' + v.handle + ')';
     }
 
+    // The last problem Sweeter showed, for Report a Problem (an hour).
+    let lastProblem = null;
+
     // Done (the default, with a check or the icon named), 'info' or 'warn'.
     function toast(msg, kind) {
       const k = kind === 'warn' || kind === 'info' ? kind : 'ok';
+      if (k === 'warn') lastProblem = { msg: String(msg), at: Date.now() };
       toastEl.dataset.kind = k;
       toastEl.innerHTML = icon(k === 'ok' ? (kind && Sweeter.SYMBOLS && Sweeter.SYMBOLS[kind] ? kind : 'check') : k) + '<span>' + h(msg) + '</span>';
       toastEl.hidden = false;
@@ -723,6 +727,17 @@
           for (const rec of popouts.values()) if (!rec.w.closed) watchTickers(rec.root, true);
         }, 60000);
       }
+    }
+
+    // Report a Problem: a GitHub issue, filled in with the version, client,
+    // system, X's language and the last error shown. Nothing personal.
+    function openReport() {
+      const client = native ? 'Mac app' : 'Safari extension';
+      const safari = (/Version\/([\d.]+)/.exec(navigator.userAgent) || [])[1];
+      const system = native && native.osVersion ? 'macOS ' + native.osVersion : safari ? 'Safari ' + safari : '';
+      const err = lastProblem && Date.now() - lastProblem.at < 3600000 ? lastProblem.msg : '';
+      const q = new URLSearchParams({ template: 'bug_report.yml', title: 'Problem: ' + (err ? err.slice(0, 70) : ''), version, client, system, xlang: document.documentElement.lang || '', error: err });
+      openUrl('https://github.com/starl3xx/sweeter/issues/new?' + q.toString());
     }
 
     function openUrl(url) {
@@ -4577,8 +4592,12 @@
         xpro.closePanel();
       }
       if (native) native.log('compose failed: ' + c.kind + ' ' + (r.reason || 'unknown'));
+      const failMsg = COMPOSE_FAIL[r.reason] || 'X Pro didn’t post it. Your text is still here.';
+      // Shown in the compose window, not a toast: Report a Problem needs it
+      // too, with the step that failed.
+      lastProblem = { msg: failMsg + ' [' + c.kind + ': ' + (r.reason || 'unknown') + ']', at: Date.now() };
       if (compose === c) {
-        cmpStatus.textContent = COMPOSE_FAIL[r.reason] || 'X Pro didn’t post it. Your text is still here.';
+        cmpStatus.textContent = failMsg;
         updateCount();
       }
     }
@@ -4945,6 +4964,9 @@
           break;
         case 'ov-close':
           closeOverview();
+          break;
+        case 'report':
+          openReport();
           break;
         case 'tk-open':
         case 'tk-scan':
@@ -5516,6 +5538,7 @@
       add('lay-export', 'Export Layout', 'Layouts', exportLayout);
       add('lay-import', 'Import Layout', 'Layouts', importLayout);
       add('prefs', 'Preferences', 'Sweeter', openPrefs, { keys: ',', icon: 'gear' });
+      add('report', 'Report a Problem…', 'Sweeter', openReport, { icon: 'warn' });
       add('keys', 'Keyboard Shortcuts', 'Sweeter', () => openPrefsTab('keys'), { icon: 'keyboard' });
       add('mutes', 'Edit Mute Filters', 'Sweeter', () => openPrefsTab('mutes'));
       add('filters', 'Edit Filters', 'Sweeter', () => openPrefsTab('filters'));
@@ -6522,6 +6545,10 @@
             return p && openProfile(p.author.handle, { postId: p.id, key: sp.c.key });
           case 'prefs':
             return arg ? openPrefsTab(arg) : openPrefs();
+          case 'report':
+            return openReport();
+          case 'github':
+            return openUrl('https://github.com/starl3xx/sweeter');
           case 'skin':
             return setOne('skin', arg);
           case 'bigger':

@@ -1,0 +1,40 @@
+name: Report a problem
+description: Something in Sweeter didn't work. Sweeter's Help menu (Mac app) or the command palette (⇧⌘P) fills in the details for you.
+title: "Problem: "
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what Sweeter did instead.
+      placeholder: "I pressed Reply on a post in my Home column, typed a reply and pressed Post. Sweeter showed an error and nothing was posted."
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      description: The exact words Sweeter showed, if any.
+  - type: input
+    id: version
+    attributes:
+      label: Sweeter version
+      description: Sweeter ▸ About Sweeter, or the bottom of Preferences.
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Mac app or Safari extension
+  - type: input
+    id: system
+    attributes:
+      label: macOS or Safari version
+  - type: input
+    id: xlang
+    attributes:
+      label: X language
+      description: The language X Pro shows (Sweeter finds some of X Pro's buttons by name).
+  - type: markdown
+    attributes:
+      value: "Please don't paste private messages, email addresses or other personal details: issues are public."

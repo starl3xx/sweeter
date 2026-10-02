@@ -364,6 +364,7 @@
       '<div class="ip-head"><span class="ip-prev"></span><input class="ip-q" type="search" placeholder="Search icons" aria-label="Search icons" autocomplete="off" spellcheck="false"></div>' +
       '<div class="ip-colors" role="radiogroup" aria-label="Color"></div><div class="ip-body" role="radiogroup" aria-label="Icon"></div>' +
       '<div class="ip-foot"><button type="button" data-cmd="ip-reset">Use Defaults</button><span class="grow"></span><button type="button" data-cmd="ip-cancel">Cancel</button><button type="button" class="done" data-cmd="ip-done">Done</button></div></div></div>' +
+      '<div class="nt-back" hidden><div class="ask nt" role="alertdialog" aria-modal="true" aria-labelledby="nt-t" aria-describedby="nt-b"><div class="nt-head"><span class="nt-ic"></span><div class="ask-t" id="nt-t">Turn on notifications for Sweeter</div></div><p class="nt-b" id="nt-b"></p><div class="ask-b"><button type="button" data-cmd="nt-no">Not Now</button><button type="button" class="done" data-cmd="nt-go">Open Notification Settings</button></div></div></div>' +
       '<div class="utoast" hidden role="status" aria-live="polite"></div>' +
       '<div class="toast" hidden role="status" aria-live="polite"></div></div>' +
       '<button class="fab" type="button" hidden title="Show Sweeter (⌥X)"><i></i>Sweeter</button>';
@@ -410,6 +411,7 @@
     const askBack = shadow.querySelector('.ask-back');
     const ovBack = shadow.querySelector('.ov-back');
     const ipBack = shadow.querySelector('.ip-back');
+    const ntBack = shadow.querySelector('.nt-back');
     const fab = shadow.querySelector('.fab');
 
     // Column identity: every column on screen has a view id. An X Pro
@@ -1839,6 +1841,7 @@
 
     function finishBoot() {
       booting = false;
+      setTimeout(() => checkNotify(null, false), 1500);
       colsEl.classList.remove('hold');
       let i = 0;
       for (const el of colsEl.children) {
@@ -3373,7 +3376,50 @@
       settings.colAlerts = Object.assign({}, settings.colAlerts, { [c.vid]: v });
       persist();
       toast(v === 'off' ? 'Alerts off for “' + titleOf(c.vid) + '”' : 'Alerts on for “' + titleOf(c.vid) + '”', 'bell');
+      if (v !== 'off') checkNotify([c], true);
     }
+
+    // Notification permission (Mac app). macOS is asked when alerts are
+    // turned on, the first time. If notifications are off for Sweeter in
+    // System Settings, a sheet says so (always after turning alerts on; at
+    // launch, once a week) and opens the right page.
+    let ntWaiting = false;
+    const alertCols = () => shown().map((e) => cols.get(e.vid)).filter((c) => c && alertOf(c) !== 'off');
+    async function checkNotify(list, fromUser) {
+      if (!native || !native.notifyStatus || settings.alertsMuted) return;
+      const st = await native.notifyStatus();
+      if (st === 'ask') {
+        // macOS shows its own prompt; a no there is respected until the
+        // next launch.
+        await native.notifyRequest();
+        return;
+      }
+      if (st !== 'off') return;
+      if (!fromUser) {
+        if (Date.now() - (settings.notifyNagAt || 0) < 7 * 864e5) return;
+        settings.notifyNagAt = Date.now();
+        persist();
+      }
+      const l = list || alertCols();
+      if (!l.length && !fromUser) return;
+      const what = l.length === 1 ? '“' + titleOf(l[0].vid) + '”' : l.length ? l.length + ' columns' : 'Sweeter';
+      ntBack.querySelector('.nt-ic').innerHTML = icon('bell');
+      ntBack.querySelector('.nt-b').textContent = 'Alerts are on for ' + what + ', but notifications for Sweeter are turned off in macOS, so none can show. Turn on Allow Notifications for Sweeter in System Settings.';
+      closePop();
+      ntBack.hidden = false;
+      ntBack.querySelector('[data-cmd="nt-go"]').focus({ preventScroll: true });
+    }
+    function closeNotify() {
+      ntBack.hidden = true;
+      app.focus({ preventScroll: true });
+    }
+    // Back from System Settings: say so once notifications are on.
+    window.addEventListener('focus', async () => {
+      if (!ntWaiting || !native || !native.notifyStatus) return;
+      if ((await native.notifyStatus()) !== 'on') return;
+      ntWaiting = false;
+      toast('Notifications are on', 'bell');
+    });
 
     // Stale columns: X Pro normally refreshes each column every 30 s. With
     // no word for 75 s, a clock shows in the header.
@@ -4688,6 +4734,14 @@
           if (viewer && viewer.handle) openProfile(viewer.handle);
           else toast('X Pro hasn’t shown which account is signed in yet.', 'info');
           break;
+        case 'nt-no':
+          closeNotify();
+          break;
+        case 'nt-go':
+          closeNotify();
+          ntWaiting = true;
+          if (native && native.notifySettings) native.notifySettings();
+          break;
         case 'ip-cancel':
           closePicker(false);
           break;
@@ -4780,6 +4834,10 @@
       }
       if (t.closest('.ov-back')) {
         if (!t.closest('.ov')) closeOverview();
+        return;
+      }
+      if (t.closest('.nt-back')) {
+        if (!t.closest('.nt')) closeNotify();
         return;
       }
       if (t.closest('.ip-back')) {
@@ -5813,9 +5871,10 @@
         return true;
       }
       if (!settings.visible) return false;
-      if (!askBack.hidden || !ovBack.hidden || !ipBack.hidden) {
+      if (!askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden) {
         if (e.key === 'Escape') {
-          if (!askBack.hidden) closeAsk();
+          if (!ntBack.hidden) closeNotify();
+          else if (!askBack.hidden) closeAsk();
           else if (!ipBack.hidden) closePicker(false);
           else closeOverview();
           return true;
@@ -6283,6 +6342,7 @@
             return setOne('snap', !settings.snap);
           case 'muteAlerts':
             setOne('alertsMuted', !settings.alertsMuted);
+            if (!settings.alertsMuted) checkNotify(null, true);
             return toast(settings.alertsMuted ? 'Alerts muted' : 'Alerts on', 'bell');
           case 'openPost': {
             // A click on an alert: “<column>\n<block key>\n<url>” (the URL

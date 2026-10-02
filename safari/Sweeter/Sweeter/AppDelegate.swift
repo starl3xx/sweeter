@@ -41,8 +41,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     static let newPostHotKey: (key: Int, mods: Int, label: String) = (kVK_ANSI_N, controlKey | optionKey | cmdKey, "⌃⌥⌘N")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Permission is asked for when alerts are turned on (the page calls
+        // notifyRequest), not here: a prompt at launch has no context.
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         setUpStatusItem()
         setUpMenus()
         registerHotKeys()

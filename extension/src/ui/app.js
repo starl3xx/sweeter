@@ -2145,19 +2145,88 @@
 
     const dirty = new Set();
     let frame = 0;
+    // Hidden (the Mac app's window closed or covered, a background tab,
+    // Sweeter toggled off): nothing is drawn, and the page's frames stop
+    // anyway. Alerts and the Dock badge still follow the data through a
+    // light pass without layout (dataTick); the first visible frame draws
+    // what changed meanwhile.
+    const live = () => settings.visible && !document.hidden;
+    const dataDirty = new Set();
+    let dataT = 0;
     function schedule(key) {
-      if (key) dirty.add(key);
+      if (key) {
+        dirty.add(key);
+        dataDirty.add(key);
+      }
+      if (!live()) {
+        if (native && !dataT && dataDirty.size) dataT = setTimeout(dataTick, 250);
+        return;
+      }
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
+        if (!live()) return schedule(null);
         remap(false);
         for (const e of layout) if (e.merge && e.merge.srcs.some((k) => dirty.has(k))) feedMerge(e.merge);
         for (const c of cols.values()) if (dirty.has(c.key)) renderColumn(c, true);
 
         dirty.clear();
+        dataDirty.clear();
         checkBoot();
       });
     }
+    function dataTick() {
+      // -1 while running: feedMerge emits re-enter schedule(), handled below.
+      dataT = -1;
+      for (const e of layout) if (e.merge && e.merge.srcs.some((k) => dataDirty.has(k))) feedMerge(e.merge);
+      for (const c of cols.values()) {
+        if (!dataDirty.has(c.key)) continue;
+        const s = store.get(c.key);
+        if (!s || s.kind === 'placeholder') continue;
+        notifyNew(c, s);
+        c.visSorts = visibleBlocks(s, c).map((x) => x.b.sortIndex);
+      }
+      dataDirty.clear();
+      dataT = 0;
+      reportCounts();
+    }
+    // Back on screen: draw what changed, refresh the clocks, look again.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return pauseLoops();
+      if (!settings.visible) return;
+      wake();
+    });
+    let wokeAt = 0;
+    function wake() {
+      wokeAt = Date.now();
+      schedule(null);
+      refreshStamps(true);
+      paintStale();
+      resumeLoops();
+    }
+    // Autoplaying loops stop while nobody can see them, and start again
+    // where the half-visible rule allows.
+    function pauseLoops() {
+      for (const v of shadow.querySelectorAll('video[data-obs]')) if (!v.paused) v.pause();
+    }
+    function resumeLoops() {
+      if (!io) return;
+      for (const v of shadow.querySelectorAll('video[data-obs]')) {
+        io.unobserve(v);
+        io.observe(v);
+      }
+    }
+    // X Pro's own muted previews under Sweeter: paused as they start (a
+    // sound the reader started is never touched; Sweeter's own videos are
+    // in its shadow root, and media events don't leave it).
+    document.addEventListener(
+      'play',
+      (e) => {
+        const v = e.target;
+        if (v instanceof HTMLMediaElement && v.muted && settings.visible && !passthrough && !host.contains(v)) v.pause();
+      },
+      true,
+    );
 
     function rebuildAll() {
       for (const c of cols.values()) {
@@ -3730,10 +3799,18 @@
       for (const c of cols.values()) {
         const s = store.get(c.key);
         const age = s && s.updated && s.kind !== 'placeholder' && s.kind !== 'conversation' ? now - s.updated : 0;
-        const stale = age > 75000;
-        c.stl.hidden = !stale;
+        // Just back on screen: X Pro was throttled meanwhile; give it a
+        // moment to refresh before calling a column stale.
+        const stale = age > 75000 && now - wokeAt > 40000;
+        if (c.stl.hidden !== !stale) c.stl.hidden = !stale;
         c.el.classList.toggle('stale', stale);
-        if (stale) c.stl.title = 'X Pro last refreshed this column ' + Math.round(age / 60000) + ' min ago. It may be off screen in X Pro, or X is slow.';
+        if (stale) {
+          const err = s.lastError && s.lastError.at > s.updated ? s.lastError.status : 0;
+          const t = err
+            ? 'X refused X Pro’s last refresh of this column (HTTP ' + err + (err === 429 ? ', too many requests' : '') + '). Last good refresh ' + Math.round(age / 60000) + ' min ago; X Pro tries again by itself.'
+            : 'X Pro last refreshed this column ' + Math.round(age / 60000) + ' min ago. It may be off screen in X Pro, or X is slow.';
+          if (c.stl.title !== t) c.stl.title = t;
+        }
       }
     }
 
@@ -4264,7 +4341,8 @@
 
     function toggle(show) {
       settings.visible = show == null ? !settings.visible : !!show;
-      if (settings.visible) setTimeout(() => refreshStamps(true), 0);
+      if (settings.visible) setTimeout(wake, 0);
+      else pauseLoops();
       if (!settings.visible) {
         closePalette();
         closePicker(true);
@@ -6569,11 +6647,13 @@
     }
     setInterval(() => refreshStamps(false), 30000);
     setInterval(() => {
+      // Hidden: X Pro's layout is not scanned (it forces a full layout).
+      if (document.hidden) return;
       if (settings.visible && remap(false)) for (const c of cols.values()) renderColumn(c, false);
       paintMe();
       checkNewAlerts();
     }, 3000);
-    setInterval(paintStale, 5000);
+    setInterval(() => live() && paintStale(), 5000);
     let bootTimer = setInterval(bootTick, 500);
     function bootTick() {
       if (!booting) return clearInterval(bootTimer);

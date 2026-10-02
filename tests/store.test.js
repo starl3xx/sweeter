@@ -174,3 +174,27 @@ test('a quiet poll (cursors only) updates the clock but emits nothing; new posts
   s.ingest({ op: 'HomeLatestTimeline', vars: {}, body: F.home([F.tweetEntry(F.tweet({ text: 'two' }), '6')]) });
   eq(seen.length, 2, 'a new post emits');
 });
+
+test('a refused refresh is remembered for the stale clock and changes nothing else', () => {
+  const F = require('./fixtures');
+  const s = globalThis.Sweeter.createStore();
+  const seen = [];
+  s.subscribe((k) => seen.push(k));
+  s.ingest({ op: 'HomeLatestTimeline', vars: {}, body: F.home([F.tweetEntry(F.tweet({ text: 'one' }), '5')]) });
+  const key = seen[0];
+  const good = s.get(key).updated;
+  s.ingest({ op: 'HomeLatestTimeline', vars: {}, body: { __status: 429 } });
+  eq(s.get(key).lastError.status, 429);
+  eq(s.get(key).updated, good, 'the last good refresh time stays');
+  eq(s.get(key).sorted.length, 1, 'posts stay');
+  eq(seen.length, 1, 'no redraw');
+  s.ingest({ op: 'HomeLatestTimeline', vars: {}, body: F.home([F.cursor('Top', 'c2', '9')]) });
+  eq(s.get(key).lastError, null, 'a good refresh clears it');
+});
+
+test('a refused column write never reaches the deck model', () => {
+  const s = globalThis.Sweeter.createStore();
+  s.ingest({ op: 'ViewerAccountSync', vars: {}, body: { data: { viewer_v2: { accountsync_client_config: { active_deck_id: '900' }, decks: [{ rest_id: '900', config: { title: 'Main' }, deck_columns_v2: [{ rest_id: '1', pathname: '/home' }] }] } } } });
+  s.ingest({ op: 'UpdateColumn', vars: { columnId: '1', pathname: '/notifications' }, body: { __status: 403 } });
+  eq(s.decks.column('1').pathname, '/home');
+});

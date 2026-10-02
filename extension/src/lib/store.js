@@ -72,6 +72,14 @@
     // One captured response from the recorder: { op, vars, body }.
     function ingest(msg) {
       if (!msg || !msg.op || !msg.body) return null;
+      // A refused request carries only its status. It touches nothing (no
+      // deck or column write X rejected, no profile, no posts): it only lets
+      // a column's stale clock say why.
+      if (msg.body.__status) {
+        const src = N.sourceFor(msg.op, msg.vars);
+        if (src && sources.has(src.key)) sources.get(src.key).lastError = { status: msg.body.__status, at: Date.now() };
+        return null;
+      }
       if (Sweeter.decks.OPS.has(msg.op)) {
         if (decks.ingest(msg)) emit('decks');
         return 'decks';
@@ -164,6 +172,7 @@
       if (!src) return null;
       const isNew = !sources.has(src.key);
       const s = ensure(src);
+      s.lastError = null;
       const firstLoad = s.blocks.size === 0;
       const readBefore = s.readSort;
       // X Pro polls every column every ~30 s, and most answers carry

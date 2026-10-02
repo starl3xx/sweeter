@@ -574,9 +574,61 @@
       const base = pairs.filter((p) => p && p.baseToken && same(p.baseToken.address));
       const pool = base.length ? base : pairs.filter((p) => p && p.quoteToken && same(p.quoteToken.address));
       pool.sort((x, y) => ((y.liquidity || {}).usd || 0) - ((x.liquidity || {}).usd || 0));
-      return pool[0] ? { pair: pool[0], token: base.length ? pool[0].baseToken : pool[0].quoteToken, priced: base.length > 0 } : null;
+      if (!pool[0]) return null;
+      // A logo, if DexScreener has one for this token (on any of its pairs).
+      const art = (base.length ? base : pool).find((x) => x.info && x.info.imageUrl);
+      return { pair: pool[0], token: base.length ? pool[0].baseToken : pool[0].quoteToken, priced: base.length > 0, logo: art ? art.info.imageUrl : '' };
     }
-    const CHAIN_NAMES = { ethereum: 'Ethereum', base: 'Base', solana: 'Solana', arbitrum: 'Arbitrum', optimism: 'Optimism', polygon: 'Polygon', bsc: 'BNB Chain', avalanche: 'Avalanche', blast: 'Blast', linea: 'Linea', zksync: 'zkSync', hyperevm: 'HyperEVM', unichain: 'Unichain', abstract: 'Abstract', sonic: 'Sonic' };
+    const CHAIN_NAMES = { ethereum: 'Ethereum', base: 'Base', solana: 'Solana', arbitrum: 'Arbitrum', optimism: 'Optimism', polygon: 'Polygon', bsc: 'BNB Chain', avalanche: 'Avalanche', blast: 'Blast', linea: 'Linea', zksync: 'zkSync', hyperevm: 'HyperEVM', unichain: 'Unichain', abstract: 'Abstract', sonic: 'Sonic', robinhood: 'Robinhood Chain', ink: 'Ink', berachain: 'Berachain', mantle: 'Mantle', scroll: 'Scroll', sei: 'Sei', tron: 'TRON', ton: 'TON', sui: 'Sui', aptos: 'Aptos', pulsechain: 'PulseChain', worldchain: 'World Chain', apechain: 'ApeChain', monad: 'Monad', megaeth: 'MegaETH', plasma: 'Plasma' };
+    const chainName = (id) => CHAIN_NAMES[id] || String(id || '').replace(/(^|[-_ ])([a-z])/g, (x, s, c) => (s ? ' ' : '') + c.toUpperCase());
+
+    // Token logos: DexScreener's image, fetched small (64 px) from outside
+    // X's page (its CSP allows only data: images from elsewhere) when the
+    // token's prices are fetched, cached by address. A token without one
+    // keeps its letter.
+    const logoCache = new Map(); // address -> data: URL, or '' for none
+    const logoPending = new Set();
+    function logoUrl(u) {
+      try {
+        const x = new URL(u);
+        // DexScreener's two image servers (both in the Safari manifest).
+        if (x.protocol !== 'https:' || !/^(cdn|dd)\.dexscreener\.com$/.test(x.hostname)) return '';
+        x.searchParams.set('width', '64');
+        x.searchParams.set('height', '64');
+        return x.toString();
+      } catch (e) {
+        return '';
+      }
+    }
+    async function tokenLogo(a, imageUrl) {
+      if (logoCache.has(a) || logoPending.has(a)) return paintLogo(a);
+      const u = logoUrl(imageUrl || '');
+      const get = native && native.dexLogo ? native.dexLogo : opts.dexLogo;
+      if (!u || !get) return logoCache.set(a, '');
+      logoPending.add(a);
+      let data = '';
+      try {
+        data = String((await get(u)) || '');
+      } catch (e) {}
+      logoPending.delete(a);
+      logoCache.set(a, /^data:image\/[a-z+.-]+;base64,/.test(data) ? data : '');
+      while (logoCache.size > 400) logoCache.delete(logoCache.keys().next().value);
+      paintLogo(a);
+    }
+    // Every element showing this token (ticker cards, $TICKER pills, the
+    // token card) takes the logo.
+    function paintLogo(a) {
+      const data = logoCache.get(a);
+      if (!data) return;
+      const sel = '[data-ca="' + CSS.escape(a) + '"]';
+      for (const root of tickerRoots()) {
+        for (const el of root.querySelectorAll(sel + ' .tkc-l, ' + sel + '.tkl, .tok[data-ca="' + CSS.escape(a) + '"] .tk-l')) {
+          if (el.classList.contains('has-logo')) continue;
+          el.style.setProperty('--logo', 'url("' + data + '")');
+          el.classList.add('has-logo');
+        }
+      }
+    }
     const EXPLORERS = { ethereum: 'https://etherscan.io/token/', base: 'https://basescan.org/token/', arbitrum: 'https://arbiscan.io/token/', optimism: 'https://optimistic.etherscan.io/token/', polygon: 'https://polygonscan.com/token/', bsc: 'https://bscscan.com/token/', avalanche: 'https://snowtrace.io/token/', blast: 'https://blastscan.io/token/', linea: 'https://lineascan.build/token/', solana: 'https://solscan.io/token/' };
     function explorerUrl(a, chain) {
       if (EXPLORERS[chain]) return EXPLORERS[chain] + a;
@@ -615,12 +667,12 @@
         const chg = p.priceChange && p.priceChange.h24 != null ? Number(p.priceChange.h24) : null;
         const age = p.pairCreatedAt ? ageLabel(p.pairCreatedAt) : '';
         const dex = p.dexId ? String(p.dexId).replace(/(^|[-_ ])([a-z])/g, (x, s, c) => (s ? ' ' : '') + c.toUpperCase()) : '';
-        body = '<div class="tk-h"><b>' + h(data.token.name || 'Token') + '</b><span class="tk-sym">$' + h(data.token.symbol || '') + '</span></div>' +
-          '<div class="tk-sub">' + h([CHAIN_NAMES[p.chainId] || p.chainId, dex, age ? 'pair ' + age + ' old' : ''].filter(Boolean).join(' · ')) + '</div>' +
+        body = '<div class="tk-h"><i class="tk-l">' + h((data.token.symbol || '?').slice(0, 1).toUpperCase()) + '</i><b>' + h(data.token.name || 'Token') + '</b><span class="tk-sym">$' + h(data.token.symbol || '') + '</span></div>' +
+          '<div class="tk-sub">' + h([chainName(p.chainId), dex, age ? 'pair ' + age + ' old' : ''].filter(Boolean).join(' · ')) + '</div>' +
           (data.priced ? '<div class="tk-price">' + h(usd(p.priceUsd)) + (chg != null ? ' <span class="' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% 24h</span>' : '') + '</div>' : '') +
           '<div class="tk-grid"><span>Market cap</span><b>' + h(usd(p.marketCap != null ? p.marketCap : p.fdv)) + '</b><span>Liquidity</span><b>' + h(usd((p.liquidity || {}).usd)) + '</b><span>24h volume</span><b>' + h(usd((p.volume || {}).h24)) + '</b></div>';
       }
-      return '<div class="tok" role="dialog" aria-label="Token ' + h(short) + '">' + body + '<div class="tk-a" title="' + h(a) + '">' + h(a) + '</div>' + foot + '<div class="tk-src">Data from DexScreener, fetched when you clicked.</div></div>';
+      return '<div class="tok" role="dialog" data-ca="' + h(a) + '" aria-label="Token ' + h(short) + '">' + body + '<div class="tk-a" title="' + h(a) + '">' + h(a) + '</div>' + foot + '<div class="tk-src">Data from DexScreener, fetched when you clicked.</div></div>';
     }
     let tokenFor = null;
     async function openToken(el) {
@@ -631,8 +683,10 @@
       pop.innerHTML = tokenCard(a, 'loading');
       placePop(el);
       let html;
+      let picked = null;
       try {
-        html = tokenCard(a, 'done', dexPick(await dexLookup(a), a, chain));
+        picked = dexPick(await dexLookup(a), a, chain);
+        html = tokenCard(a, 'done', picked);
       } catch (e) {
         html = tokenCard(a, 'error');
       }
@@ -640,6 +694,7 @@
       if (tokenFor !== a || pop.hidden) return;
       pop.innerHTML = html;
       placePop(el);
+      if (picked) tokenLogo(a, picked.logo);
     }
 
     // Ticker cards: filled from DexScreener once on screen (if the reader
@@ -665,6 +720,9 @@
       if (!d) return true;
       if (d.token.symbol) el.querySelector('.tkc-s').textContent = '$' + d.token.symbol;
       el.querySelector('.tkc-n').textContent = d.token.name || '';
+      const lt = el.querySelector('.tkc-l');
+      if (lt && d.token.symbol) lt.textContent = d.token.symbol.slice(0, 1).toUpperCase();
+      tokenLogo(a, d.logo);
       if (d.priced) {
         el.querySelector('.tkc-p').textContent = usd(d.pair.priceUsd);
         const chg = d.pair.priceChange && d.pair.priceChange.h24 != null ? Number(d.pair.priceChange.h24) : null;

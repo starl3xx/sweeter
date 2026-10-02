@@ -81,6 +81,9 @@
         dex: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
           ? (address) => Promise.resolve(api.runtime.sendMessage({ type: 'dex', address })).then((r) => (r && r.ok ? r.body : Promise.reject(new Error('lookup failed'))))
           : null,
+        dexLogo: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
+          ? (url) => Promise.resolve(api.runtime.sendMessage({ type: 'dexLogo', url })).then((r) => (r && r.ok ? r.body : ''))
+          : null,
       });
       // The native Mac app drives these from its menus and global hotkeys.
       Sweeter.native = { compose: ui.compose, toggle: ui.toggle, cmd: ui.cmd };

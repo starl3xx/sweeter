@@ -56,8 +56,12 @@
     dark(' .ipsw', '--sw:var(--cd)'),
   ].join('\n');
 
+  // The coin a token pill shows until its logo is known (a CSS mask).
+  const COIN = 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><path d="' + ((Sweeter.SYMBOLS && Sweeter.SYMBOLS.coin) || '') + '"/></svg>') + '")';
+
   Sweeter.css = `
 :host{all:initial}
+.app,.popout{--coin:${COIN}}
 *{box-sizing:border-box}
 .app{${LIGHT}
   --fs:14px; --chh:26px; --av:calc(var(--fs) * 2.475); /* avatar: 75% of Tweetbot’s 3.3em */ --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
@@ -300,17 +304,26 @@ img{display:block}
 
 /* repost menu */
 .tkcs{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px}
-.tkc{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:baseline;gap:8px;width:100%;max-width:440px;box-sizing:border-box;border:1px solid var(--div);border-radius:10px;background:var(--quote);padding:8px 12px;font:inherit;font-size:13px;color:var(--t2);text-align:left;cursor:pointer}
+.tkc{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto auto;align-items:baseline;gap:8px;width:100%;max-width:440px;box-sizing:border-box;border:1px solid var(--div);border-radius:10px;background:var(--quote);padding:8px 12px;font:inherit;font-size:13px;color:var(--t2);text-align:left;cursor:pointer}
 .tkc:hover{background:var(--sub)}
+.tkc-l,.tok .tk-l{flex:none;align-self:center;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 16%,var(--sub));color:var(--accent);font-size:11px;font-weight:700;font-style:normal;line-height:1}
+.tok .tk-l{width:28px;height:28px;font-size:14px}
+.tkc-l.has-logo,.tok .tk-l.has-logo{background:var(--logo) center/cover no-repeat;color:transparent}
+.pop .tok .tk-h{align-items:center}
 .tkc-s{color:var(--t1);font-weight:600}
 .tkc-n{color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tkc-p{color:var(--t1);font-weight:600;font-variant-numeric:tabular-nums}
 .tkc-c{font-weight:600;font-variant-numeric:tabular-nums}
 .tkc-c.up{color:#2B8F48}
 .tkc-c.down{color:#D9443A}
-.tx a.ca{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:var(--sub);border-radius:5px;padding:0 4px;white-space:nowrap}
-/* A ticker X tagged ($RSR) reads as a cashtag link, not an address chip. */
-.tx a.ca.tkl{font-family:inherit;font-size:inherit;background:none;border-radius:0;padding:0}
+/* Tokens in the text stand apart from links and plain cashtags: a tinted
+   pill with a coin (or the token's logo, once known). Addresses keep a
+   monospace face. */
+.tx a.ca{display:inline-flex;align-items:center;gap:3px;padding:0 5px 0 3px;border-radius:6px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:600;white-space:nowrap;text-decoration:none;line-height:1.35;vertical-align:baseline}
+.tx a.ca::before{content:'';flex:none;width:1em;height:1em;border-radius:50%;background:currentColor;-webkit-mask:var(--coin) center/contain no-repeat;mask:var(--coin) center/contain no-repeat}
+.tx a.ca.has-logo::before{-webkit-mask:none;mask:none;background:var(--logo) center/cover no-repeat}
+.tx a.ca:hover{background:color-mix(in srgb,var(--accent) 22%,transparent)}
+.tx a.ca:not(.tkl){font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;font-weight:500}
 .pop .tok{width:280px;padding:8px 8px 4px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--t2)}
 .tok .tk-h{display:flex;align-items:baseline;gap:6px;color:var(--t1)}
 .tok .tk-h b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}

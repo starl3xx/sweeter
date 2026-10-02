@@ -617,6 +617,15 @@
     return { ok: true };
   }
 
+  // X Pro's own answer to a post (the recorder reads CreateTweet's
+  // response): the new post's id, or X's error. Read, never sent.
+  let lastPostResult = null;
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (e.source !== window || !d || d.__sweeter !== 1 || (d.op !== 'CreateTweet' && d.op !== 'CreateNoteTweet') || !d.body) return;
+    lastPostResult = { at: Date.now(), id: d.body.id || null, error: d.body.error || null, status: d.body.status || 0 };
+  });
+
   // Put text and media into X Pro’s open composer and press its Post (or
   // Reply) button once.
   async function fillAndPost(text, opts) {
@@ -640,11 +649,26 @@
     }
     // A test run stops here, with nothing sent.
     if (o.dryRun) return { ok: true, dry: true };
+    const t0 = Date.now();
     btn.click();
-    // Sent: the composer closes, or resets to empty with Post disabled.
-    const sent = await waitFor(() => !composerOpen() || (norm(editor().innerText) === '' && !postEnabled()), 60000);
-    if (sent) closePanel();
-    return { ok: !!sent, reason: sent ? null : 'unsent' };
+    // Sent: X Pro's own answer names the new post (or X's error), or, if
+    // that never arrives, the composer closes or resets to empty.
+    const answer = () => (lastPostResult && lastPostResult.at >= t0 ? lastPostResult : null);
+    const closed = () => !composerOpen() || (norm(editor().innerText) === '' && !postEnabled());
+    const done = await waitFor(() => answer() || closed(), 45000);
+    const res = answer();
+    if (res && !res.id) {
+      const e = res.error || {};
+      return { ok: false, reason: 'xerror', detail: (e.message || 'HTTP ' + res.status) + (e.code ? ' (code ' + e.code + ')' : '') };
+    }
+    if (res || done) {
+      await waitFor(() => !composerOpen(), 3000);
+      closePanel();
+      return { ok: true, id: res ? res.id : null };
+    }
+    // No answer at all: what X Pro shows, if anything.
+    const t = document.querySelector('[data-testid="toast"]');
+    return { ok: false, reason: 'unsent', detail: t ? norm(t.innerText).slice(0, 200) : '' };
   }
 
   // Hand over to X Pro’s own composer with text and media already in place,

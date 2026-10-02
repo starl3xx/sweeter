@@ -151,3 +151,10 @@ test('a block’s time is its post’s (or repost’s) Snowflake, or a notificat
   const b = s.get('home').sorted[0];
   eq(s.timeOf('home', b), globalThis.Sweeter.util.snowflakeMs(p.rest_id));
 });
+
+test('a post answer from the recorder (CreateTweet) passes through the store harmlessly', () => {
+  const s = globalThis.Sweeter.createStore();
+  s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 200, id: '2104599248595714999', error: null } });
+  s.ingest({ op: 'CreateNoteTweet', vars: {}, body: { status: 403, id: null, error: { code: 226, message: 'automated' } } });
+  ok(true);
+});

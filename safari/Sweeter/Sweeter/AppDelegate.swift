@@ -283,6 +283,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.addItem(standard("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)), "", []))
         insert(window, after: "Go", in: main)
         NSApp.windowsMenu = window
+
+        // Help: report a problem (a filled-in GitHub issue) or visit the repo.
+        let help = NSMenu(title: "Help")
+        help.addItem(menuItem("Report a Problem…", "report", "", [], "exclamationmark.bubble"))
+        help.addItem(menuItem("Sweeter on GitHub", "github", "", [], "arrow.up.right.square"))
+        insert(help, after: "Window", in: main)
+        NSApp.helpMenu = help
     }
 
     /// A standard item sent down the responder chain (target nil).

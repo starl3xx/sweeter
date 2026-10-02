@@ -172,6 +172,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
           const post = (m) => window.webkit.messageHandlers.sweeter.postMessage(m);
           globalThis.SweeterNative = {
             translucent: \(translucent ? "true" : "false"),
+            osVersion: '\(ProcessInfo.processInfo.operatingSystemVersion.majorVersion).\(ProcessInfo.processInfo.operatingSystemVersion.minorVersion).\(ProcessInfo.processInfo.operatingSystemVersion.patchVersion)',
             counts: (c) => { post({ type: 'counts', notifications: c.notifications | 0, posts: c.posts | 0, columns: JSON.stringify(c.columns || []) }); },
             state: (s) => { post({ type: 'state', json: JSON.stringify(s) }); },
             menu: (m) => post({ type: 'menu', json: JSON.stringify(m) }),

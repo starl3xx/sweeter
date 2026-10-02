@@ -44,6 +44,10 @@ The Sweeter app needs none of this.
 
 Columns are X Pro’s own columns. When you add, remove, rename or reorder one in Sweeter, Sweeter does it with X Pro’s own controls, so the change follows you to every device. Sweeter’s own touches (colors, icons, filters, merged columns, groups) stay on this Mac.
 
+## Report a problem
+
+In the Mac app choose **Help ▸ Report a Problem…**; in Safari open the command palette (⇧⌘P) and choose **Report a Problem…**, or use the link at the bottom of Preferences. It opens a [GitHub issue](https://github.com/starl3xx/sweeter/issues/new?template=bug_report.yml) already filled in with Sweeter’s version, your macOS or Safari version, X’s language and the last error Sweeter showed. Nothing else is included, and nothing is sent until you submit it. Issues are public, so leave out anything private.
+
 ## Build from source
 
 Needs Xcode 26 or later and Node.js.

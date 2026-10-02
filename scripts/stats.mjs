@@ -88,6 +88,9 @@ if (trafficToken) {
   const clones = await api('/traffic/clones', trafficToken);
   const referrers = await api('/traffic/popular/referrers', trafficToken);
   traffic = {
+    // GitHub's own 14-day totals (days with no views are left out of the
+    // daily list, so counting rows would span more than 14 days).
+    total: { views: views.count, uniques: views.uniques },
     views: upsert('views.csv', ['date', 'views', 'unique_visitors'], 1, views.views.map((d) => [d.timestamp.slice(0, 10), d.count, d.uniques])),
     clones: upsert('clones.csv', ['date', 'clones', 'unique_cloners'], 1, clones.clones.map((d) => [d.timestamp.slice(0, 10), d.count, d.uniques])),
     referrers: upsert('referrers.csv', ['date', 'referrer', 'views_14_days', 'unique_visitors_14_days'], 2, referrers.map((r) => [today, r.referrer, r.count, r.uniques])),
@@ -106,10 +109,7 @@ let md = '# Sweeter download stats\n\nUpdated ' + today + ' by `.github/workflow
 md += '## Downloads\n\n**' + total + '** in total (every file of every release, as GitHub counts them, bots and repeats included).\n\n| Release | File | Downloads |\n|---|---|---:|\n';
 md += rows.map((r) => '| ' + r.rel + ' | ' + r.file + ' | ' + r.n + ' |').join('\n') + '\n';
 if (traffic) {
-  const last = (a, n) => a.slice(-n);
-  const sum = (a, i) => a.reduce((s, r) => s + Number(r[i]), 0);
-  const v14 = last(traffic.views, 14);
-  md += '\n## Repo traffic, last 14 days\n\n' + sum(v14, 1) + ' views; daily unique visitors peak at ' + Math.max(0, ...v14.map((r) => Number(r[2]))) + '. History: `views.csv`, `clones.csv`, `referrers.csv`.\n';
+  md += '\n## Repo traffic, last 14 days\n\n' + traffic.total.views + ' views from ' + traffic.total.uniques + ' unique visitors. History: `views.csv`, `clones.csv`, `referrers.csv`.\n';
   const refs = traffic.referrers.filter((r) => r[0] === today);
   if (refs.length) md += '\n| Referrer | Views | Unique |\n|---|---:|---:|\n' + refs.map((r) => '| ' + r[1] + ' | ' + r[2] + ' | ' + r[3] + ' |').join('\n') + '\n';
 } else md += '\nRepo traffic is not recorded yet: it needs the TRAFFIC_TOKEN secret (see `scripts/stats.mjs`).\n';

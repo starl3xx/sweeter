@@ -539,6 +539,7 @@
       return hit && Date.now() - hit.at < DEX_FRESH ? hit.body : null;
     };
     // Up to 30 addresses in one request; each address keeps its own pairs.
+    // Callers pass at most 30 (fillTickers splits longer lists).
     async function dexLookupMany(list) {
       const want = [...new Set(list)].filter((a) => !dexFresh(a)).slice(0, 30);
       if (want.length) {
@@ -686,16 +687,35 @@
       }
       if (tkWant.size && !tkTimer) tkTimer = setTimeout(fillTickers, 250);
     }
+    // Every queued address, 30 per request. A failed request frees its
+    // cards to be watched again, and one retry follows a minute later.
+    let tkRetry = 0;
     async function fillTickers() {
       tkTimer = 0;
       const list = [...tkWant];
       tkWant.clear();
-      try {
-        await dexLookupMany(list);
-      } catch (e) {
-        return;
+      const failed = [];
+      for (let i = 0; i < list.length; i += 30) {
+        const part = list.slice(i, i + 30);
+        try {
+          await dexLookupMany(part);
+        } catch (e) {
+          failed.push(...part);
+        }
       }
-      for (const root of tickerRoots()) for (const el of root.querySelectorAll('.tkc:not([data-filled])')) if (list.includes(el.dataset.ca)) paintTicker(el);
+      for (const root of tickerRoots()) {
+        for (const el of root.querySelectorAll('.tkc:not([data-filled])')) {
+          if (failed.includes(el.dataset.ca)) delete el.dataset.obs;
+          else if (list.includes(el.dataset.ca)) paintTicker(el);
+        }
+      }
+      if (failed.length && !tkRetry) {
+        tkRetry = setTimeout(() => {
+          tkRetry = 0;
+          watchTickers(shadow);
+          for (const rec of popouts.values()) if (!rec.w.closed) watchTickers(rec.root, true);
+        }, 60000);
+      }
     }
 
     function openUrl(url) {
@@ -5657,6 +5677,13 @@
           showMain();
           return openCompose('quote', menu.dataset.id, ref);
         }
+      }
+      // A ticker card or contract address: DexScreener's page (the token
+      // card is anchored in the main window, which may be elsewhere).
+      const tok = t.closest('.tkc, a.ca');
+      if (tok) {
+        e.preventDefault();
+        return openUrl('https://dexscreener.com/search?q=' + encodeURIComponent(tok.dataset.ca));
       }
       const cell = t.closest('.cell[data-id]');
       const act = t.closest('[data-act]');

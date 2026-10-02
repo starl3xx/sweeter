@@ -169,3 +169,17 @@ test('X Articles become a card and their bare link leaves the text', () => {
   eq(p.html, 'A new kind of workforce');
   eq(p.article, { id: '2104', title: 'The Agentic Workforce', preview: 'Why teams of agents…', image: 'https://pbs.twimg.com/media/cover.jpg', w: 1200, h: 480, url: 'https://x.com/i/article/2104' });
 });
+
+test('smart tags and cashtag attachments become ticker cards; the text shows $TICKER', () => {
+  const F = require('./fixtures');
+  const N = globalThis.Sweeter.normalize;
+  const id = 'ethereum:0x320623b8e4ff03373931769a31fc52a4e78b5d70';
+  const text = 'hot in here ' + id + ' and $XRP';
+  const r = F.tweet({ text, entities: { smarttags: [{ indices: [12, 12 + id.length], text: id, tag: { info: { info: { name: 'Reserve Rights', ticker: 'RSR' } } } }] } });
+  r.cashtag_attachments = [{ rest_id: id }, { rest_id: 'ripple:native' }, { rest_id: '$CRCL' }];
+  const p = N.post(r);
+  eq(p.tickers, [{ chain: 'ethereum', address: '0x320623b8e4ff03373931769a31fc52a4e78b5d70', symbol: 'RSR', name: 'Reserve Rights' }]);
+  ok(p.html.includes('class="ca tkl"') && p.html.includes('>$RSR</a>') && !p.html.includes('ethereum:'), p.html);
+  eq(p.plain, 'hot in here $RSR and $XRP');
+  eq(N.post(F.tweet({ text: 'plain' })).tickers, []);
+});

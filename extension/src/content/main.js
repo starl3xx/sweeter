@@ -76,6 +76,11 @@
         late,
         version: (api.runtime && api.runtime.getManifest && api.runtime.getManifest().version) || '',
         native: globalThis.SweeterNative || null,
+        // Token details for a clicked contract address, via the background
+        // script (Safari). The Mac app answers through its own bridge.
+        dex: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
+          ? (address) => Promise.resolve(api.runtime.sendMessage({ type: 'dex', address })).then((r) => (r && r.ok ? r.body : Promise.reject(new Error('lookup failed'))))
+          : null,
       });
       // The native Mac app drives these from its menus and global hotkeys.
       Sweeter.native = { compose: ui.compose, toggle: ui.toggle, cmd: ui.cmd };

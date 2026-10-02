@@ -91,3 +91,23 @@ test('compact counts', () => {
   eq(U.compactCount(25000), '25K');
   eq(U.compactCount(1200000), '1.2M');
 });
+
+test('contract addresses link to DexScreener, shortened; links and hashes stay as they are', () => {
+  const { richText } = globalThis.Sweeter.text;
+  const evm = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+  let html = richText('CA: ' + evm + ' on Base');
+  ok(html.includes('class="ca"') && html.includes('data-ca="' + evm + '"'), html);
+  ok(html.includes('>0x8335…2913</a>'), 'shortened: ' + html);
+  ok(html.includes('https://dexscreener.com/search?q=' + evm), html);
+  // A 64-digit transaction hash is not an address.
+  ok(!richText('tx 0x' + 'ab'.repeat(32)).includes('class="ca"'), 'tx hash');
+  // An address inside a link entity stays that link.
+  const url = 'https://basescan.org/token/' + evm;
+  const linked = richText('see https://t.co/abc', { urls: [{ url: 'https://t.co/abc', expanded_url: url, display_url: 'basescan.org/token/0x83…', indices: [4, 20] }] });
+  ok(!linked.includes('class="ca"'), linked);
+  // Solana: base58 with a digit and both cases; a long plain word is not one.
+  const sol = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr';
+  ok(richText('sol ' + sol + ' pump').includes('data-ca="' + sol + '"'), 'solana');
+  ok(!richText('pneumonoultramicroscopicsilicovolcanoconiosis').includes('class="ca"'), 'long word');
+  ok(!richText('x' + evm).includes('class="ca"'), 'glued to a word');
+});

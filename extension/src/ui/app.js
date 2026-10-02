@@ -404,6 +404,7 @@
     const bootEl = shadow.querySelector('.boot');
     const bootStart = Date.now();
     let booting = true;
+    const ntChecked = new Set(); // view ids whose alerts were checked (checkNewAlerts)
     const toastEl = shadow.querySelector('.toast');
     const utoast = shadow.querySelector('.utoast');
     const addBack = shadow.querySelector('.add-back');
@@ -715,6 +716,7 @@
       c.el.dataset.vid = to;
       cols.set(to, c);
       if (focusVid === from) focusVid = to;
+      if (ntChecked.delete(from)) ntChecked.add(to);
       let changed = false;
       for (const n of OWN) {
         if (settings[n] && from in settings[n]) {
@@ -1841,7 +1843,7 @@
 
     function finishBoot() {
       booting = false;
-      setTimeout(() => checkNotify(null, false), 1500);
+      setTimeout(checkNewAlerts, 1500);
       colsEl.classList.remove('hold');
       let i = 0;
       for (const el of colsEl.children) {
@@ -3376,7 +3378,10 @@
       settings.colAlerts = Object.assign({}, settings.colAlerts, { [c.vid]: v });
       persist();
       toast(v === 'off' ? 'Alerts off for “' + titleOf(c.vid) + '”' : 'Alerts on for “' + titleOf(c.vid) + '”', 'bell');
-      if (v !== 'off') checkNotify([c], true);
+      if (v !== 'off') {
+        ntChecked.add(c.vid);
+        checkNotify([c], true);
+      }
     }
 
     // Notification permission (Mac app). macOS is asked when alerts are
@@ -3387,6 +3392,9 @@
     const alertCols = () => shown().map((e) => cols.get(e.vid)).filter((c) => c && alertOf(c) !== 'off');
     async function checkNotify(list, fromUser) {
       if (!native || !native.notifyStatus || settings.alertsMuted) return;
+      // Unasked, nothing that would alert asks nothing.
+      const l = list || alertCols();
+      if (!l.length && !fromUser) return;
       const st = await native.notifyStatus();
       if (st === 'ask') {
         // macOS shows its own prompt; a no there is respected until the
@@ -3400,14 +3408,22 @@
         settings.notifyNagAt = Date.now();
         persist();
       }
-      const l = list || alertCols();
-      if (!l.length && !fromUser) return;
       const what = l.length === 1 ? '“' + titleOf(l[0].vid) + '”' : l.length ? l.length + ' columns' : 'Sweeter';
       ntBack.querySelector('.nt-ic').innerHTML = icon('bell');
       ntBack.querySelector('.nt-b').textContent = 'Alerts are on for ' + what + ', but notifications for Sweeter are turned off in macOS, so none can show. Turn on Allow Notifications for Sweeter in System Settings.';
       closePop();
       ntBack.hidden = false;
       ntBack.querySelector('[data-cmd="nt-go"]').focus({ preventScroll: true });
+    }
+    // Columns that alert, checked once each (ntChecked, by view id): after
+    // loading, then as they arrive (a notifications column alerts by
+    // default, and its kind is known only once its posts are).
+    function checkNewAlerts() {
+      if (booting || !native || !native.notifyStatus) return;
+      const fresh = alertCols().filter((c) => !ntChecked.has(c.vid));
+      if (!fresh.length) return;
+      for (const c of fresh) ntChecked.add(c.vid);
+      checkNotify(fresh, false);
     }
     function closeNotify() {
       ntBack.hidden = true;
@@ -6219,6 +6235,7 @@
     setInterval(() => {
       if (settings.visible && remap(false)) for (const c of cols.values()) renderColumn(c, false);
       paintMe();
+      checkNewAlerts();
     }, 3000);
     setInterval(paintStale, 5000);
     const bootTimer = setInterval(() => {

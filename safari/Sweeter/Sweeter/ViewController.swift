@@ -180,6 +180,9 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             save: (f) => { post({ type: 'save', name: String(f.name || 'Sweeter.json'), text: String(f.text || '') }); },
             allowPopup: () => post({ type: 'allowPopup' }),
             show: () => post({ type: 'show' }),
+            notifyStatus: () => post({ type: 'notifyStatus' }),
+            notifyRequest: () => post({ type: 'notifyRequest' }),
+            notifySettings: () => post({ type: 'notifySettings' }),
             notify: (n) => { post({ type: 'notify', title: String(n.title || ''), body: String(n.body || ''), url: String(n.url || ''), subtitle: String(n.subtitle || ''), thread: String(n.thread || ''), key: String(n.key || ''), sound: !!n.sound }); },
             log: (m) => { post({ type: 'log', message: String(m) }); },
           };
@@ -233,6 +236,27 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 NotificationCenter.default.post(name: .sweeterState, object: nil)
             }
             replyHandler(nil, nil)
+        // Notification permission, asked for when the reader turns alerts on
+        // (never at launch, out of context): "on", "off" or "ask".
+        case "notifyStatus":
+            UNUserNotificationCenter.current().getNotificationSettings { s in
+                let v: String
+                switch s.authorizationStatus {
+                case .notDetermined: v = "ask"
+                case .denied: v = "off"
+                default: v = s.alertSetting == .disabled ? "off" : "on"
+                }
+                DispatchQueue.main.async { replyHandler(v, nil) }
+            }
+        case "notifyRequest":
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                DispatchQueue.main.async { replyHandler(granted, nil) }
+            }
+        case "notifySettings":
+            // Sweeter’s own page in System Settings ▸ Notifications.
+            let id = Bundle.main.bundleIdentifier ?? ""
+            if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=" + id) { NSWorkspace.shared.open(url) }
+            replyHandler(true, nil)
         case "allowPopup":
             // Sweeter is about to open a pop-out window (a blank page it
             // writes into). Only the next blank window, within two seconds.

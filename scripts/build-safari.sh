@@ -28,7 +28,7 @@ xcodebuild -project "$PROJ" -scheme Sweeter -configuration Release \
 
 APP="$DD/Build/Products/Release/Sweeter.app"
 DEST="/Applications/Sweeter.app"
-osascript -e 'tell application id "fun.starl3xx.Sweeter" to quit' >/dev/null 2>&1 || true
+osascript -e 'with timeout of 5 seconds' -e 'tell application id "fun.starl3xx.Sweeter" to quit' -e 'end timeout' >/dev/null 2>&1 || true
 rm -rf "$DEST"
 ditto "$APP" "$DEST"
 # A second copy in DerivedData makes Safari list the extension twice.
@@ -42,5 +42,5 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   pluginkit -m -i fun.starl3xx.Sweeter.Extension 2>/dev/null | grep -q "($VERSION)" && break
   sleep 1
 done
-osascript -e 'tell application id "fun.starl3xx.Sweeter" to quit' >/dev/null 2>&1 || true
+osascript -e 'with timeout of 5 seconds' -e 'tell application id "fun.starl3xx.Sweeter" to quit' -e 'end timeout' >/dev/null 2>&1 || true
 echo "Installed $DEST (v$VERSION)"

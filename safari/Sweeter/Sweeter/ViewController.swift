@@ -182,6 +182,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             allowPopup: () => post({ type: 'allowPopup' }),
             show: () => post({ type: 'show' }),
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
+            dexLogo: (u) => post({ type: 'dexLogo', url: String(u || '') }),
             notifyStatus: () => post({ type: 'notifyStatus' }),
             notifyRequest: () => post({ type: 'notifyRequest' }),
             notifySettings: () => post({ type: 'notifySettings' }),
@@ -256,6 +257,25 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                     return
                 }
                 replyHandler(String(data: data, encoding: .utf8), nil)
+            }
+        // A token logo from DexScreener's image server, as a data: URL (X's
+        // page allows no other image host). Only https on dexscreener.com,
+        // images only, small.
+        case "dexLogo":
+            guard let url = URL(string: body["url"] as? String ?? ""), url.scheme == "https",
+                  let host = url.host, host == "dexscreener.com" || host.hasSuffix(".dexscreener.com") else {
+                replyHandler(nil, "bad url")
+                return
+            }
+            Task {
+                guard let (data, response) = try? await URLSession.shared.data(from: url),
+                      let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                      let type = http.value(forHTTPHeaderField: "Content-Type")?.split(separator: ";").first.map(String.init),
+                      type.hasPrefix("image/"), data.count <= 200_000 else {
+                    replyHandler(nil, "logo failed")
+                    return
+                }
+                replyHandler("data:" + type + ";base64," + data.base64EncodedString(), nil)
             }
         // Notification permission, asked for when the reader turns alerts on
         // (never at launch, out of context): "on", "off" or "ask".

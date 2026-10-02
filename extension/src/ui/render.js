@@ -135,7 +135,7 @@
   // 24-hour change once DexScreener answers (app.js fills them in).
   function tickerCards(list) {
     if (!list || !list.length) return '';
-    return '<div class="tkcs">' + list.map((t) => '<button type="button" class="tkc" data-ca="' + h(t.address) + '" data-chain="' + h(t.chain) + '" title="' + h(t.chain + ' ' + t.address) + '"><b class="tkc-s">' + h(t.symbol ? '$' + t.symbol : t.address.slice(0, 6) + '…' + t.address.slice(-4)) + '</b><span class="tkc-n">' + h(t.name || '') + '</span><span class="tkc-p"></span><span class="tkc-c"></span></button>').join('') + '</div>';
+    return '<div class="tkcs">' + list.map((t) => '<button type="button" class="tkc" data-ca="' + h(t.address) + '" data-chain="' + h(t.chain) + '" title="' + h(t.chain + ' ' + t.address) + '"><i class="tkc-l">' + h((t.symbol || '?').slice(0, 1).toUpperCase()) + '</i><b class="tkc-s">' + h(t.symbol ? '$' + t.symbol : t.address.slice(0, 6) + '…' + t.address.slice(-4)) + '</b><span class="tkc-n">' + h(t.name || '') + '</span><span class="tkc-p"></span><span class="tkc-c"></span></button>').join('') + '</div>';
   }
 
   // What sits between the name line and the buttons. With small thumbnails

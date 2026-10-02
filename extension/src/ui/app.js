@@ -6230,10 +6230,12 @@
         app.classList.add('switching');
         requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('switching')));
       }
+      // Text size and density pick the avatar size: redraw when it flips.
+      const avBefore = R.avatarSmall(settings);
       settings[key] = val;
       applySettings();
       persist();
-      if (REBUILD.has(key)) rebuildAll();
+      if (REBUILD.has(key) || R.avatarSmall(settings) !== avBefore) rebuildAll();
       if (key === 'fit' || key === 'snap' || key === 'alertsMuted') reportState();
     }
 

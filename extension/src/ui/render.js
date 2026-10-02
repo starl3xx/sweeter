@@ -7,8 +7,15 @@
   const { escapeHtml: h, safeUrl, relativeTime, absoluteTime, compactCount } = Sweeter.util;
   const icon = Sweeter.icon;
 
-  // X serves avatars at 48 (_normal), 73 (_bigger), 200 and 400 px. A 46 pt
-  // avatar on a Retina screen needs about 92 px, so use 200; tiny ones use 73.
+  // X serves avatars at 48 (_normal), 73 (_bigger), 200 and 400 px. A post's
+  // avatar is --av (text size × 2.475, or × 2 compact): at the default 14 px
+  // that is ~35 pt, 69 px on Retina, so 73 is enough; larger text uses 200.
+  // (200 px decodes to ~7.5× the pixels, for every post.)
+  function avatarSmall(settings) {
+    const fs = Number(settings && settings.fontSize) || 14;
+    const dpr = Math.max(2, typeof devicePixelRatio === 'number' ? devicePixelRatio : 2);
+    return fs * (settings && settings.density === 'compact' ? 2 : 2.475) * dpr <= 73;
+  }
   function profile(handle) {
     return 'https://x.com/' + encodeURIComponent(handle);
   }
@@ -183,7 +190,7 @@
     }
     return '<article class="' + cls + '" data-id="' + h(p.id) + '" data-url="' + h(safeUrl(p.url)) + '">' +
       top +
-      '<a class="avl" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" aria-label="' + h(p.author.name) + ' on X"><img class="av" src="' + h(avatar(p.author.avatar)) + '" alt="" loading="lazy" decoding="async"></a>' +
+      '<a class="avl" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" aria-label="' + h(p.author.name) + ' on X"><img class="av" src="' + h(avatar(p.author.avatar, avatarSmall(ctx.settings))) + '" alt="" loading="lazy" decoding="async"></a>' +
       '<div class="main">' +
       '<div class="meta"><a class="nm" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" title="' + h(p.author.name) + '">' + h(p.author.name) + '</a>' + badges(p.author, ctx) + (p.author.protected ? icon('lock', 'lock') : '') +
       '<a class="hd" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" title="@' + h(p.author.handle) + '">@' + h(p.author.handle) + '</a>' + time(p.createdMs, p.url, ctx) + '</div>' +
@@ -237,5 +244,5 @@
     return post(b.post, Object.assign({}, ctx, { context: b.context }));
   }
 
-  Sweeter.render = { block, post, notification, timeLabel, avatar, badges };
+  Sweeter.render = { block, post, notification, timeLabel, avatar, badges, avatarSmall };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

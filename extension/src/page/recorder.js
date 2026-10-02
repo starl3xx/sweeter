@@ -159,7 +159,12 @@
         this.addEventListener('load', function () {
           // A post's answer counts even when X refuses it (403 with errors).
           const posting = POSTING.has(op);
-          if (this.status !== 200 && !posting) return;
+          // A refused refresh (429 and the like): only its status, so the
+          // column can say why it is stale.
+          if (this.status !== 200 && !posting) {
+            if (this.status) emit(op, varsOf(url, body), { __status: this.status }, seq);
+            return;
+          }
           let json = null;
           try {
             if (this.responseType === '' || this.responseType === 'text') json = JSON.parse(this.responseText);
@@ -184,7 +189,10 @@
         const seq = ++sent;
         p.then((r) => {
           const posting = POSTING.has(op);
-          if (r.status !== 200 && !posting) return;
+          if (r.status !== 200 && !posting) {
+            if (r.status) emit(op, varsOf(url, init && init.body), { __status: r.status }, seq);
+            return;
+          }
           r.clone()
             .json()
             .then((json) => emit(op, posting ? {} : varsOf(url, init && init.body), json, seq, r.status), () => posting && emit(op, {}, {}, seq, r.status));

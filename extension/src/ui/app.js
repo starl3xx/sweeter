@@ -279,12 +279,17 @@
     host.style.cssText = 'position:fixed;inset:0;z-index:2147483000;pointer-events:none;';
     document.body.appendChild(host);
     const shadow = host.attachShadow({ mode: 'open' });
-    if (native) {
-      // In the Mac app the sidebar is a real translucent macOS sidebar drawn
-      // behind the page, so X Pro’s own page (still running underneath) must
-      // not paint while Sweeter is showing.
+    {
+      // X Pro's page keeps running under Sweeter. visibility:hidden stops it
+      // painting and decoding images nobody sees (its layout, polls and
+      // buttons still work); xpro.js lifts it ('sweeter-acting') only while
+      // it types into X Pro, since focus and innerText need it visible. In
+      // the Mac app the sidebar is a real translucent macOS sidebar drawn
+      // behind the page, so the page's background goes too.
       const pageStyle = document.createElement('style');
-      pageStyle.textContent = 'html.sweeter-cover,html.sweeter-cover body{background:transparent !important}html.sweeter-cover body>*:not(#sweeter-host){opacity:0 !important}';
+      pageStyle.textContent =
+        'html.sweeter-cover:not(.sweeter-acting) body>*:not(#sweeter-host){visibility:hidden !important}' +
+        (native ? 'html.sweeter-cover,html.sweeter-cover body{background:transparent !important}html.sweeter-cover body>*:not(#sweeter-host){opacity:0 !important}' : '');
       (document.head || document.documentElement).appendChild(pageStyle);
     }
     if ('adoptedStyleSheets' in shadow && typeof CSSStyleSheet === 'function' && 'replaceSync' in CSSStyleSheet.prototype) {
@@ -468,10 +473,8 @@
       else delete app.dataset.black;
       app.hidden = !settings.visible || passthrough;
       fab.hidden = settings.visible || passthrough;
-      if (native) {
-        document.documentElement.classList.toggle('sweeter-cover', settings.visible && !passthrough);
-        reportState();
-      }
+      document.documentElement.classList.toggle('sweeter-cover', settings.visible && !passthrough);
+      if (native) reportState();
     }
 
     // Equal widths: no column keeps a width of its own, and every column
@@ -1828,9 +1831,15 @@
           if (s.kind === 'notifications') notes += n;
           else posts += n;
         }
-        if (native) native.counts({ notifications: notes, posts, columns: perCol });
+        // Only a change goes to the Dock and the menu bar.
+        const sig = JSON.stringify([notes, posts, perCol]);
+        if (native && sig !== lastCounts) {
+          lastCounts = sig;
+          native.counts({ notifications: notes, posts, columns: perCol });
+        }
       }, 800);
     }
+    let lastCounts = '';
 
     // Native app: a system notification for each new notification-column
     // item (at most three per refresh; nothing on the first load).
@@ -2123,6 +2132,12 @@
         if (el === nocolsEl) continue;
         el.style.setProperty('--d', i++ * 70 + 'ms');
         el.classList.add('arrive');
+        // The arrival plays once: a column moved later must not replay it.
+        el.addEventListener('animationend', function done(e) {
+          if (e.target !== el || e.animationName !== 'sweeter-col') return;
+          el.classList.remove('arrive');
+          el.removeEventListener('animationend', done);
+        });
       }
       bootEl.classList.add('done');
       setTimeout(() => bootEl.remove(), 600);
@@ -2133,19 +2148,88 @@
 
     const dirty = new Set();
     let frame = 0;
+    // Hidden (the Mac app's window closed or covered, a background tab,
+    // Sweeter toggled off): nothing is drawn, and the page's frames stop
+    // anyway. Alerts and the Dock badge still follow the data through a
+    // light pass without layout (dataTick); the first visible frame draws
+    // what changed meanwhile.
+    const live = () => settings.visible && !document.hidden;
+    const dataDirty = new Set();
+    let dataT = 0;
     function schedule(key) {
-      if (key) dirty.add(key);
+      if (key) {
+        dirty.add(key);
+        dataDirty.add(key);
+      }
+      if (!live()) {
+        if (native && !dataT && dataDirty.size) dataT = setTimeout(dataTick, 250);
+        return;
+      }
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
+        if (!live()) return schedule(null);
         remap(false);
         for (const e of layout) if (e.merge && e.merge.srcs.some((k) => dirty.has(k))) feedMerge(e.merge);
         for (const c of cols.values()) if (dirty.has(c.key)) renderColumn(c, true);
 
         dirty.clear();
+        dataDirty.clear();
         checkBoot();
       });
     }
+    function dataTick() {
+      // -1 while running: feedMerge emits re-enter schedule(), handled below.
+      dataT = -1;
+      for (const e of layout) if (e.merge && e.merge.srcs.some((k) => dataDirty.has(k))) feedMerge(e.merge);
+      for (const c of cols.values()) {
+        if (!dataDirty.has(c.key)) continue;
+        const s = store.get(c.key);
+        if (!s || s.kind === 'placeholder') continue;
+        notifyNew(c, s);
+        c.visSorts = visibleBlocks(s, c).map((x) => x.b.sortIndex);
+      }
+      dataDirty.clear();
+      dataT = 0;
+      reportCounts();
+    }
+    // Back on screen: draw what changed, refresh the clocks, look again.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return pauseLoops();
+      if (!settings.visible) return;
+      wake();
+    });
+    let wokeAt = 0;
+    function wake() {
+      wokeAt = Date.now();
+      schedule(null);
+      refreshStamps(true);
+      paintStale();
+      resumeLoops();
+    }
+    // Autoplaying loops stop while nobody can see them, and start again
+    // where the half-visible rule allows.
+    function pauseLoops() {
+      for (const v of shadow.querySelectorAll('video[data-obs]')) if (!v.paused) v.pause();
+    }
+    function resumeLoops() {
+      if (!io) return;
+      for (const v of shadow.querySelectorAll('video[data-obs]')) {
+        io.unobserve(v);
+        io.observe(v);
+      }
+    }
+    // X Pro's own muted previews under Sweeter: paused as they start (a
+    // sound the reader started is never touched; Sweeter's own videos are
+    // in its shadow root, and media events don't leave it).
+    document.addEventListener(
+      'play',
+      (e) => {
+        const v = e.target;
+        if (v instanceof HTMLMediaElement && v.muted && settings.visible && !passthrough && !host.contains(v)) v.pause();
+      },
+      true,
+    );
 
     function rebuildAll() {
       for (const c of cols.values()) {
@@ -3718,10 +3802,18 @@
       for (const c of cols.values()) {
         const s = store.get(c.key);
         const age = s && s.updated && s.kind !== 'placeholder' && s.kind !== 'conversation' ? now - s.updated : 0;
-        const stale = age > 75000;
-        c.stl.hidden = !stale;
+        // Just back on screen: X Pro was throttled meanwhile; give it a
+        // moment to refresh before calling a column stale.
+        const stale = age > 75000 && now - wokeAt > 40000;
+        if (c.stl.hidden !== !stale) c.stl.hidden = !stale;
         c.el.classList.toggle('stale', stale);
-        if (stale) c.stl.title = 'X Pro last refreshed this column ' + Math.round(age / 60000) + ' min ago. It may be off screen in X Pro, or X is slow.';
+        if (stale) {
+          const err = s.lastError && s.lastError.at > s.updated ? s.lastError.status : 0;
+          const t = err
+            ? 'X refused X Pro’s last refresh of this column (HTTP ' + err + (err === 429 ? ', too many requests' : '') + '). Last good refresh ' + Math.round(age / 60000) + ' min ago; X Pro tries again by itself.'
+            : 'X Pro last refreshed this column ' + Math.round(age / 60000) + ' min ago. It may be off screen in X Pro, or X is slow.';
+          if (c.stl.title !== t) c.stl.title = t;
+        }
       }
     }
 
@@ -4252,6 +4344,8 @@
 
     function toggle(show) {
       settings.visible = show == null ? !settings.visible : !!show;
+      if (settings.visible) setTimeout(wake, 0);
+      else pauseLoops();
       if (!settings.visible) {
         closePalette();
         closePicker(true);
@@ -6136,10 +6230,12 @@
         app.classList.add('switching');
         requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('switching')));
       }
+      // Text size and density pick the avatar size: redraw when it flips.
+      const avBefore = R.avatarSmall(settings);
       settings[key] = val;
       applySettings();
       persist();
-      if (REBUILD.has(key)) rebuildAll();
+      if (REBUILD.has(key) || R.avatarSmall(settings) !== avBefore) rebuildAll();
       if (key === 'fit' || key === 'snap' || key === 'alertsMuted') reportState();
     }
 
@@ -6533,26 +6629,52 @@
 
     // ---------- timers ----------
 
-    setInterval(() => {
+    // Timestamps: only where someone can see them, and only labels that
+    // changed (each write re-lays-out its post). Absolute dates change at
+    // midnight only.
+    let stampDay = '';
+    function refreshStamps(force) {
       const now = Date.now();
-      const stamps = Array.from(shadow.querySelectorAll('.tm[data-ts]'));
-      for (const rec of popouts.values()) if (!rec.w.closed) stamps.push(...rec.root.querySelectorAll('.tm[data-ts]'));
-      for (const el of stamps) {
-        const ms = Number(el.dataset.ts);
-        if (ms) el.textContent = R.timeLabel(ms, { settings, now });
+      const today = new Date(now).toDateString();
+      if (settings.dateFormat === 'absolute' && !force && today === stampDay) return;
+      stampDay = today;
+      const roots = [];
+      if (settings.visible && !document.hidden) roots.push(shadow);
+      for (const rec of popouts.values()) if (!rec.w.closed && !rec.w.document.hidden) roots.push(rec.root);
+      for (const root of roots) {
+        for (const el of root.querySelectorAll('.tm[data-ts]')) {
+          const ms = Number(el.dataset.ts);
+          if (!ms) continue;
+          const label = R.timeLabel(ms, { settings, now });
+          if (el.textContent !== label) el.textContent = label;
+        }
       }
-    }, 30000);
+    }
+    setInterval(() => refreshStamps(false), 30000);
     setInterval(() => {
+      // Hidden: X Pro's layout is not scanned (it forces a full layout).
+      if (document.hidden) return;
       if (settings.visible && remap(false)) for (const c of cols.values()) renderColumn(c, false);
       paintMe();
       checkNewAlerts();
     }, 3000);
-    setInterval(paintStale, 5000);
-    const bootTimer = setInterval(() => {
+    setInterval(() => live() && paintStale(), 5000);
+    let bootTimer = setInterval(bootTick, 500);
+    function bootTick() {
       if (!booting) return clearInterval(bootTimer);
       remap(false);
       checkBoot();
-    }, 500);
+      // X Pro shows no columns (an error page, signed out, rate limited):
+      // stop the animation, say so, and look less often. A slow X Pro still
+      // finishes loading through checkBoot.
+      if (booting && Date.now() - bootStart > 20000 && !mapping.length && !(store.decks && store.decks.ready()) && !bootEl.classList.contains('stuck')) {
+        bootEl.classList.add('stuck');
+        const st = bootEl.querySelector('.boot-s');
+        if (st) st.innerHTML = 'X Pro hasn’t shown any columns yet. <button class="lnk" type="button" data-cmd="xpro">Show X Pro</button> <button class="lnk" type="button" data-cmd="reload">Reload</button>';
+        clearInterval(bootTimer);
+        bootTimer = setInterval(bootTick, 2000);
+      }
+    }
 
     applySettings();
     remap(true);

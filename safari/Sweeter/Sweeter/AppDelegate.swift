@@ -84,8 +84,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     @objc func countsChanged(_ note: Notification) {
         columnCounts = note.userInfo?["columns"] as? [[String: Any]] ?? []
         let notes = note.userInfo?["notifications"] as? Int ?? 0
-        NSApp.dockTile.badgeLabel = notes > 0 ? String(notes) : nil
-        statusItem?.button?.title = notes > 0 ? " \(notes)" : ""
+        // Only a change reaches the Dock and the menu bar.
+        let label: String? = notes > 0 ? String(notes) : nil
+        if NSApp.dockTile.badgeLabel != label { NSApp.dockTile.badgeLabel = label }
+        let title = notes > 0 ? " \(notes)" : ""
+        if statusItem?.button?.title != title { statusItem?.button?.title = title }
     }
 
     // MARK: - Menu bar item

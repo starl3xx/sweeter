@@ -22,6 +22,7 @@
     else queue.push(m);
   });
 
+
   // Registered now, before X Pro’s scripts run, so Sweeter sees keys first.
   for (const type of ['keydown', 'keypress', 'keyup']) {
     window.addEventListener(type, (e) => ui && ui.onWindowKey(e), true);

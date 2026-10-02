@@ -1449,5 +1449,22 @@
     return !!(col && from(col.el));
   }
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn, stackToColumn, conversationToColumn, profileToColumn, renameColumn, clearInXPro, showLatestInXPro, openSearchEditor, drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch, addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer, composerOpen, fillAndPost, prefill, clearEditor, closePanel };
+  // While Sweeter covers X Pro, X Pro's page is visibility:hidden (app.js).
+  // Focus, selections and innerText need it visible, so the few actions
+  // that type into X Pro lift it for their duration (and a moment more for
+  // keys sent after they return). Nested calls share one lift.
+  let acting = 0;
+  async function awake(fn, linger) {
+    if (acting++ === 0) document.documentElement.classList.add('sweeter-acting');
+    try {
+      return await fn();
+    } finally {
+      setTimeout(() => {
+        if (--acting === 0) document.documentElement.classList.remove('sweeter-acting');
+      }, linger || 0);
+    }
+  }
+  const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
+
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

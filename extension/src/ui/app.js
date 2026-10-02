@@ -279,12 +279,17 @@
     host.style.cssText = 'position:fixed;inset:0;z-index:2147483000;pointer-events:none;';
     document.body.appendChild(host);
     const shadow = host.attachShadow({ mode: 'open' });
-    if (native) {
-      // In the Mac app the sidebar is a real translucent macOS sidebar drawn
-      // behind the page, so X Pro’s own page (still running underneath) must
-      // not paint while Sweeter is showing.
+    {
+      // X Pro's page keeps running under Sweeter. visibility:hidden stops it
+      // painting and decoding images nobody sees (its layout, polls and
+      // buttons still work); xpro.js lifts it ('sweeter-acting') only while
+      // it types into X Pro, since focus and innerText need it visible. In
+      // the Mac app the sidebar is a real translucent macOS sidebar drawn
+      // behind the page, so the page's background goes too.
       const pageStyle = document.createElement('style');
-      pageStyle.textContent = 'html.sweeter-cover,html.sweeter-cover body{background:transparent !important}html.sweeter-cover body>*:not(#sweeter-host){opacity:0 !important}';
+      pageStyle.textContent =
+        'html.sweeter-cover:not(.sweeter-acting) body>*:not(#sweeter-host){visibility:hidden !important}' +
+        (native ? 'html.sweeter-cover,html.sweeter-cover body{background:transparent !important}html.sweeter-cover body>*:not(#sweeter-host){opacity:0 !important}' : '');
       (document.head || document.documentElement).appendChild(pageStyle);
     }
     if ('adoptedStyleSheets' in shadow && typeof CSSStyleSheet === 'function' && 'replaceSync' in CSSStyleSheet.prototype) {
@@ -468,10 +473,8 @@
       else delete app.dataset.black;
       app.hidden = !settings.visible || passthrough;
       fab.hidden = settings.visible || passthrough;
-      if (native) {
-        document.documentElement.classList.toggle('sweeter-cover', settings.visible && !passthrough);
-        reportState();
-      }
+      document.documentElement.classList.toggle('sweeter-cover', settings.visible && !passthrough);
+      if (native) reportState();
     }
 
     // Equal widths: no column keeps a width of its own, and every column

@@ -30,7 +30,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
         run: node scripts/stats.mjs stats-data
+      # Runs even when Record failed after saving (a traffic error): the
+      # download counts are kept, and the job still shows as failed.
       - name: Commit
+        if: ${{ !cancelled() }}
         working-directory: stats-data
         run: |
           git config user.name 'github-actions[bot]'

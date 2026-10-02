@@ -1,0 +1,335 @@
+// Keeps one timeline per X Pro column and the reading position for each.
+// It only ever receives data; it never asks X for anything.
+(function (root) {
+  'use strict';
+  const Sweeter = root.Sweeter || (root.Sweeter = {});
+  const { compareSort, snowflakeMs } = Sweeter.util;
+  const N = Sweeter.normalize;
+
+  const MAX_BLOCKS = 600;
+
+  function createStore(opts) {
+    const o = opts || {};
+    const sources = new Map(); // key -> column state
+    const listNames = new Map(); // listId -> name
+    const details = new Map(); // focal post id -> { blocks (X’s order), updated }
+    // Profiles Sweeter asked X Pro to open: the person (by lowercase handle)
+    // and their timelines (by user id, then by X’s operation name, one per
+    // profile tab). A watched user’s timelines never become columns.
+    const profiles = new Map();
+    const profileIds = new Map(); // user id -> lowercase handle
+    const timelines = new Map(); // user id -> Map(op -> { blocks, sorted })
+    const watched = new Set();
+    const expected = new Set(); // lowercase handles whose id is not known yet
+    // X Pro’s decks and columns (lib/decks.js), from X Pro’s own traffic.
+    const decks = Sweeter.decks.createDecks();
+    // Reading positions, saved by time (ms). X numbers a timeline’s entries
+    // (sortIndex) afresh on every page load, so a saved sortIndex means
+    // nothing after a reload (verified 2026-09-30, P6). Notifications keep
+    // theirs, which is already a time. A pre-0.15 saved sortIndex from a
+    // timeline was itself a Snowflake made at fetch time: its time stands in.
+    const readPositions = {}; // key -> ms
+    for (const [k, v] of Object.entries(o.readPositions || {})) {
+      const t = typeof v === 'number' ? v : String(v).length >= 16 ? snowflakeMs(String(v)) : Number(v);
+      if (isFinite(t) && t > 0) readPositions[k] = t;
+    }
+    const listeners = new Set();
+
+    function emit(key) {
+      for (const fn of listeners) fn(key);
+    }
+
+    function ensure(src) {
+      let s = sources.get(src.key);
+      if (!s) {
+        s = {
+          key: src.key,
+          kind: src.kind,
+          title: src.listId && listNames.has(src.listId) ? listNames.get(src.listId) : src.title,
+          listId: src.listId || null,
+          blocks: new Map(),
+          sorted: [],
+          cursors: {},
+          readSort: null,
+          readAt: readPositions[src.key] || null,
+          xUnreadAbove: null,
+          updated: 0,
+          order: sources.size,
+        };
+        sources.set(src.key, s);
+      }
+      return s;
+    }
+
+    function resort(s) {
+      s.sorted = Array.from(s.blocks.values()).sort((a, b) => compareSort(b.sortIndex, a.sortIndex));
+      if (s.sorted.length > MAX_BLOCKS) {
+        for (const b of s.sorted.slice(MAX_BLOCKS)) s.blocks.delete(b.key);
+        s.sorted.length = MAX_BLOCKS;
+      }
+    }
+
+    // One captured response from the recorder: { op, vars, body }.
+    function ingest(msg) {
+      if (!msg || !msg.op || !msg.body) return null;
+      if (Sweeter.decks.OPS.has(msg.op)) {
+        if (decks.ingest(msg)) emit('decks');
+        return 'decks';
+      }
+      if (msg.op === 'ListByRestId') {
+        const info = N.listInfo(msg.body);
+        if (info && info.id) {
+          listNames.set(info.id, info.name);
+          for (const s of sources.values()) if (s.listId === info.id) s.title = info.name;
+          emit(null);
+        }
+        return null;
+      }
+      if (msg.op === 'UserByScreenName' || msg.op === 'UserByRestId') {
+        const pr = N.profile(msg.body);
+        if (!pr) return null;
+        const hl = pr.handle.toLowerCase();
+        profiles.set(hl, pr);
+        profileIds.set(String(pr.id), hl);
+        if (expected.has(hl)) {
+          expected.delete(hl);
+          watched.add(String(pr.id));
+        }
+        emit('profile:' + hl);
+        return 'profile:' + hl;
+      }
+      const uid = msg.vars && msg.vars.userId != null ? String(msg.vars.userId) : null;
+      if (uid && watched.has(uid) && msg.op !== 'Likes') {
+        let byOp = timelines.get(uid);
+        if (!byOp) timelines.set(uid, (byOp = new Map()));
+        let t = byOp.get(msg.op);
+        if (!t) byOp.set(msg.op, (t = { blocks: new Map(), sorted: [], pinned: null }));
+        for (const ins of N.timeline(msg.body)) {
+          if (ins.type === 'clear') t.blocks.clear();
+          else if (ins.type === 'add') for (const b of ins.blocks) t.blocks.set(b.key, b);
+          else if (ins.type === 'pin') t.pinned = ins.block;
+        }
+        t.sorted = Array.from(t.blocks.values()).sort((a, b) => compareSort(b.sortIndex, a.sortIndex));
+        if (t.pinned) t.sorted = [t.pinned].concat(t.sorted.filter((b) => b.key !== t.pinned.key));
+        emit('timeline:' + uid);
+        // Their profile column (if the deck has one) keeps getting posts
+        // while the sheet is open: only the ones it lacks, so a sheet’s own
+        // fetch never renumbers posts the column already shows.
+        const src = N.sourceFor(msg.op, msg.vars);
+        const cs = src && sources.get(src.key);
+        if (cs) {
+          let added = false;
+          for (const b of t.blocks.values()) {
+            if (!cs.blocks.has(b.key)) {
+              cs.blocks.set(b.key, b);
+              added = true;
+            }
+          }
+          if (added) {
+            resort(cs);
+            cs.updated = Date.now();
+            emit(cs.key);
+          }
+        }
+        return 'timeline:' + uid;
+      }
+      if (msg.op === 'TweetDetail') {
+        // A conversation X Pro opened: the focal post, what it replies to,
+        // and reply threads, kept in X’s order (not sorted like a timeline).
+        const id = msg.vars && msg.vars.focalTweetId ? String(msg.vars.focalTweetId) : null;
+        if (!id) return null;
+        let d = details.get(id);
+        for (const ins of N.timeline(msg.body)) {
+          if (ins.type === 'clear' || !d) d = { blocks: [], keys: new Set(), updated: 0 };
+          if (ins.type === 'add') {
+            for (const b of ins.blocks) {
+              if (d.keys.has(b.key)) continue;
+              d.keys.add(b.key);
+              d.blocks.push(b);
+            }
+          }
+        }
+        if (!d) return null;
+        d.updated = Date.now();
+        details.set(id, d);
+        emit('detail:' + id);
+        // A conversation column (declared by the UI) draws the same blocks.
+        if (sources.has('conv:' + id)) {
+          fillConv(sources.get('conv:' + id), d);
+          emit('conv:' + id);
+        }
+        return 'detail:' + id;
+      }
+      const src = N.sourceFor(msg.op, msg.vars);
+      if (!src) return null;
+      const s = ensure(src);
+      const firstLoad = s.blocks.size === 0;
+      for (const ins of N.timeline(msg.body)) {
+        switch (ins.type) {
+          case 'clear':
+            s.blocks.clear();
+            break;
+          case 'add':
+            for (const b of ins.blocks) s.blocks.set(b.key, b);
+            if (ins.cursors.top && (!s.cursors.top || firstLoad)) s.cursors.top = ins.cursors.top;
+            if (ins.cursors.bottom) s.cursors.bottom = ins.cursors.bottom;
+            break;
+          case 'pin':
+            // A profile’s pinned post: shown first, but outside time order.
+            ins.block.pinned = true;
+            s.blocks.set(ins.block.key, ins.block);
+            break;
+          case 'cursor':
+            s.cursors[ins.cursorType] = ins.value;
+            break;
+          case 'unreadAbove':
+            s.xUnreadAbove = ins.sortIndex;
+            break;
+          default:
+            break;
+        }
+      }
+      resort(s);
+      // First sight of a column this session: a saved position (a time)
+      // becomes this session’s sortIndex; with none, start “all read”,
+      // except notifications, where X tells us what is unread.
+      // ('1' means every post loaded so far was newer: look again as older
+      // pages arrive, until the reader moves the position themselves.)
+      if (s.sorted.length && (!s.readSort || (s.readSort === '1' && s.readAt))) {
+        if (s.readAt) s.readSort = sortAt(s, s.readAt);
+        else s.readSort = s.kind === 'notifications' && s.xUnreadAbove ? s.xUnreadAbove : s.sorted[0].sortIndex;
+      }
+      s.updated = Date.now();
+      emit(s.key);
+      return s.key;
+    }
+
+    // A block’s own time: a notification’s sortIndex (ms); a post’s id,
+    // or the repost’s that put it in the timeline; a thread’s newest post.
+    function blockTime(s, b) {
+      if (s.kind === 'notifications' || b.kind === 'notification') {
+        const n = Number(b.sortIndex);
+        return isFinite(n) && n > 1e12 && n < 1e14 ? n : null;
+      }
+      const ps = b.kind === 'post' ? [b.post] : b.kind === 'thread' ? b.posts : [];
+      let t = null;
+      for (const p of ps) {
+        const pt = p ? snowflakeMs(p.repostId || p.id) : NaN;
+        if (isFinite(pt) && (t == null || pt > t)) t = pt;
+      }
+      return t;
+    }
+    // This session’s sortIndex for a saved time: the newest block at or
+    // before it. Everything loaded is newer: all of it is unread.
+    function sortAt(s, t) {
+      for (const b of s.sorted) {
+        const bt = blockTime(s, b);
+        if (bt != null && bt <= t) return b.sortIndex;
+      }
+      return '1';
+    }
+
+    // X numbers a conversation in the order it shows it, so newest
+    // sortIndex first is X’s own order.
+    function fillConv(cs, d) {
+      cs.blocks = new Map(d.blocks.map((b) => [b.key, b]));
+      resort(cs);
+      if (!cs.readSort && cs.sorted.length) cs.readSort = cs.sorted[0].sortIndex;
+      cs.updated = Date.now();
+    }
+
+    function markRead(key, sortIndex) {
+      const s = sources.get(key);
+      if (!s || !sortIndex) return false;
+      if (s.readSort && compareSort(sortIndex, s.readSort) <= 0) return false;
+      s.readSort = sortIndex;
+      const b = s.sorted.find((x) => x.sortIndex === String(sortIndex));
+      const t = b ? blockTime(s, b) : null;
+      if (t != null && (!readPositions[key] || t > readPositions[key])) {
+        readPositions[key] = t;
+        s.readAt = t;
+        if (o.onRead) o.onRead(key, t, Object.assign({}, readPositions));
+      }
+      return true;
+    }
+
+    function markAllRead(key) {
+      const s = sources.get(key);
+      if (s && s.sorted.length) return markRead(key, s.sorted[0].sortIndex);
+      return false;
+    }
+
+    function isUnread(s, block) {
+      return !!s.readSort && compareSort(block.sortIndex, s.readSort) > 0;
+    }
+
+    return {
+      ingest,
+      decks,
+      markRead,
+      markAllRead,
+      isUnread,
+      // A block’s own time (ms), or null: what a saved position compares.
+      timeOf: (key, b) => {
+        const s = sources.get(key);
+        return s && b ? blockTime(s, b) : null;
+      },
+      get: (key) => sources.get(key),
+      detail: (id) => details.get(String(id)) || null,
+      profile: (handle) => profiles.get(String(handle).toLowerCase()) || null,
+      // Route this person’s timelines to the profile, by id or (when only
+      // the handle is known) once X Pro’s profile response names the id.
+      watch(handle, id) {
+        if (id) watched.add(String(id));
+        else if (handle) expected.add(String(handle).toLowerCase());
+      },
+      unwatch(handle, id, keep) {
+        if (id) {
+          watched.delete(String(id));
+          if (!keep) timelines.delete(String(id));
+        }
+        if (handle) expected.delete(String(handle).toLowerCase());
+      },
+      timeline: (id, ops) => {
+        const byOp = timelines.get(String(id));
+        if (!byOp) return null;
+        for (const op of ops) if (byOp.has(op)) return byOp.get(op);
+        return null;
+      },
+      all: () => Array.from(sources.values()).sort((a, b) => a.order - b.order),
+      listName: (id) => listNames.get(id),
+      // The id of a person X Pro has shown, by handle.
+      userId: (handle) => {
+        const pr = profiles.get(String(handle).toLowerCase());
+        return pr && pr.id ? String(pr.id) : null;
+      },
+      // A source Sweeter makes itself (a merged column): its blocks come
+      // from the UI, already deduplicated and numbered by post time.
+      feed(key, blocks) {
+        const s = sources.get(key);
+        if (!s) return;
+        s.blocks = new Map(blocks.map((b) => [b.key, b]));
+        resort(s);
+        if (s.sorted.length && (!s.readSort || (s.readSort === '1' && s.readAt))) s.readSort = s.readAt ? sortAt(s, s.readAt) : s.sorted[0].sortIndex;
+        s.updated = Date.now();
+        emit(key);
+      },
+      // A column whose timeline has not arrived yet (or never will: a
+      // placeholder) still needs a source to draw.
+      declare(src) {
+        if (!src || !src.key || sources.has(src.key)) return;
+        const s = ensure(src);
+        s.updated = Date.now();
+        const conv = /^conv:(\d+)$/.exec(src.key);
+        if (conv && details.has(conv[1])) fillConv(s, details.get(conv[1]));
+      },
+      subscribe(fn) {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+    };
+  }
+
+  Sweeter.createStore = createStore;
+  if (typeof module !== 'undefined' && module.exports) module.exports = createStore;
+})(typeof globalThis !== 'undefined' ? globalThis : this);

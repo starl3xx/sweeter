@@ -1,0 +1,585 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4A5B8F30306AC8D60046AF31 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F2F306AC8D60046AF31 /* AppDelegate.swift */; };
+		4A5B8F34306AC8D60046AF31 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F32306AC8D60046AF31 /* Main.html */; };
+		4A5B8F36306AC8D60046AF31 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F35306AC8D60046AF31 /* Icon.png */; };
+		4A5B8F38306AC8D60046AF31 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F37306AC8D60046AF31 /* Style.css */; };
+		4A5B8F3A306AC8D60046AF31 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F39306AC8D60046AF31 /* Script.js */; };
+		4A5B8F3C306AC8D60046AF31 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F3B306AC8D60046AF31 /* ViewController.swift */; };
+		4A5B8F3F306AC8D60046AF31 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F3D306AC8D60046AF31 /* Main.storyboard */; };
+		4A5B8F41306AC8D70046AF31 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F40306AC8D70046AF31 /* Assets.xcassets */; };
+		4A5B8F48306AC8D80046AF31 /* Sweeter Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4A5B8F47306AC8D80046AF31 /* Sweeter Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4A5B8F4D306AC8D80046AF31 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F4C306AC8D80046AF31 /* SafariWebExtensionHandler.swift */; };
+		4A5B8F5C306AC8D80046AF31 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F59306AC8D80046AF31 /* icons */; };
+		4A5B8F5D306AC8D80046AF31 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F5A306AC8D80046AF31 /* manifest.json */; };
+		4A5B8F5E306AC8D80046AF31 /* src in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F5B306AC8D80046AF31 /* src */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4A5B8F49306AC8D80046AF31 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4A5B8F24306AC8D60046AF31 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4A5B8F46306AC8D80046AF31;
+			remoteInfo = "Sweeter Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		4A5B8F54306AC8D80046AF31 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				4A5B8F48306AC8D80046AF31 /* Sweeter Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		4A5B8F2C306AC8D60046AF31 /* Sweeter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sweeter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4A5B8F2F306AC8D60046AF31 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		4A5B8F33306AC8D60046AF31 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		4A5B8F35306AC8D60046AF31 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		4A5B8F37306AC8D60046AF31 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		4A5B8F39306AC8D60046AF31 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		4A5B8F3B306AC8D60046AF31 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		4A5B8F3E306AC8D60046AF31 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		4A5B8F40306AC8D70046AF31 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4A5B8F42306AC8D70046AF31 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4A5B8F47306AC8D80046AF31 /* Sweeter Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Sweeter Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		4A5B8F4C306AC8D80046AF31 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		4A5B8F4E306AC8D80046AF31 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4A5B8F59306AC8D80046AF31 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = ../../../extension/icons; sourceTree = "<group>"; };
+		4A5B8F5A306AC8D80046AF31 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = ../../../extension/manifest.json; sourceTree = "<group>"; };
+		4A5B8F5B306AC8D80046AF31 /* src */ = {isa = PBXFileReference; lastKnownFileType = folder; name = src; path = ../../../extension/src; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4A5B8F29306AC8D60046AF31 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		4A5B8F44306AC8D80046AF31 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4A5B8F23306AC8D60046AF31 = {
+			isa = PBXGroup;
+			children = (
+				4A5B8F2E306AC8D60046AF31 /* Sweeter */,
+				4A5B8F4B306AC8D80046AF31 /* Sweeter Extension */,
+				4A5B8F2D306AC8D60046AF31 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4A5B8F2D306AC8D60046AF31 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4A5B8F2C306AC8D60046AF31 /* Sweeter.app */,
+				4A5B8F47306AC8D80046AF31 /* Sweeter Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4A5B8F2E306AC8D60046AF31 /* Sweeter */ = {
+			isa = PBXGroup;
+			children = (
+				4A5B8F2F306AC8D60046AF31 /* AppDelegate.swift */,
+				4A5B8F3B306AC8D60046AF31 /* ViewController.swift */,
+				4A5B8F3D306AC8D60046AF31 /* Main.storyboard */,
+				4A5B8F40306AC8D70046AF31 /* Assets.xcassets */,
+				4A5B8F42306AC8D70046AF31 /* Info.plist */,
+				4A5B8F31306AC8D60046AF31 /* Resources */,
+			);
+			path = "Sweeter";
+			sourceTree = "<group>";
+		};
+		4A5B8F31306AC8D60046AF31 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				4A5B8F32306AC8D60046AF31 /* Main.html */,
+				4A5B8F35306AC8D60046AF31 /* Icon.png */,
+				4A5B8F37306AC8D60046AF31 /* Style.css */,
+				4A5B8F39306AC8D60046AF31 /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		4A5B8F4B306AC8D80046AF31 /* Sweeter Extension */ = {
+			isa = PBXGroup;
+			children = (
+				4A5B8F58306AC8D80046AF31 /* Resources */,
+				4A5B8F4C306AC8D80046AF31 /* SafariWebExtensionHandler.swift */,
+				4A5B8F4E306AC8D80046AF31 /* Info.plist */,
+			);
+			path = "Sweeter Extension";
+			sourceTree = "<group>";
+		};
+		4A5B8F58306AC8D80046AF31 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				4A5B8F59306AC8D80046AF31 /* icons */,
+				4A5B8F5A306AC8D80046AF31 /* manifest.json */,
+				4A5B8F5B306AC8D80046AF31 /* src */,
+			);
+			name = Resources;
+			path = "Sweeter Extension";
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4A5B8F2B306AC8D60046AF31 /* Sweeter */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4A5B8F55306AC8D80046AF31 /* Build configuration list for PBXNativeTarget "Sweeter" */;
+			buildPhases = (
+				4A5B8F28306AC8D60046AF31 /* Sources */,
+				4A5B8F29306AC8D60046AF31 /* Frameworks */,
+				4A5B8F2A306AC8D60046AF31 /* Resources */,
+				4A5B8F54306AC8D80046AF31 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4A5B8F4A306AC8D80046AF31 /* PBXTargetDependency */,
+			);
+			name = "Sweeter";
+			productName = "Sweeter";
+			productReference = 4A5B8F2C306AC8D60046AF31 /* Sweeter.app */;
+			productType = "com.apple.product-type.application";
+		};
+		4A5B8F46306AC8D80046AF31 /* Sweeter Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4A5B8F51306AC8D80046AF31 /* Build configuration list for PBXNativeTarget "Sweeter Extension" */;
+			buildPhases = (
+				4A5B8F43306AC8D80046AF31 /* Sources */,
+				4A5B8F44306AC8D80046AF31 /* Frameworks */,
+				4A5B8F45306AC8D80046AF31 /* Resources */,
+			);
+			buildRules = (
+			);
+			name = "Sweeter Extension";
+			productName = "Sweeter Extension";
+			productReference = 4A5B8F47306AC8D80046AF31 /* Sweeter Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4A5B8F24306AC8D60046AF31 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					4A5B8F2B306AC8D60046AF31 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					4A5B8F46306AC8D80046AF31 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = 4A5B8F27306AC8D60046AF31 /* Build configuration list for PBXProject "Sweeter" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 4A5B8F23306AC8D60046AF31;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 4A5B8F2D306AC8D60046AF31 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4A5B8F2B306AC8D60046AF31 /* Sweeter */,
+				4A5B8F46306AC8D80046AF31 /* Sweeter Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		4A5B8F2A306AC8D60046AF31 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				4A5B8F36306AC8D60046AF31 /* Icon.png in Resources */,
+				4A5B8F3F306AC8D60046AF31 /* Main.storyboard in Resources */,
+				4A5B8F3A306AC8D60046AF31 /* Script.js in Resources */,
+				4A5B8F34306AC8D60046AF31 /* Main.html in Resources */,
+				4A5B8F41306AC8D70046AF31 /* Assets.xcassets in Resources */,
+				4A5B8F38306AC8D60046AF31 /* Style.css in Resources */,
+			);
+		};
+		4A5B8F45306AC8D80046AF31 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				4A5B8F5E306AC8D80046AF31 /* src in Resources */,
+				4A5B8F5D306AC8D80046AF31 /* manifest.json in Resources */,
+				4A5B8F5C306AC8D80046AF31 /* icons in Resources */,
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4A5B8F28306AC8D60046AF31 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				4A5B8F3C306AC8D60046AF31 /* ViewController.swift in Sources */,
+				4A5B8F30306AC8D60046AF31 /* AppDelegate.swift in Sources */,
+			);
+		};
+		4A5B8F43306AC8D80046AF31 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				4A5B8F4D306AC8D80046AF31 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4A5B8F4A306AC8D80046AF31 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4A5B8F46306AC8D80046AF31 /* Sweeter Extension */;
+			targetProxy = 4A5B8F49306AC8D80046AF31 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		4A5B8F32306AC8D60046AF31 /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				4A5B8F33306AC8D60046AF31 /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		4A5B8F3D306AC8D60046AF31 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				4A5B8F3E306AC8D60046AF31 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		4A5B8F4F306AC8D80046AF31 /* Debug configuration for PBXProject "Sweeter" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		4A5B8F50306AC8D80046AF31 /* Release configuration for PBXProject "Sweeter" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		4A5B8F52306AC8D80046AF31 /* Debug configuration for PBXNativeTarget "Sweeter Extension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Sweeter Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Sweeter;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.17.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = fun.starl3xx.Sweeter.Extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		4A5B8F53306AC8D80046AF31 /* Release configuration for PBXNativeTarget "Sweeter Extension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Sweeter Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Sweeter;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.17.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = fun.starl3xx.Sweeter.Extension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4A5B8F56306AC8D80046AF31 /* Debug configuration for PBXNativeTarget "Sweeter" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Sweeter/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Sweeter;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				INFOPLIST_KEY_NSViewGestureRecognizerIsExclusive = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.17.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = fun.starl3xx.Sweeter;
+				PRODUCT_NAME = Sweeter;
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		4A5B8F57306AC8D80046AF31 /* Release configuration for PBXNativeTarget "Sweeter" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Sweeter/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Sweeter;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				INFOPLIST_KEY_NSViewGestureRecognizerIsExclusive = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.17.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = fun.starl3xx.Sweeter;
+				PRODUCT_NAME = Sweeter;
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4A5B8F27306AC8D60046AF31 /* Build configuration list for PBXProject "Sweeter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4A5B8F4F306AC8D80046AF31 /* Debug configuration for PBXProject "Sweeter" */,
+				4A5B8F50306AC8D80046AF31 /* Release configuration for PBXProject "Sweeter" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		4A5B8F51306AC8D80046AF31 /* Build configuration list for PBXNativeTarget "Sweeter Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4A5B8F52306AC8D80046AF31 /* Debug configuration for PBXNativeTarget "Sweeter Extension" */,
+				4A5B8F53306AC8D80046AF31 /* Release configuration for PBXNativeTarget "Sweeter Extension" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		4A5B8F55306AC8D80046AF31 /* Build configuration list for PBXNativeTarget "Sweeter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4A5B8F56306AC8D80046AF31 /* Debug configuration for PBXNativeTarget "Sweeter" */,
+				4A5B8F57306AC8D80046AF31 /* Release configuration for PBXNativeTarget "Sweeter" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4A5B8F24306AC8D60046AF31 /* Project object */;
+	validationLevel = 1;
+}

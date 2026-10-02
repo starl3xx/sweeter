@@ -1,0 +1,11 @@
+# Captured X Pro responses (real people's posts): local only, never commit.
+fixtures/raw/
+# Research notes and the pre-release history: local only.
+private/
+# Your Apple Team ID for local signed builds (see scripts/build-safari.sh).
+scripts/local.env
+node_modules/
+build/
+.claude/
+.DS_Store
+xcuserdata/

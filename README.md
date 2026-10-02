@@ -1,0 +1,61 @@
+<p align="center"><img src="design/icon-1024.png" width="128" height="128" alt="Sweeter icon"></p>
+
+<h1 align="center">Sweeter</h1>
+
+<p align="center">A fast, keyboard-friendly, Tweetbot-inspired face for X Pro on the Mac.</p>
+
+Sweeter draws X Pro (pro.x.com) as calm, dense columns you can read with the keyboard: unread markers that remember where you stopped, filters and mutes, merged columns, column groups, pop-out windows, a media viewer and a command palette. It comes as a Mac app, and the same thing works as a Safari extension.
+
+It is in early testing. Things will break when X changes X Pro.
+
+## Before you install
+
+1. **You need X Pro.** Sweeter is a new face for pro.x.com, not a separate service. If you can’t open [pro.x.com](https://pro.x.com) with your X account (X includes X Pro with Premium+), Sweeter has nothing to show.
+2. **Mac only.** macOS 14 Sonoma or later. Built and tested on macOS 26 Tahoe; earlier versions are untested.
+3. **No X API.** Sweeter makes no API calls and has no API keys. It reads the timelines the X Pro page already loads in your own window, and when you like, reply or bookmark, it presses X Pro’s own button for you, once. It never sends a request of its own to X and never reads your cookies, passwords or tokens.
+4. **No data collection.** No analytics, no tracking, no accounts, no servers. Your settings, filters and reading positions stay on your Mac. The only thing Sweeter ever downloads by itself is an image you ask it to copy or save, from X’s public media server, the way Safari’s Save Image does.
+
+## Install
+
+1. Download `Sweeter-x.y.z.zip` from the [latest release](https://github.com/starl3xx/sweeter/releases/latest) and unzip it.
+2. Drag **Sweeter.app** into your Applications folder.
+3. Open it. macOS stops it the first time, because this test build isn’t notarized by Apple. To allow it: open **System Settings ▸ Privacy & Security**, scroll down to “Sweeter was blocked”, and click **Open Anyway**. (Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Sweeter.app`.)
+4. Sign in to X inside the Sweeter window. That’s it: Sweeter opens X Pro and draws over it.
+
+### Optional: use it in Safari instead
+
+The app includes a Safari extension that does the same thing on pro.x.com in Safari. Test builds aren’t signed by a registered developer, so Safari hides the extension unless you allow unsigned extensions:
+
+1. Safari ▸ Settings ▸ Advanced: turn on **Show features for web developers**.
+2. Safari ▸ Settings ▸ Developer: turn on **Allow unsigned extensions** (Safari asks for your password). Safari turns this off again each time it quits.
+3. Safari ▸ Settings ▸ Extensions: turn on **Sweeter**, and allow it on pro.x.com.
+
+The Sweeter app needs none of this.
+
+## Using it
+
+- **⌥X** shows or hides Sweeter over X Pro. Anything Sweeter doesn’t do yet is one key away in X Pro itself.
+- **j / k** move through posts, **1–9** jump to a column, **n** writes a post, **/** finds in a column, **,** opens Preferences.
+- **⇧⌘P** opens the command palette: every command, found by typing.
+- Each column’s **…** menu holds its filters, width, Icon & Color, merge, groups and pop-out window.
+
+Columns are X Pro’s own columns. When you add, remove, rename or reorder one in Sweeter, Sweeter does it with X Pro’s own controls, so the change follows you to every device. Sweeter’s own touches (colors, icons, filters, merged columns, groups) stay on this Mac.
+
+## Build from source
+
+Needs Xcode 26 or later and Node.js.
+
+```sh
+node tests/run.js            # the tests
+scripts/build-safari.sh      # builds and installs /Applications/Sweeter.app
+```
+
+Without a Team ID the build is signed ad hoc. To sign with your own Apple Development certificate, put `SWEETER_TEAM=<your Team ID>` in `scripts/local.env` (git ignores it). `scripts/release.sh` makes the downloadable zip.
+
+How it works: `extension/src/page/recorder.js` listens to the responses X Pro’s page receives (it never sends anything); `extension/src/lib` turns them into timelines; `extension/src/ui` draws Sweeter; `extension/src/content/xpro.js` presses X Pro’s buttons. `safari/Sweeter` is the Mac app, which runs the same scripts in its own web view.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Free to use, change and share for any noncommercial purpose. Selling Sweeter or a version of it is not allowed.
+
+Sweeter is not affiliated with or endorsed by X Corp. or Tapbots. X and X Pro are trademarks of X Corp.; Tweetbot is a trademark of Tapbots.

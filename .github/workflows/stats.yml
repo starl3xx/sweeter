@@ -1,0 +1,41 @@
+# Once a day: download counts (and repo traffic, if TRAFFIC_TOKEN is set)
+# appended to the `stats` branch. GitHub keeps only lifetime totals and 14
+# days of traffic, so these snapshots are the history.
+name: Download stats
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stats
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: stats
+          path: stats-data
+      - name: Record
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+        run: node scripts/stats.mjs stats-data
+      - name: Commit
+        working-directory: stats-data
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Stats for $(date -u +%F)"
+          git push origin HEAD:stats

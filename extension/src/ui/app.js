@@ -695,18 +695,25 @@
       const list = [...tkWant];
       tkWant.clear();
       const failed = [];
+      // Each batch paints as soon as it returns, so a slow later batch
+      // never holds back prices already in hand.
+      const paint = (part, ok) => {
+        for (const root of tickerRoots()) {
+          for (const el of root.querySelectorAll('.tkc:not([data-filled])')) {
+            if (!part.includes(el.dataset.ca)) continue;
+            if (ok) paintTicker(el);
+            else delete el.dataset.obs;
+          }
+        }
+      };
       for (let i = 0; i < list.length; i += 30) {
         const part = list.slice(i, i + 30);
         try {
           await dexLookupMany(part);
+          paint(part, true);
         } catch (e) {
           failed.push(...part);
-        }
-      }
-      for (const root of tickerRoots()) {
-        for (const el of root.querySelectorAll('.tkc:not([data-filled])')) {
-          if (failed.includes(el.dataset.ca)) delete el.dataset.obs;
-          else if (list.includes(el.dataset.ca)) paintTicker(el);
+          paint(part, false);
         }
       }
       if (failed.length && !tkRetry) {

@@ -3964,7 +3964,7 @@
     // scroll bar until the notes move).
     function fadeNotes() {
       const n = upBack.querySelector('.up-notes');
-      n.classList.toggle('more', n.scrollTop + n.clientHeight < n.scrollHeight - 2);
+      n.classList.toggle('up-fade', n.scrollTop + n.clientHeight < n.scrollHeight - 2);
     }
     upBack.querySelector('.up-notes').addEventListener('scroll', fadeNotes, { passive: true });
     function closeUpdate() {

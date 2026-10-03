@@ -3,8 +3,10 @@
 // page has a body.
 (function () {
   'use strict';
-  // Only X Pro’s own page (never a blank pop-out window Sweeter writes into).
-  if (!/^pro\.(x|twitter)\.com$/.test(location.hostname)) return;
+  // Only X Pro’s own page, never a pop-out window Sweeter writes into: once
+  // written, that page has pro.x.com’s address too, so its name (sweeter-…,
+  // from app.js popOut) tells them apart.
+  if (!/^pro\.(x|twitter)\.com$/.test(location.hostname) || /^sweeter-/.test(window.name)) return;
   const Sweeter = globalThis.Sweeter;
   const api = globalThis.browser || globalThis.chrome;
   const queue = [];

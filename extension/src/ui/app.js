@@ -3994,6 +3994,7 @@
       closeTip();
       closePalette();
       if (!prefsEl.hidden) closePrefs();
+      greeted = true;
       wcPaused = false;
       wcAt = 0;
       paintWelcome();
@@ -4038,6 +4039,7 @@
     // The next tip, after the one shown last. `due`: the one that comes
     // with opening Sweeter (it starts the wait for the next).
     function showTip(due) {
+      greeted = true;
       tipNow = T.nextTip(T.tipsFor(!!native), settings.tipLast);
       settings.tipLast = tipNow.id;
       if (due) settings.tipAt = Date.now();
@@ -4070,11 +4072,21 @@
     }
     // After the columns arrive: the welcome on a first open, otherwise a tip
     // when one is due.
-    let greetLater = false;
+    // Once a launch, never over something else. Opened with X Pro showing,
+    // it waits for Sweeter to show (toggle); with a sheet, the palette or the
+    // composer open, it tries again a little later. The welcome or a tip
+    // opened by hand counts as this launch’s greeting.
+    let greeted = false;
+    let greetTimer = 0;
+    const sheetOpen = () => !wcBack.hidden || !prefsEl.hidden || !cmpBack.hidden || !profBack.hidden || !addBack.hidden || !askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden || !upBack.hidden || !!(palette && palette.isOpen()) || !!lb || passthrough;
     function greet() {
-      // Opened with X Pro showing: when Sweeter shows (toggle).
-      greetLater = !settings.visible;
-      if (greetLater) return;
+      clearTimeout(greetTimer);
+      if (greeted || booting || !settings.visible) return;
+      if (sheetOpen()) {
+        greetTimer = setTimeout(greet, 3000);
+        return;
+      }
+      greeted = true;
       if (!settings.welcomed && settings.firstOpenAt) openWelcome();
       else if (T.tipDue(settings, Date.now())) showTip(true);
     }
@@ -4654,7 +4666,7 @@
       if (settings.visible) {
         app.focus({ preventScroll: true });
         schedule(null);
-        if (greetLater) setTimeout(greet, 600);
+        if (!greeted) greetTimer = setTimeout(greet, 600);
       }
     }
 
@@ -6086,6 +6098,7 @@
       if (old && !old.w.closed) return old.w.focus();
       // The Mac app opens a window only right after Sweeter asks for one.
       if (native && native.allowPopup) await native.allowPopup();
+      // The name keeps Sweeter’s own scripts out of this window (main.js).
       const w = window.open('', 'sweeter-' + Math.random().toString(36).slice(2, 10), 'popup,width=440,height=860');
       if (!w) return toast('The window didn’t open. Allow pop-up windows for pro.x.com.', 'warn');
       const d = w.document;

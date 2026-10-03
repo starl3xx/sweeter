@@ -1728,6 +1728,9 @@
     // Media grid: every photo, video and GIF the column shows, as tiles.
     // A tile is the post’s cell (so j, k, o and the viewer work as usual).
     function renderGrid(c, s, dataChanged) {
+      // The grid draws everything: no list window to extend (onScroll then
+      // asks X Pro for older posts as usual).
+      c.drawnCount = c.visCount = 0;
       if (!c.wasGrid) {
         for (const node of c.nodes.values()) dropNode(node);
         c.nodes.clear();
@@ -2729,8 +2732,13 @@
       } else if (!first) c.dscroll.scrollTop = keep;
       if (sel) {
         const cell = c.dlist.querySelector('.cell[data-id="' + CSS.escape(sel) + '"]');
-        if (cell) cell.classList.add('sel');
+        if (cell) {
+          cell.classList.add('sel');
+          fillActs(cell);
+        }
       }
+      // Rebuilt cells start with empty bars: fill the one under the pointer.
+      fillActs(c.dlist.querySelector('.cell[data-id]:hover'));
       observeVideos(c.dlist);
     }
 
@@ -5940,6 +5948,8 @@
         }
       }
       rec.full = false;
+      // Rebuilt cells start with empty bars: fill the one under the pointer.
+      fillActs(rec.list.querySelector('.cell[data-id]:hover'));
       rec.root.querySelector('.foot').textContent = vis.length ? '' : 'No posts here yet.';
       if (anchor) {
         const n = Array.from(rec.list.children).find((x) => x.dataset.key === anchor);

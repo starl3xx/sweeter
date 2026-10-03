@@ -52,6 +52,7 @@ let ICONS: [(String, String, NSFont.Weight)] = [
     ("italic", "italic", .semibold),
     ("x", "xmark", .semibold),
     ("open", "arrow.up.right.square", .semibold),
+    ("update", "arrow.down.circle", .semibold),
     ("filter", "line.3.horizontal.decrease.circle", .semibold),
     ("filterOn", "line.3.horizontal.decrease.circle.fill", .semibold),
     // Release 2: per-column icons, decks, views, alerts and pause.

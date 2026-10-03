@@ -332,6 +332,7 @@
       '<button class="skip" type="button" data-cmd="skip">Skip to the timeline</button>' +
       '<nav class="side"><button type="button" class="me" data-cmd="me" title="Your profile" aria-label="Your profile"></button><button class="deck" type="button" data-cmd="deckmenu" hidden></button><div class="tabs"></div><span class="spacer"></span>' +
       '<button class="round post" type="button" data-cmd="compose" title="New post (n)" aria-label="New post">' + icon('compose') + '</button>' +
+      '<button class="round upd" type="button" data-cmd="update-show" hidden>' + icon('update') + '</button>' +
       '<button class="round" type="button" data-cmd="settings" title="Preferences (,)" aria-label="Preferences">' + icon('gear') + '</button>' +
       '<button class="round" type="button" data-cmd="xpro" title="Show X Pro (⌥X)" aria-label="Show X Pro">' + icon('swap') + '</button></nav>' +
       (opts.late ? '<div class="banner"><span>Sweeter started after X Pro loaded, so these columns only show new posts.</span><button type="button" data-cmd="reload">Reload</button><button class="x" type="button" data-cmd="banner-close" aria-label="Dismiss">×</button></div>' : '') +
@@ -3953,7 +3954,15 @@
       }
       if (!rel || !rel.tag) return manual && toast('Sweeter couldn’t reach GitHub to check for updates.', 'warn');
       const latest = rel.tag.replace(/^v/, '');
-      if (!version || !isNewer(latest, version)) return manual && toast('Sweeter ' + (version || latest) + ' is the latest version.');
+      // The sidebar button keeps a newer version in view after Not Now.
+      const newer = !!version && isNewer(latest, version);
+      if ((settings.updateLatest || '') !== (newer ? latest : '')) {
+        if (newer) settings.updateLatest = latest;
+        else delete settings.updateLatest;
+        persist();
+        paintUpdate();
+      }
+      if (!newer) return manual && toast('Sweeter ' + (version || latest) + ' is the latest version.');
       // An automatic check offers each version once (Not Now).
       if (!manual && settings.updateSkip === latest) return;
       upRel = Object.assign({}, rel, { latest });
@@ -3983,6 +3992,18 @@
       upBack.hidden = true;
       app.focus({ preventScroll: true });
     }
+    // The sidebar’s update button: shown while a newer release is known
+    // (from the last check, so it needs no request at launch), until this
+    // copy is that version or newer. A click opens the update window.
+    function paintUpdate() {
+      const b = shadow.querySelector('.round.upd');
+      const v = settings.updateLatest;
+      b.hidden = !(v && version && isNewer(v, version));
+      if (b.hidden) return;
+      b.title = 'Sweeter ' + v + ' is available';
+      b.setAttribute('aria-label', b.title);
+    }
+    paintUpdate();
     function autoCheckUpdates() {
       if (settings.updateCheck === false || Date.now() - (settings.updateCheckedAt || 0) < 864e5) return;
       // One sheet at a time: the welcome goes first.
@@ -5509,6 +5530,9 @@
         case 'tip-show':
           closePrefs();
           showTip(false);
+          break;
+        case 'update-show':
+          checkUpdates(true);
           break;
         case 'up-skip':
           if (upRel) {

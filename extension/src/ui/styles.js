@@ -102,6 +102,9 @@ img{display:block}
 .round svg{width:19px;height:19px}
 .round.post{width:46px;height:46px;background:var(--accent-solid);color:#fff;margin-bottom:8px;box-shadow:0 3px 10px rgba(0,0,0,.35)}
 .round.post svg{width:22px;height:22px}
+.round[hidden]{display:none}
+.round.upd{position:relative;color:var(--accent-solid);margin-bottom:8px}
+.round.upd::after{content:"";position:absolute;top:2px;right:2px;width:9px;height:9px;border-radius:50%;background:var(--accent-solid);box-shadow:0 0 0 2px var(--side,#1C1C1E)}
 
 /* columns */
 /* Sizes come from flex-basis, never from content: with flex:1 1 auto the
@@ -800,6 +803,8 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 /* Winamp Classic */
 .app[data-skin="winamp"] .side{border-right:2px solid #08080F;gap:6px}
 .app[data-skin="winamp"] .tab,.app[data-skin="winamp"] .round{border-radius:0;background:#4A4A66;box-shadow:inset 1px 1px 0 #8C8CAA,inset -1px -1px 0 #14141F;width:46px;height:30px;color:#D8D8EE}
+.app[data-skin="winamp"] .round.upd{color:#00FF00}
+.app[data-skin="winamp"] .round.upd::after{background:#00FF00;box-shadow:0 0 0 2px #14141F}
 .app[data-skin="winamp"] .tab.on{background:#5C5C80;color:#fff}
 .app[data-skin="winamp"] .tab .dot{background:#00FF00;border-radius:0}
 .app[data-skin="winamp"] .tab .num{background:#000;color:#00FF00;border-radius:0}

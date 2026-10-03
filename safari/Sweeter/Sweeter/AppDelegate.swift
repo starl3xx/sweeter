@@ -566,6 +566,9 @@ extension AppDelegate: NSMenuDelegate {
 /// new installs and sessions; the page adds a few named events (signal).
 enum Telemetry {
     private static let appID = (Bundle.main.object(forInfoDictionaryKey: "SweeterTelemetryAppID") as? String ?? "").trimmingCharacters(in: .whitespaces)
+    /// The organization's namespace (Dashboard ▸ Set Up App, next to the App
+    /// ID): where TelemetryDeck stores the app's signals.
+    private static let namespace = (Bundle.main.object(forInfoDictionaryKey: "SweeterTelemetryNamespace") as? String ?? "").trimmingCharacters(in: .whitespaces)
 
     /// At launch, unless the saved settings turned it off.
     static func start() {
@@ -584,7 +587,7 @@ enum Telemetry {
             return
         }
         guard on else { return }
-        let c = TelemetryDeck.Config(appID: appID)
+        let c = TelemetryDeck.Config(appID: appID, namespace: namespace.isEmpty ? nil : namespace)
         // The build-safari.sh install (the developer’s own) counts as a test.
         if (Bundle.main.object(forInfoDictionaryKey: "SweeterTelemetryTestMode") as? String) == "YES" { c.testMode = true }
         config = c
@@ -593,6 +596,13 @@ enum Telemetry {
 
     static func signal(_ name: String, _ parameters: [String: String]) {
         guard let config, !config.analyticsDisabled else { return }
+        // A warning Sweeter showed (its key, without names or links) goes to
+        // TelemetryDeck's Errors view.
+        if name == "Sweeter.problem" {
+            guard let id = parameters["id"], !id.isEmpty else { return }
+            TelemetryDeck.errorOccurred(id: id, category: .appState)
+            return
+        }
         TelemetryDeck.signal(name, parameters: parameters)
     }
 }

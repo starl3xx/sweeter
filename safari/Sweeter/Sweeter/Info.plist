@@ -6,6 +6,8 @@
 	<true/>
 	<key>SweeterTelemetryAppID</key>
 	<string>$(SWEETER_TELEMETRY_APP_ID)</string>
+	<key>SweeterTelemetryNamespace</key>
+	<string>$(SWEETER_TELEMETRY_NAMESPACE)</string>
 	<key>SweeterTelemetryTestMode</key>
 	<string>$(SWEETER_TELEMETRY_TEST_MODE)</string>
 	<key>SFSafariWebExtensionConverterVersion</key>

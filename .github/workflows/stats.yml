@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  issues: read
 
 concurrency:
   group: stats

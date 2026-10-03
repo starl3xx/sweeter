@@ -76,6 +76,20 @@
     return /^https?:\/\//i.test(String(u || '')) ? String(u) : '#';
   }
 
-  Sweeter.util = { escapeHtml, unescapeEntities, compareSort, snowflakeMs, relativeTime, absoluteTime, compactCount, safeUrl, fullTime };
+  // A warning Sweeter showed, as a key for usage counts: the same problem
+  // gives the same key, with nothing personal in it (no @handles, quoted
+  // names, links or long numbers).
+  function problemKey(msg) {
+    return String(msg || '')
+      .replace(/https?:\/\/\S+/g, '…')
+      .replace(/@\w{1,15}/g, '@…')
+      .replace(/“[^”]*”|"[^"]*"/g, '“…”')
+      .replace(/\d{4,}/g, '…')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 100);
+  }
+
+  Sweeter.util = { escapeHtml, unescapeEntities, compareSort, snowflakeMs, relativeTime, absoluteTime, compactCount, safeUrl, fullTime, problemKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.util;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

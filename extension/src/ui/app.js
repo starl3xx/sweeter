@@ -565,9 +565,21 @@
     let lastProblem = null;
 
     // Done (the default, with a check or the icon named), 'info' or 'warn'.
+    // Each kind of warning counts once every ten minutes at most (usage
+    // counts, Mac app): TelemetryDeck's Errors view, for triage.
+    const problemSent = new Map();
+    function noteProblem(msg) {
+      const id = Sweeter.util.problemKey(msg);
+      if (!id || Date.now() - (problemSent.get(id) || 0) < 600000) return;
+      problemSent.set(id, Date.now());
+      signal('problem', { id });
+    }
     function toast(msg, kind) {
       const k = kind === 'warn' || kind === 'info' ? kind : 'ok';
-      if (k === 'warn') lastProblem = { msg: String(msg), at: Date.now() };
+      if (k === 'warn') {
+        lastProblem = { msg: String(msg), at: Date.now() };
+        noteProblem(msg);
+      }
       toastEl.dataset.kind = k;
       toastEl.innerHTML = icon(k === 'ok' ? (kind && Sweeter.SYMBOLS && Sweeter.SYMBOLS[kind] ? kind : 'check') : k) + '<span>' + h(msg) + '</span>';
       toastEl.hidden = false;
@@ -5084,6 +5096,7 @@
       // Shown in the compose window, not a toast: Report a Problem needs it
       // too, with the step that failed.
       lastProblem = { msg: failMsg + ' [' + c.kind + ': ' + (r.reason || 'unknown') + ']', at: Date.now() };
+      noteProblem(lastProblem.msg);
       if (compose === c) {
         cmpStatus.textContent = failMsg;
         updateCount();
@@ -6548,7 +6561,7 @@
         row('Avatars:', check('round', 'Round avatars')) +
         row('Updates:', check('updateCheck', 'Check for updates once a day') + ' <button class="lnk" type="button" data-cmd="check-updates">Check Now</button>', 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', 'updateCheck') +
         row('Tips:', check('tips', 'Show a tip when Sweeter opens') + ' <button class="lnk" type="button" data-cmd="tip-show">Show One Now</button>', null, 'tips') +
-        (native ? row('Usage data:', check('telemetry', 'Send anonymous usage counts'), 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, and tips turned off, with the Sweeter version and facts about the Mac such as its macOS version, model, and language. Never anything from X.', 'telemetry') : '') +
+        (native ? row('Usage data:', check('telemetry', 'Send anonymous usage counts'), 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, tips turned off, and the warnings Sweeter shows (without names or links), with the Sweeter version and facts about the Mac such as its macOS version, model, and language. Never anything from X.', 'telemetry') : '') +
         row('Checkmarks:', check('badges', 'Show verified checkmarks and organization badges')) +
         row('Counts:', check('counts', 'Show reply, repost and like counts')) +
         row('Timeline:', check('pinToTop', 'Pin timeline to top when at top'), 'Clicking a column header also jumps to the newest post and keeps it pinned.') +

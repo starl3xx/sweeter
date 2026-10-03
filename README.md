@@ -17,7 +17,7 @@ It is in early testing. Things will break when X changes X Pro.
    - X’s public media server, for an image you ask it to copy or save (as Safari’s Save Image does);
    - [TelemetryDeck](https://telemetrydeck.com), from the Mac app: anonymous counts of opens, of the welcome and its Follow button, and of tips turned off, with the Sweeter version and facts about the Mac such as its macOS version, model, and language. TelemetryDeck gets a hash of a random ID made on your Mac, never your name, your X account, or anything from X. Turn it off in Preferences ▸ General ▸ Usage data. The Safari extension, and Sweeter built from source, send none.
    - GitHub, to check for a newer version of Sweeter: once a day (you can turn this off in Preferences) and when you choose Check for Updates;
-   - [DexScreener](https://dexscreener.com)’s public API, for token prices and logos: when you click a crypto contract address, and for ticker cards ($RSR) on screen, every few minutes at most. DexScreener sees those requests like any website visit. Turn both off in Preferences ▸ General. (In Safari, logos also need Sweeter allowed on cdn.dexscreener.com: Safari ▸ Settings ▸ Extensions ▸ Sweeter ▸ Edit Websites.)
+   - [DexScreener](https://dexscreener.com)’s public API, for token prices and logos: when you click a crypto contract address, and for ticker cards ($RSR) on screen, every few minutes at most. DexScreener sees those requests like any website visit. Turn both off in Preferences ▸ Extras. (In Safari, logos also need Sweeter allowed on cdn.dexscreener.com: Safari ▸ Settings ▸ Extensions ▸ Sweeter ▸ Edit Websites.)
 
 ## Install
 

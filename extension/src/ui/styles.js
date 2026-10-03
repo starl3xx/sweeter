@@ -447,6 +447,8 @@ img{display:block}
 .mutes .mk{font-family:ui-monospace,Menlo,monospace;color:var(--t1);flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mutes .me2{color:var(--t3);font-size:11px;white-space:nowrap}
 .hint{font-size:12px;color:var(--t3);line-height:1.45}
+.psec{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--t1)}
+.psec:not(:first-child){margin-top:22px;padding-top:16px;border-top:1px solid var(--div)}
 .hint kbd,.flist kbd{font:inherit;font-size:11px;border:1px solid var(--div);border-radius:4px;padding:0 4px;color:var(--t2)}
 .flist{margin-top:10px}
 .flist .mk{font-family:inherit;flex:0 1 auto}

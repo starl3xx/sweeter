@@ -223,10 +223,10 @@
   const TABS = [
     ['general', 'General', 'gear'],
     ['media', 'Media', 'photo'],
-    ['filters', 'Filters', 'filter'],
-    ['mutes', 'Mutes', 'mute'],
+    ['filters', 'Filters & Mutes', 'filter'],
     ['layouts', 'Layouts', 'decks'],
     ['keys', 'Keyboard', 'keyboard'],
+    ['extras', 'Extras', 'sparkle'],
   ];
   // What a layout holds: Sweeter’s own arrangement, never X Pro’s decks.
   const LAYOUT_KEYS = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
@@ -5291,8 +5291,7 @@
           location.reload();
           break;
         case 'edit-mutes':
-          prefsTab = 'mutes';
-          openPrefs();
+          openPrefsTab('mutes');
           break;
         case 'skip': {
           const first = shown().length && cols.get(shown()[0].vid);
@@ -6473,6 +6472,19 @@
         '</div><div class="fbtns"><button type="button" data-cmd="flt-cancel">Cancel</button><button class="done" type="button" data-cmd="flt-save">Save filter</button></div></div>';
     }
 
+    // Mutes share a tab with Filters (before 0.19 they had their own).
+    const mutesPane = () =>
+      '<div class="hint">Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd> or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists and searches.</div>' +
+      '<div class="pgrid">' + row('Notifications:', check('muteNotes', 'Mutes hide notifications too'), 'A like, repost or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.') + '</div>' +
+      '<div class="mute-add"><input type="text" id="mute-in" placeholder="airdrop, /^gm\\b/i, @someone" autocomplete="off" spellcheck="false" aria-label="Words, patterns or accounts to mute">' +
+      '<select id="mute-dur" aria-label="How long to mute">' + Object.keys(DURATION_LABEL).map((k) => '<option value="' + k + '"' + (k === 'forever' ? ' selected' : '') + '>' + DURATION_LABEL[k] + '</option>').join('') + '</select>' +
+      '<button type="button" data-cmd="mute-add">Mute</button></div>' +
+      '<div class="mutes">' +
+      (rules.length
+        ? rules.map((r) => '<div class="mr"><span class="mk">' + h(Sweeter.mutes.label(r)) + '</span><span class="me2">' + h(expiry(r)) + '</span><button class="x" type="button" data-cmd="mute-del" data-id="' + h(r.id) + '" title="Remove" aria-label="Remove">×</button></div>').join('')
+        : '<div class="mr"><span class="me2">No mute filters yet.</span></div>') +
+      '</div>';
+
     const PANES = {
       general: () =>
         '<div class="pgrid">' +
@@ -6494,11 +6506,9 @@
         row('Post action buttons:', select('actions', [['always', 'Show always'], ['hover', 'Show on mouseover']]), null, 'actions') +
         '<div class="sep"></div>' +
         row('Avatars:', check('round', 'Round avatars')) +
-        row('Contract addresses:', check('tokenLookup', 'Show token details on click'), 'Asks DexScreener only when you click an address or ticker card. Off: they open DexScreener.', 'tokenLookup') +
         row('Updates:', check('updateCheck', 'Check for updates once a day') + ' <button class="lnk" type="button" data-cmd="check-updates">Check Now</button>', 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', 'updateCheck') +
         row('Tips:', check('tips', 'Show a tip when Sweeter opens') + ' <button class="lnk" type="button" data-cmd="tip-show">Show One Now</button>', null, 'tips') +
         (native ? row('Usage data:', check('telemetry', 'Send anonymous usage counts'), 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, and tips turned off, with the Sweeter version and facts about the Mac such as its macOS version, model, and language. Never anything from X.', 'telemetry') : '') +
-        row('Ticker cards:', check('tickerPrices', 'Show prices'), 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most.', 'tickerPrices') +
         row('Checkmarks:', check('badges', 'Show verified checkmarks and organization badges')) +
         row('Counts:', check('counts', 'Show reply, repost and like counts')) +
         row('Timeline:', check('pinToTop', 'Pin timeline to top when at top'), 'Clicking a column header also jumps to the newest post and keeps it pinned.') +
@@ -6519,25 +6529,15 @@
       filters: () => {
         const quick = XF.QUICK.map((f, i) => h(f.name) + ' <kbd>⌥' + (i + 1) + '</kbd>').join(', ');
         const n0 = XF.QUICK.length;
-        return '<div class="hint">A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '.</div>' +
+        return '<h3 class="psec">Filters</h3><div class="hint">A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '.</div>' +
           '<div class="mutes flist">' +
           (custom.length
             ? custom.map((f, i) => '<div class="mr"><span class="mk">' + h(f.name) + (n0 + i < 9 ? ' <kbd>⌥' + (n0 + i + 1) + '</kbd>' : '') + '</span><span class="me2">' + h(describe(f)) + '</span><button class="lnk" type="button" data-cmd="flt-edit" data-id="' + h(f.id) + '">Edit</button><button class="x" type="button" data-cmd="flt-del" data-id="' + h(f.id) + '" title="Delete" aria-label="Delete ' + h(f.name) + '">×</button></div>').join('')
             : '<div class="mr"><span class="me2">No custom filters yet.</span></div>') +
           '</div>' +
-          (editing ? filterEditor(editing) : '<div class="fnew"><button type="button" data-cmd="flt-new">New filter…</button></div>');
+          (editing ? filterEditor(editing) : '<div class="fnew"><button type="button" data-cmd="flt-new">New filter…</button></div>') +
+          '<h3 class="psec" id="psec-mutes">Mutes</h3>' + mutesPane();
       },
-      mutes: () =>
-        '<div class="hint">Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd> or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists and searches.</div>' +
-        '<div class="pgrid">' + row('Notifications:', check('muteNotes', 'Mutes hide notifications too'), 'A like, repost or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.') + '</div>' +
-        '<div class="mute-add"><input type="text" id="mute-in" placeholder="airdrop, /^gm\\b/i, @someone" autocomplete="off" spellcheck="false" aria-label="Words, patterns or accounts to mute">' +
-        '<select id="mute-dur" aria-label="How long to mute">' + Object.keys(DURATION_LABEL).map((k) => '<option value="' + k + '"' + (k === 'forever' ? ' selected' : '') + '>' + DURATION_LABEL[k] + '</option>').join('') + '</select>' +
-        '<button type="button" data-cmd="mute-add">Mute</button></div>' +
-        '<div class="mutes">' +
-        (rules.length
-          ? rules.map((r) => '<div class="mr"><span class="mk">' + h(Sweeter.mutes.label(r)) + '</span><span class="me2">' + h(expiry(r)) + '</span><button class="x" type="button" data-cmd="mute-del" data-id="' + h(r.id) + '" title="Remove" aria-label="Remove">×</button></div>').join('')
-          : '<div class="mr"><span class="me2">No mute filters yet.</span></div>') +
-        '</div>',
       layouts: () => {
         const ls = settings.layouts || [];
         return '<div class="hint">A layout is Sweeter’s own arrangement: views, merged columns, groups, widths, filters, titles, icons, colors, media and the column layout. X Pro’s decks and columns stay as they are, so a layout fits the decks it was made with.</div>' +
@@ -6574,6 +6574,12 @@
         ];
         return '<div class="keys">' + k.map(([keys, d]) => '<span class="k">' + keys.split(/\s{2}/).map((g) => g.split(' ').map((x) => '<kbd>' + h(x) + '</kbd>').join(' ')).join(' ') + '</span><span class="d">' + h(d) + '</span>').join('') + '</div>';
       },
+      // Optional things, some of them experimental. More will join later.
+      extras: () =>
+        '<h3 class="psec">Crypto</h3><div class="pgrid">' +
+        row('Contract addresses:', check('tokenLookup', 'Show token details on click'), 'Asks DexScreener only when you click an address or ticker card. Off: they open DexScreener.', 'tokenLookup') +
+        row('Ticker cards:', check('tickerPrices', 'Show prices'), 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most.', 'tickerPrices') +
+        '</div>',
     };
 
     function renderPrefs() {
@@ -6582,8 +6588,13 @@
     }
 
     function openPrefsTab(tab) {
-      prefsTab = tab;
+      // 'mutes' (a tab of its own before 0.19) is the second half of Filters.
+      prefsTab = tab === 'mutes' ? 'filters' : PANES[tab] ? tab : 'general';
       openPrefs();
+      if (tab === 'mutes') {
+        pbody.querySelector('#psec-mutes').scrollIntoView({ block: 'start' });
+        pbody.querySelector('#mute-in').focus({ preventScroll: true });
+      }
     }
 
     function saveFilter() {

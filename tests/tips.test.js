@@ -43,7 +43,7 @@ test('tips: app-only and Safari-only items stay where they work', () => {
 test('tips: ids are unique and every action is one app.js knows', () => {
   const ids = W.TIPS.map((t) => t.id);
   eq(new Set(ids).size, ids.length);
-  const known = /^(palette|find|nextUnread|report|colMenu|prefs:(general|media|filters|mutes|layouts|keys))$/;
+  const known = /^(palette|find|nextUnread|report|colMenu|prefs:(general|media|filters|mutes|layouts|keys|extras))$/;
   for (const t of W.TIPS) if (t.act) ok(known.test(t.act[1]), t.id + ': ' + t.act[1]);
 });
 

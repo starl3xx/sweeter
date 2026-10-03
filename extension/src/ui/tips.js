@@ -94,7 +94,7 @@
     { id: 'goKeys', text: '{g} then {h} goes to Home. {g} then {n}, {r}, {i}, or {b} goes to Notifications, Mentions, a list, or Bookmarks.' },
     { id: 'hover', text: 'A pinned column holds still under the pointer, and new posts wait above it.' },
     { id: 'popout', text: 'Give a column a window of its own: its … menu ▸ Open in New Window.', act: ['Open Column Menu', 'colMenu'] },
-    { id: 'tokens', text: 'Click a crypto contract address in a post for its price, liquidity, and market cap. ⌘-click opens DexScreener instead.' },
+    { id: 'tokens', text: 'Click a crypto contract address in a post for its price, liquidity, and market cap. ⌘-click opens DexScreener instead.', act: ['Open Extras', 'prefs:extras'] },
     { id: 'dock', where: 'app', text: 'The Dock icon’s menu lists your columns with their unread counts.' },
     { id: 'density', text: 'Compact density fits more posts on screen: Preferences ▸ General ▸ Density.', act: ['Open Preferences', 'prefs:general'] },
     { id: 'columnKeys', text: '{c} then {n} adds a column, {c} then {⌫} removes the selected one (it asks first), and {c} then {u} brings it back.' },
@@ -116,7 +116,7 @@
     { id: 'width', text: 'Set one column’s width from its … menu ▸ Width.', act: ['Open Column Menu', 'colMenu'] },
     { id: 'reposts', text: 'Prefer Tweetbot’s “Reposted by” line under the post? Preferences ▸ General ▸ Reposts.', act: ['Open Preferences', 'prefs:general'] },
     { id: 'links', text: 'Links can show as X shows them, as the domain only, or in full: Preferences ▸ Media ▸ Links.', act: ['Open Preferences', 'prefs:media'] },
-    { id: 'muteNotes', text: 'Mutes can hide notifications too, such as a like from a muted account: Preferences ▸ Mutes.', act: ['Open Mutes', 'prefs:mutes'] },
+    { id: 'muteNotes', text: 'Mutes can hide notifications too, such as a like from a muted account: Preferences ▸ Filters & Mutes.', act: ['Open Mutes', 'prefs:mutes'] },
     { id: 'report', where: 'app', text: 'Something broken? Help ▸ Report a Problem… opens a GitHub issue with the details filled in.', act: ['Report a Problem', 'report'] },
     { id: 'reportSafari', where: 'safari', text: 'Something broken? Report a Problem…, in the command palette, opens a GitHub issue with the details filled in.', act: ['Report a Problem', 'report'] },
   ];

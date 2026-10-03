@@ -169,6 +169,22 @@
     return ctx.settings.counts && n ? '<span class="cnt">' + compactCount(n) + '</span>' : '';
   }
 
+  // A post's action bar. In the default hover mode it is hidden until the
+  // pointer or the selection reaches the post, so it is built then (app.js
+  // fillActs): it was nearly half of every post's elements.
+  function acts(p, ctx) {
+    return (
+      '<div class="acts">' +
+      '<button type="button" data-act="reply" title="Reply (r)" aria-label="Reply" tabindex="-1">' + icon('reply') + count(p.counts.reply, ctx) + '</button>' +
+      '<button type="button" data-act="repost" class="' + (p.state.reposted ? 'on-rt' : '') + '" title="' + (p.state.reposted ? 'Undo repost or quote (t)' : 'Repost or quote (t)') + '" aria-label="' + (p.state.reposted ? 'Reposted. Undo repost or quote' : 'Repost or quote') + '" aria-pressed="' + !!p.state.reposted + '" tabindex="-1">' + icon(p.state.reposted ? 'repostOn' : 'repost') + count(p.counts.repost, ctx) + '</button>' +
+      '<button type="button" data-act="like" class="' + (p.state.liked ? 'on-like' : '') + '" title="' + (p.state.liked ? 'Unlike (l)' : 'Like (l)') + '" aria-label="Like" aria-pressed="' + !!p.state.liked + '" tabindex="-1">' + icon(p.state.liked ? 'likeOn' : 'like') + count(p.counts.like, ctx) + '</button>' +
+      '<button type="button" data-act="bookmark" class="' + (p.state.bookmarked ? 'on-bm' : '') + '" title="' + (p.state.bookmarked ? 'Remove bookmark (b)' : 'Bookmark (b)') + '" aria-label="Bookmark" aria-pressed="' + !!p.state.bookmarked + '" tabindex="-1">' + icon(p.state.bookmarked ? 'bookmarkOn' : 'bookmark') + '</button>' +
+      '<button type="button" data-act="copy" title="Copy link to post" aria-label="Copy link to post" tabindex="-1">' + icon('link') + '</button>' +
+      '<button type="button" data-act="open" title="Open on x.com" aria-label="Open on x.com" tabindex="-1">' + icon('open') + '</button>' +
+      '</div>'
+    );
+  }
+
   function post(p, ctx, extraClass) {
     if (!p || p.unavailable) return '<article class="cell gone-cell"><div></div><div class="main gone">This post is unavailable.</div></article>';
     const viewer = ctx.viewer && ctx.viewer.handle ? ctx.viewer.handle.toLowerCase() : null;
@@ -196,14 +212,8 @@
       '<a class="hd" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" title="@' + h(p.author.handle) + '">@' + h(p.author.handle) + '</a>' + time(p.createdMs, p.url, ctx) + '</div>' +
       body(p, ctx, bare, reply, context) +
       (ctx.focal ? focalMeta(p) : '') +
-      '<div class="acts">' +
-      '<button type="button" data-act="reply" title="Reply (r)" aria-label="Reply" tabindex="-1">' + icon('reply') + count(p.counts.reply, ctx) + '</button>' +
-      '<button type="button" data-act="repost" class="' + (p.state.reposted ? 'on-rt' : '') + '" title="' + (p.state.reposted ? 'Undo repost or quote (t)' : 'Repost or quote (t)') + '" aria-label="' + (p.state.reposted ? 'Reposted. Undo repost or quote' : 'Repost or quote') + '" aria-pressed="' + !!p.state.reposted + '" tabindex="-1">' + icon(p.state.reposted ? 'repostOn' : 'repost') + count(p.counts.repost, ctx) + '</button>' +
-      '<button type="button" data-act="like" class="' + (p.state.liked ? 'on-like' : '') + '" title="' + (p.state.liked ? 'Unlike (l)' : 'Like (l)') + '" aria-label="Like" aria-pressed="' + !!p.state.liked + '" tabindex="-1">' + icon(p.state.liked ? 'likeOn' : 'like') + count(p.counts.like, ctx) + '</button>' +
-      '<button type="button" data-act="bookmark" class="' + (p.state.bookmarked ? 'on-bm' : '') + '" title="' + (p.state.bookmarked ? 'Remove bookmark (b)' : 'Bookmark (b)') + '" aria-label="Bookmark" aria-pressed="' + !!p.state.bookmarked + '" tabindex="-1">' + icon(p.state.bookmarked ? 'bookmarkOn' : 'bookmark') + '</button>' +
-      '<button type="button" data-act="copy" title="Copy link to post" aria-label="Copy link to post" tabindex="-1">' + icon('link') + '</button>' +
-      '<button type="button" data-act="open" title="Open on x.com" aria-label="Open on x.com" tabindex="-1">' + icon('open') + '</button>' +
-      '</div></div></article>';
+      (ctx.focal || ctx.settings.actions === 'always' ? acts(p, ctx) : '<div class="acts" data-lazy></div>') +
+      '</div></article>';
   }
 
   // “Name ✓ [org] followed you”: bold names, each with its badges.
@@ -244,5 +254,5 @@
     return post(b.post, Object.assign({}, ctx, { context: b.context }));
   }
 
-  Sweeter.render = { block, post, notification, timeLabel, avatar, badges, avatarSmall };
+  Sweeter.render = { block, post, notification, timeLabel, avatar, badges, avatarSmall, acts };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

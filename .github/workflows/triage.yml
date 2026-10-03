@@ -1,0 +1,24 @@
+# Labels each new issue for triage (scripts/triage.js): "needs triage", the
+# client it came from, and "older version" when it predates the latest
+# release. The issue text is read as data, never run.
+name: Triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Label
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/triage.js

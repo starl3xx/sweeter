@@ -15,6 +15,7 @@ PROJ="$ROOT/safari/Sweeter/Sweeter.xcodeproj"
 # Usage counts (TelemetryDeck): the App ID lives in scripts/local.env, which
 # git ignores, so a build from source sends nothing.
 TELEMETRY=$(sed -n 's/^SWEETER_TELEMETRY=//p' "$ROOT/scripts/local.env" 2>/dev/null || true)
+TELEMETRY_NS=$(sed -n 's/^SWEETER_TELEMETRY_NAMESPACE=//p' "$ROOT/scripts/local.env" 2>/dev/null || true)
 [ -n "$TELEMETRY" ] || echo "warning: no SWEETER_TELEMETRY in scripts/local.env, so this build sends no usage counts" >&2
 
 node "$ROOT/tests/run.js"
@@ -24,7 +25,7 @@ xcodebuild -project "$PROJ" -scheme Sweeter -configuration Release MARKETING_VER
   ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
   DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES STRIP_STYLE=non-global COPY_PHASE_STRIP=YES DEBUG_INFORMATION_FORMAT=dwarf-with-dsym \
   CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" \
-  SWEETER_TELEMETRY_APP_ID="$TELEMETRY" SWEETER_TELEMETRY_TEST_MODE=NO \
+  SWEETER_TELEMETRY_APP_ID="$TELEMETRY" SWEETER_TELEMETRY_NAMESPACE="$TELEMETRY_NS" SWEETER_TELEMETRY_TEST_MODE=NO \
   clean build -quiet
 
 APP="$DD/Build/Products/Release/Sweeter.app"

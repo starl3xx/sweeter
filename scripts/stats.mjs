@@ -104,6 +104,16 @@ if (trafficToken) {
   }
 } else console.log('TRAFFIC_TOKEN not set: traffic skipped, downloads recorded.');
 
+// Open issues, and the ones nobody has looked at yet (triage.yml labels
+// every new one "needs triage"). The issues list includes pull requests.
+const issues = [];
+for (let page = 1; ; page++) {
+  const batch = await api('/issues?state=open&per_page=100&page=' + page, token);
+  issues.push(...batch.filter((i) => !i.pull_request));
+  if (batch.length < 100) break;
+}
+const untriaged = issues.filter((i) => i.labels.some((l) => l.name === 'needs triage'));
+
 // README: the latest totals, so the branch page is the dashboard.
 const latest = new Map();
 for (const [date, rel, file, n] of downloads) {
@@ -113,6 +123,7 @@ for (const [date, rel, file, n] of downloads) {
 const rows = [...latest.values()].sort((a, b) => b.rel.localeCompare(a.rel, undefined, { numeric: true }));
 const total = rows.reduce((s, r) => s + r.n, 0);
 let md = '# Sweeter download stats\n\nUpdated ' + today + ' by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.\n\n';
+md += '## Issues\n\n' + issues.length + ' open, **' + untriaged.length + '** waiting for triage.' + (untriaged.length ? '\n\n' + untriaged.slice(0, 10).map((i) => '- [#' + i.number + '](' + i.html_url + ') ' + i.title.replace(/[\[\]|]/g, ' ')).join('\n') : '') + '\n\n';
 md += '## Downloads\n\n**' + total + '** in total (every file of every release, as GitHub counts them, bots and repeats included).\n\n| Release | File | Downloads |\n|---|---|---:|\n';
 md += rows.map((r) => '| ' + r.rel + ' | ' + r.file + ' | ' + r.n + ' |').join('\n') + '\n';
 if (traffic) {
@@ -122,7 +133,7 @@ if (traffic) {
 } else if (trafficError) md += '\nRepo traffic was not recorded on ' + today + ' (' + trafficError + '): the TRAFFIC_TOKEN secret is wrong or expired. Earlier days stay in the CSV files.\n';
 else md += '\nRepo traffic is not recorded yet: it needs the TRAFFIC_TOKEN secret (see `scripts/stats.mjs`).\n';
 fs.writeFileSync(path.join(dir, 'README.md'), md);
-console.log('downloads: ' + total + ' total across ' + rows.length + ' files' + (traffic ? '; traffic recorded' : ''));
+console.log('downloads: ' + total + ' total across ' + rows.length + ' files' + (traffic ? '; traffic recorded' : '') + '; issues: ' + issues.length + ' open, ' + untriaged.length + ' need triage');
 if (trafficError) {
   console.log('::error::Traffic not recorded (' + trafficError + '). Downloads were saved. Check the TRAFFIC_TOKEN secret.');
   process.exitCode = 1;

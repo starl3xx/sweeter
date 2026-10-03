@@ -26,7 +26,7 @@ It is in early testing. Things will break when X changes X Pro.
 3. Open it. macOS stops it the first time, because this test build isn’t notarized by Apple. To allow it: open **System Settings ▸ Privacy & Security**, scroll down to “Sweeter was blocked”, and click **Open Anyway**. (Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Sweeter.app`.)
 4. Sign in to X inside the Sweeter window. That’s it: Sweeter opens X Pro and draws over it.
 
-**Updating:** choose **Sweeter ▸ Check for Updates…** (in Safari: the command palette, ⇧⌘P). Sweeter also checks once a day and tells you when a new version is out. Download it, unzip it, and drag Sweeter to Applications, replacing the old one. Your settings and X sign-in live in macOS’s data folder for Sweeter, not inside the app, so they carry over.
+**Updating:** choose **Sweeter ▸ Check for Updates…** (in Safari: the command palette, ⇧⌘P). Sweeter also checks once a day and tells you when a new version is out; until you update, a button above the gear in the sidebar opens the update window again. Download it, unzip it, and drag Sweeter to Applications, replacing the old one. Your settings and X sign-in live in macOS’s data folder for Sweeter, not inside the app, so they carry over.
 
 ### Optional: use it in Safari instead
 

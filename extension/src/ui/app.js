@@ -4070,8 +4070,11 @@
     }
     // After the columns arrive: the welcome on a first open, otherwise a tip
     // when one is due.
+    let greetLater = false;
     function greet() {
-      if (!settings.visible) return;
+      // Opened with X Pro showing: when Sweeter shows (toggle).
+      greetLater = !settings.visible;
+      if (greetLater) return;
       if (!settings.welcomed && settings.firstOpenAt) openWelcome();
       else if (T.tipDue(settings, Date.now())) showTip(true);
     }
@@ -4651,6 +4654,7 @@
       if (settings.visible) {
         app.focus({ preventScroll: true });
         schedule(null);
+        if (greetLater) setTimeout(greet, 600);
       }
     }
 
@@ -5326,20 +5330,20 @@
           break;
         case 'flt-new':
           editing = { id: null, name: '', include: '', exclude: '', match: 'all', rules: [] };
-          renderPrefs();
+          redrawPrefs('filters');
           pbody.querySelector('#fe-name').focus();
           break;
         case 'flt-edit': {
           const f = custom.find((x) => x.id === el.dataset.id);
           if (!f) break;
           editing = JSON.parse(JSON.stringify(f));
-          renderPrefs();
+          redrawPrefs('filters');
           pbody.querySelector('#fe-name').focus();
           break;
         }
         case 'flt-cancel':
           editing = null;
-          renderPrefs();
+          redrawPrefs('filters');
           break;
         case 'flt-save':
           saveFilter();
@@ -6472,6 +6476,17 @@
         '</div><div class="fbtns"><button type="button" data-cmd="flt-cancel">Cancel</button><button class="done" type="button" data-cmd="flt-save">Save filter</button></div></div>';
     }
 
+    function filtersPart() {
+      const quick = XF.QUICK.map((f, i) => h(f.name) + ' <kbd>⌥' + (i + 1) + '</kbd>').join(', ');
+      const n0 = XF.QUICK.length;
+      return '<h3 class="psec">Filters</h3><div class="hint">A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '.</div>' +
+        '<div class="mutes flist">' +
+        (custom.length
+          ? custom.map((f, i) => '<div class="mr"><span class="mk">' + h(f.name) + (n0 + i < 9 ? ' <kbd>⌥' + (n0 + i + 1) + '</kbd>' : '') + '</span><span class="me2">' + h(describe(f)) + '</span><button class="lnk" type="button" data-cmd="flt-edit" data-id="' + h(f.id) + '">Edit</button><button class="x" type="button" data-cmd="flt-del" data-id="' + h(f.id) + '" title="Delete" aria-label="Delete ' + h(f.name) + '">×</button></div>').join('')
+          : '<div class="mr"><span class="me2">No custom filters yet.</span></div>') +
+        '</div>' +
+        (editing ? filterEditor(editing) : '<div class="fnew"><button type="button" data-cmd="flt-new">New filter…</button></div>');
+    }
     // Mutes share a tab with Filters (before 0.19 they had their own).
     const mutesPane = () =>
       '<div class="hint">Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd> or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists and searches.</div>' +
@@ -6526,18 +6541,7 @@
         row('Links:', select('links', [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']]), null, 'links') +
         row('Quoted posts:', check('quoteMedia', 'Show a thumbnail of their media')) +
         '</div>',
-      filters: () => {
-        const quick = XF.QUICK.map((f, i) => h(f.name) + ' <kbd>⌥' + (i + 1) + '</kbd>').join(', ');
-        const n0 = XF.QUICK.length;
-        return '<h3 class="psec">Filters</h3><div class="hint">A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '.</div>' +
-          '<div class="mutes flist">' +
-          (custom.length
-            ? custom.map((f, i) => '<div class="mr"><span class="mk">' + h(f.name) + (n0 + i < 9 ? ' <kbd>⌥' + (n0 + i + 1) + '</kbd>' : '') + '</span><span class="me2">' + h(describe(f)) + '</span><button class="lnk" type="button" data-cmd="flt-edit" data-id="' + h(f.id) + '">Edit</button><button class="x" type="button" data-cmd="flt-del" data-id="' + h(f.id) + '" title="Delete" aria-label="Delete ' + h(f.name) + '">×</button></div>').join('')
-            : '<div class="mr"><span class="me2">No custom filters yet.</span></div>') +
-          '</div>' +
-          (editing ? filterEditor(editing) : '<div class="fnew"><button type="button" data-cmd="flt-new">New filter…</button></div>') +
-          '<h3 class="psec" id="psec-mutes">Mutes</h3>' + mutesPane();
-      },
+      filters: () => '<div class="pf-filters">' + filtersPart() + '</div><h3 class="psec" id="psec-mutes">Mutes</h3><div class="pf-mutes">' + mutesPane() + '</div>',
       layouts: () => {
         const ls = settings.layouts || [];
         return '<div class="hint">A layout is Sweeter’s own arrangement: views, merged columns, groups, widths, filters, titles, icons, colors, media and the column layout. X Pro’s decks and columns stay as they are, so a layout fits the decks it was made with.</div>' +
@@ -6582,6 +6586,16 @@
         '</div>',
     };
 
+    // Filters and Mutes share a tab: a change to one redraws only its own
+    // half, so a draft in the other (a filter being edited, a mute being
+    // typed) survives.
+    function redrawPrefs(part) {
+      if (prefsEl.hidden) return;
+      const el = prefsTab === 'filters' && pbody.querySelector(part === 'mutes' ? '.pf-mutes' : '.pf-filters');
+      if (el) el.innerHTML = part === 'mutes' ? mutesPane() : filtersPart();
+      else renderPrefs();
+    }
+
     function renderPrefs() {
       for (const t of shadow.querySelectorAll('.ptab')) t.setAttribute('aria-selected', String(t.dataset.tab === prefsTab));
       pbody.innerHTML = PANES[prefsTab]();
@@ -6623,7 +6637,7 @@
         paintFilterUI(c);
         renderColumn(c, false);
       }
-      if (!prefsEl.hidden) renderPrefs();
+      redrawPrefs('filters');
       reportState();
     }
 
@@ -6691,7 +6705,7 @@
       noteMatch = Sweeter.mutes.compileNote ? Sweeter.mutes.compileNote(rules) : null;
       save({ mutes: rules });
       rebuildAll();
-      if (!prefsEl.hidden) renderPrefs();
+      redrawPrefs('mutes');
     }
 
     // ---------- keyboard ----------

@@ -704,6 +704,44 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .ask-b{display:flex;justify-content:flex-end;gap:8px}
 .ask-b button{font:inherit;border:0;border-radius:6px;padding:5px 14px;background:var(--chip,rgba(127,127,127,.14));color:var(--t2);cursor:pointer}
 .ask-b button.done{background:var(--accent-solid);color:#fff;font-weight:600}
+.wc-back{position:absolute;inset:0;background:rgba(0,0,0,.28);display:grid;place-items:center;z-index:6;padding:24px}
+.wc-back[hidden]{display:none}
+.wc{position:relative;width:min(470px,100%);max-height:100%;overflow-y:auto;box-sizing:border-box;background:var(--sheet);color:var(--t2);border-radius:14px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px rgba(0,0,0,.12);padding:30px 28px 16px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;font-size:13px;animation:sweeter-sheet .22s cubic-bezier(.2,.85,.25,1)}
+.wc-x{position:absolute;right:10px;top:10px;width:26px;height:26px;display:grid;place-items:center;padding:0}
+.wc-x svg{width:12px;height:12px}
+.wc-slide{display:flex;flex-direction:column;align-items:center;text-align:center;min-height:290px}
+.wc-mark{width:64px;height:64px;margin-bottom:12px}
+.wc-ic{width:56px;height:56px;border-radius:14px;background:var(--accent-solid);color:#fff;display:grid;place-items:center;margin-bottom:14px;flex:none}
+.wc-ic svg{width:30px;height:30px}
+.wc-t{margin:0 0 6px;font-size:20px;font-weight:700;color:var(--t1);text-wrap:balance}
+.wc-p{margin:0 0 18px;line-height:1.5;text-wrap:pretty}
+.wc-keys{display:grid;grid-template-columns:auto auto;gap:8px 14px;align-items:baseline;text-align:left}
+.wc-keys .k{text-align:right;white-space:nowrap}
+.wc-keys .k i{font-style:normal;color:var(--t3);font-size:12px}
+.wc-keys .d{color:var(--t1)}
+.wc-tips{display:flex;align-items:center;gap:6px;margin-top:20px}
+.wc-by{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:22px;color:var(--t3);font-size:12px}
+.wc-by button{display:inline-flex;align-items:center;gap:5px;font:inherit;font-weight:600;background:none;border:1px solid var(--accent-solid);color:var(--accent-solid);border-radius:999px;padding:3px 11px 3px 8px;cursor:pointer}
+.wc-by button svg{width:13px;height:13px}
+.wc-foot{display:flex;align-items:center;gap:8px;margin-top:14px}
+.wc-foot .grow,.tip .grow{flex:1}
+.wc-dots{display:flex;gap:6px}
+.wc-dots i{width:6px;height:6px;border-radius:50%;background:var(--div)}
+.wc-dots i.on{background:var(--accent-solid)}
+.wc-foot button,.tip-f button{font:inherit;border:0;border-radius:6px;padding:5px 14px;background:var(--chip,rgba(127,127,127,.14));color:var(--t2);cursor:pointer}
+.wc-foot button.done{background:var(--accent-solid);color:#fff;font-weight:600}
+.wc-foot button[hidden],.tip-f button[hidden]{display:none}
+.tip{position:absolute;right:18px;bottom:18px;width:min(320px,calc(100% - 36px));box-sizing:border-box;background:var(--sheet);color:var(--t2);border-radius:12px;box-shadow:0 14px 40px var(--shadow),0 0 0 1px rgba(0,0,0,.1);padding:10px 12px 12px 14px;z-index:4;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;font-size:13px;animation:sweeter-sheet .22s cubic-bezier(.2,.85,.25,1)}
+.tip[hidden]{display:none}
+.tip-h{display:flex;align-items:center;gap:7px;color:var(--t1)}
+.tip-h .x{width:24px;height:24px;display:grid;place-items:center;padding:0;margin-right:-4px}
+.tip-h .x svg{width:11px;height:11px}
+.tip-ic{width:22px;height:22px;border-radius:6px;background:var(--accent-solid);color:#fff;display:grid;place-items:center;flex:none}
+.tip-ic svg{width:13px;height:13px}
+.tip-b{margin:8px 0 12px;line-height:1.45;color:var(--t1);text-wrap:pretty}
+.tip-f{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tip-f label{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t3);flex-basis:100%;margin-bottom:4px}
+.tip-f button{font-size:12px;padding:4px 10px}
 .ov{width:min(620px,100%);max-height:min(720px,100%);display:flex;flex-direction:column;background:var(--sheet);color:var(--t2);border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px rgba(0,0,0,.12);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;font-size:13px}
 .ov-body{overflow:auto;padding:6px 10px}
 .ov-deck{padding:8px 4px;border-bottom:1px solid var(--div)}

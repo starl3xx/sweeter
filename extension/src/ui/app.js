@@ -26,6 +26,8 @@
     tokenLookup: true, // a click on a contract address shows DexScreener's numbers
     tickerPrices: true, // ticker cards on screen show DexScreener's price
     updateCheck: true, // look for a newer release on GitHub once a day
+    tips: true, // a tip when Sweeter opens (at most every few hours: tips.js)
+    telemetry: true, // Mac app: anonymous usage counts through TelemetryDeck
     dateFormat: 'relative',
     pinToTop: true,
     counts: true,
@@ -276,6 +278,24 @@
     // Saved custom filters (Ivory’s “create your own”), shared by every column.
     let custom = (opts.filters || []).filter((f) => f && f.id);
     const save = opts.save || (() => {});
+    const T = Sweeter.tips;
+
+    // Anonymous usage counts (Mac app only, through TelemetryDeck): a name
+    // and a few short values Sweeter chooses, never anything from X.
+    function signal(name, params) {
+      if (native && native.signal && settings.telemetry !== false) native.signal('Sweeter.' + name, params || {});
+    }
+    // The first open: the welcome shows once the columns load, and stays
+    // due until it is closed. Installs from before it existed skip it.
+    const welcome = T.welcomeState(opts.settings);
+    if (welcome === 'new') {
+      settings.firstOpenAt = Date.now();
+      persist();
+      signal('firstOpen');
+    } else if (welcome === 'old') {
+      settings.welcomed = 1;
+      persist();
+    }
 
     // ---------- shell ----------
     const host = document.createElement('div');
@@ -378,6 +398,16 @@
       '<div class="ip-foot"><button type="button" data-cmd="ip-reset">Use Defaults</button><span class="grow"></span><button type="button" data-cmd="ip-cancel">Cancel</button><button type="button" class="done" data-cmd="ip-done">Done</button></div></div></div>' +
       '<div class="up-back" hidden><div class="ask nt up" role="alertdialog" aria-modal="true" aria-labelledby="up-t" aria-describedby="up-b"><div class="nt-head"><span class="nt-ic"></span><div class="ask-t" id="up-t"></div></div><p class="nt-b" id="up-b"></p><p class="up-notes"></p><p class="up-how">Download it, unzip it, and drag Sweeter to Applications, replacing this one.</p><div class="ask-b"><button type="button" data-cmd="up-skip">Not Now</button><button type="button" data-cmd="up-notes">Release Notes</button><button type="button" class="done" data-cmd="up-get">Download</button></div></div></div>' +
       '<div class="nt-back" hidden><div class="ask nt" role="alertdialog" aria-modal="true" aria-labelledby="nt-t" aria-describedby="nt-b"><div class="nt-head"><span class="nt-ic"></span><div class="ask-t" id="nt-t">Turn on notifications for Sweeter</div></div><p class="nt-b" id="nt-b"></p><div class="ask-b"><button type="button" data-cmd="nt-no">Not Now</button><button type="button" class="done" data-cmd="nt-go">Open Notification Settings</button></div></div></div>' +
+      '<div class="wc-back" hidden><div class="wc" role="dialog" aria-modal="true" aria-labelledby="wc-t">' +
+      '<button class="x wc-x" type="button" data-cmd="wc-close" aria-label="Close (Esc)">' + icon('x') + '</button>' +
+      '<div class="wc-slide"></div>' +
+      '<div class="wc-foot"><div class="wc-dots" aria-hidden="true"></div><span class="grow"></span><button type="button" data-cmd="wc-prev">Back</button><button type="button" class="done" data-cmd="wc-next">Continue</button></div>' +
+      '</div></div>' +
+      '<div class="tip" hidden role="region" aria-label="Tip"><div class="tip-h"><span class="tip-ic">' + icon('bulb') + '</span><b>Tip</b><span class="grow"></span>' +
+      '<button class="x" type="button" data-cmd="tip-close" aria-label="Close the tip (Esc)">' + icon('x') + '</button></div>' +
+      '<p class="tip-b" aria-live="polite"></p>' +
+      '<div class="tip-f"><label><input type="checkbox" class="tip-on">Show a tip when Sweeter opens</label><span class="grow"></span>' +
+      '<button type="button" data-cmd="tip-act" hidden></button><button type="button" data-cmd="tip-next">Next Tip</button></div></div>' +
       '<div class="utoast" hidden role="status" aria-live="polite"></div>' +
       '<div class="toast" hidden role="status" aria-live="polite"></div></div>' +
       '<button class="fab" type="button" hidden title="Show Sweeter (⌥X)"><i></i>Sweeter</button>';
@@ -427,6 +457,8 @@
     const ipBack = shadow.querySelector('.ip-back');
     const ntBack = shadow.querySelector('.nt-back');
     const upBack = shadow.querySelector('.up-back');
+    const wcBack = shadow.querySelector('.wc-back');
+    const tipEl = shadow.querySelector('.tip');
     const fab = shadow.querySelector('.fab');
 
     // Column identity: every column on screen has a view id. An X Pro
@@ -2160,6 +2192,7 @@
     function finishBoot() {
       booting = false;
       setTimeout(checkNewAlerts, 1500);
+      setTimeout(greet, 1200);
       setTimeout(autoCheckUpdates, 8000);
       colsEl.classList.remove('hold');
       let i = 0;
@@ -3124,6 +3157,7 @@
         if (remap(true)) for (const cc of cols.values()) renderColumn(cc, false);
       }, 900);
       app.focus({ preventScroll: true });
+      resumeWelcome();
     }
 
     function fmtCount(n) {
@@ -3191,6 +3225,13 @@
       const pr = store.profile(p.handle);
       if (pr && !p.id) p.id = pr.id;
       const u = pr || personOf(p.handle) || { handle: p.handle, name: p.handle };
+      // Follow from the welcome: once X Pro has the profile open, unless
+      // it is the reader’s own or already followed (or asked, or blocked).
+      if (p.followAfter && p.xpro && pr && pr.id) {
+        p.followAfter = false;
+        const me = viewer && viewer.handle && viewer.handle.toLowerCase() === p.handle.toLowerCase();
+        if (!me && !pr.following && !pr.requested && !pr.blocking) return void profFollow(true);
+      }
       profHead.innerHTML = profileHead(u, p);
       profTabs.innerHTML = p.xpro
         ? PTABS.map(([id, label]) => '<button class="pf-tab" type="button" role="tab" aria-selected="' + (p.tab === id) + '" data-cmd="prof-tab" data-tab="' + id + '">' + label + '</button>').join('')
@@ -3920,7 +3961,126 @@
     }
     function autoCheckUpdates() {
       if (settings.updateCheck === false || Date.now() - (settings.updateCheckedAt || 0) < 864e5) return;
+      // One sheet at a time: the welcome goes first.
+      if (!wcBack.hidden) return void setTimeout(autoCheckUpdates, 20000);
       checkUpdates(false);
+    }
+
+    // ---------- welcome and tips ----------
+    // The welcome: a few slides on the first open (Help ▸ Welcome to
+    // Sweeter shows it again). A tip: a card in the corner when Sweeter
+    // opens, next to the columns, so reading goes on around it.
+    let wcAt = 0;
+    let wcPaused = false; // stepped aside for the developer’s profile
+    const keyRows = (keys) => keys.map(([k, d]) => '<span class="k">' + T.markup(k).replace(/ (to|then) /g, ' <i>$1</i> ') + '</span><span class="d">' + h(d) + '</span>').join('');
+    function paintWelcome() {
+      const list = T.slides(!!native);
+      const s = list[wcAt];
+      const last = wcAt === list.length - 1;
+      wcBack.querySelector('.wc-slide').innerHTML =
+        (s.mark ? '<img class="wc-mark" src="' + (Sweeter.MARK || '') + '" alt="">' : '<span class="wc-ic">' + icon(s.icon) + '</span>') +
+        '<h2 class="wc-t" id="wc-t">' + h(s.title) + '</h2><p class="wc-p">' + h(s.text) + '</p>' +
+        (s.keys.length ? '<div class="wc-keys">' + keyRows(s.keys) + '</div>' : '') +
+        (s.by ? '<div class="wc-by"><span>Developed by ' + h(T.DEVELOPER) + '</span><button type="button" data-cmd="wc-follow">' + icon('follow') + 'Follow @' + h(T.DEVELOPER) + '</button></div>' : '') +
+        (last ? '<label class="wc-tips"><input type="checkbox" class="tip-on"' + (settings.tips !== false ? ' checked' : '') + '>Show a tip when Sweeter opens</label>' : '');
+      wcBack.querySelector('.wc-dots').innerHTML = list.map((x, i) => '<i' + (i === wcAt ? ' class="on"' : '') + '></i>').join('');
+      wcBack.querySelector('[data-cmd="wc-prev"]').hidden = wcAt === 0;
+      const next = wcBack.querySelector('[data-cmd="wc-next"]');
+      next.textContent = last ? 'Start Reading' : 'Continue';
+      next.focus({ preventScroll: true });
+    }
+    function openWelcome() {
+      closePop();
+      closeTip();
+      closePalette();
+      if (!prefsEl.hidden) closePrefs();
+      wcPaused = false;
+      wcAt = 0;
+      paintWelcome();
+      wcBack.hidden = false;
+      wcBack.querySelector('[data-cmd="wc-next"]').focus({ preventScroll: true });
+    }
+    function stepWelcome(d) {
+      const n = T.slides(!!native).length;
+      if (wcAt + d >= n) return closeWelcome(true);
+      wcAt = Math.max(0, wcAt + d);
+      paintWelcome();
+    }
+    function closeWelcome(finished) {
+      wcBack.hidden = true;
+      // Counted once: the first time it closes.
+      if (!settings.welcomed) {
+        settings.welcomed = 1;
+        persist();
+        signal('welcomeClosed', { slide: String(wcAt + 1), finished: finished ? 'yes' : 'no' });
+      }
+      app.focus({ preventScroll: true });
+    }
+
+    // Follow the developer: the welcome steps aside for their profile sheet,
+    // which presses X Pro’s own Follow button once the profile loads
+    // (renderProfile), and comes back when the sheet closes (closeProfile).
+    function followDeveloper() {
+      signal('followTapped');
+      wcPaused = true;
+      wcBack.hidden = true;
+      openProfile(T.DEVELOPER);
+      if (prof) prof.followAfter = true;
+    }
+    function resumeWelcome() {
+      if (!wcPaused) return;
+      wcPaused = false;
+      wcBack.hidden = false;
+      wcBack.querySelector('[data-cmd="wc-next"]').focus({ preventScroll: true });
+    }
+
+    let tipNow = null;
+    // The next tip, after the one shown last. `due`: the one that comes
+    // with opening Sweeter (it starts the wait for the next).
+    function showTip(due) {
+      tipNow = T.nextTip(T.tipsFor(!!native), settings.tipLast);
+      settings.tipLast = tipNow.id;
+      if (due) settings.tipAt = Date.now();
+      persist();
+      tipEl.querySelector('.tip-b').innerHTML = T.markup(tipNow.text);
+      const act = tipEl.querySelector('[data-cmd="tip-act"]');
+      act.hidden = !tipNow.act;
+      act.textContent = tipNow.act ? tipNow.act[0] : '';
+      tipEl.querySelector('.tip-on').checked = settings.tips !== false;
+      tipEl.hidden = false;
+    }
+    function closeTip() {
+      if (tipEl.hidden) return;
+      tipEl.hidden = true;
+      if (tipEl.contains(shadow.activeElement)) app.focus({ preventScroll: true });
+    }
+    function tipAction(a) {
+      closeTip();
+      if (a === 'palette') return openPalette();
+      if (a.startsWith('prefs:')) return openPrefsTab(a.slice(6));
+      if (a === 'find') return openFind(focusCol());
+      if (a === 'nextUnread') return nextUnread(1);
+      if (a === 'report') return openReport();
+      if (a === 'colMenu') {
+        const fc = focusCol() || cols.get((shown()[0] || {}).vid);
+        if (!fc) return toast('Add a column first.', 'info');
+        setFocus(fc.vid);
+        return showColumnMenu(fc, fc.el.querySelector('.cmenu'));
+      }
+    }
+    // After the columns arrive: the welcome on a first open, otherwise a tip
+    // when one is due.
+    function greet() {
+      if (!settings.visible) return;
+      if (!settings.welcomed && settings.firstOpenAt) openWelcome();
+      else if (T.tipDue(settings, Date.now())) showTip(true);
+    }
+    // The “Show a tip” boxes (the tip card and the welcome’s last slide).
+    for (const el of [tipEl, wcBack]) {
+      el.addEventListener('change', (e) => {
+        if (!e.target.classList.contains('tip-on')) return;
+        setOne('tips', e.target.checked);
+      });
     }
 
     // Back from System Settings: say so once notifications are on.
@@ -5285,6 +5445,31 @@
         case 'nt-no':
           closeNotify();
           break;
+        case 'wc-close':
+          closeWelcome(false);
+          break;
+        case 'wc-prev':
+          stepWelcome(-1);
+          break;
+        case 'wc-next':
+          stepWelcome(1);
+          break;
+        case 'wc-follow':
+          followDeveloper();
+          break;
+        case 'tip-close':
+          closeTip();
+          break;
+        case 'tip-next':
+          showTip(false);
+          break;
+        case 'tip-act':
+          if (tipNow && tipNow.act) tipAction(tipNow.act[1]);
+          break;
+        case 'tip-show':
+          closePrefs();
+          showTip(false);
+          break;
         case 'up-skip':
           if (upRel) {
             settings.updateSkip = upRel.latest;
@@ -5418,6 +5603,7 @@
         closeProfile();
         return;
       }
+      if (t.closest('.wc-back') || t.closest('.tip')) return;
       const tab = t.closest('.ptab');
       if (tab) {
         prefsTab = tab.dataset.tab;
@@ -5862,6 +6048,8 @@
       add('report', 'Report a Problem…', 'Sweeter', openReport, { icon: 'warn' });
       add('updates', 'Check for Updates…', 'Sweeter', () => checkUpdates(true), { icon: 'open' });
       add('keys', 'Keyboard Shortcuts', 'Sweeter', () => openPrefsTab('keys'), { icon: 'keyboard' });
+      add('welcome', 'Welcome to Sweeter', 'Sweeter', openWelcome, { icon: 'sparkle', keywords: ['tour onboarding help'] });
+      add('tip', 'Show a Tip', 'Sweeter', () => showTip(false), { icon: 'bulb', keywords: ['tips hint help'] });
       add('mutes', 'Edit Mute Filters', 'Sweeter', () => openPrefsTab('mutes'));
       add('filters', 'Edit Filters', 'Sweeter', () => openPrefsTab('filters'));
       add('xpro', 'Show X Pro', 'Sweeter', () => toggle(false), { keys: '⌥X' });
@@ -6308,6 +6496,8 @@
         row('Avatars:', check('round', 'Round avatars')) +
         row('Contract addresses:', check('tokenLookup', 'Show token details on click'), 'Asks DexScreener only when you click an address or ticker card. Off: they open DexScreener.', 'tokenLookup') +
         row('Updates:', check('updateCheck', 'Check for updates once a day') + ' <button class="lnk" type="button" data-cmd="check-updates">Check Now</button>', 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', 'updateCheck') +
+        row('Tips:', check('tips', 'Show a tip when Sweeter opens') + ' <button class="lnk" type="button" data-cmd="tip-show">Show One Now</button>', null, 'tips') +
+        (native ? row('Usage data:', check('telemetry', 'Send anonymous usage counts'), 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, and tips turned off, with the Sweeter version and facts about the Mac such as its macOS version, model, and language. Never anything from X.', 'telemetry') : '') +
         row('Ticker cards:', check('tickerPrices', 'Show prices'), 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most.', 'tickerPrices') +
         row('Checkmarks:', check('badges', 'Show verified checkmarks and organization badges')) +
         row('Counts:', check('counts', 'Show reply, repost and like counts')) +
@@ -6451,6 +6641,8 @@
       persist();
       if (REBUILD.has(key) || R.avatarSmall(settings) !== avBefore) rebuildAll();
       if (key === 'fit' || key === 'snap' || key === 'alertsMuted') reportState();
+      if (key === 'tips' && !val) signal('tipsOff');
+      if (key === 'telemetry' && native && native.telemetry) native.telemetry(!!val);
     }
 
     pbody.addEventListener('input', (e) => {
@@ -6507,6 +6699,15 @@
         return true;
       }
       if (!settings.visible) return false;
+      // The welcome: arrows step, Esc closes; Return and Space press the
+      // focused button.
+      if (!wcBack.hidden) {
+        if (e.key === 'Escape') closeWelcome(false);
+        else if (e.key === 'ArrowRight') stepWelcome(1);
+        else if (e.key === 'ArrowLeft') stepWelcome(-1);
+        else return false;
+        return true;
+      }
       if (!askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden || !upBack.hidden) {
         if (e.key === 'Escape') {
           if (!upBack.hidden) closeUpdate();
@@ -6759,7 +6960,8 @@
           return true;
         case 'Escape': {
           const c = focusCol();
-          if (c && c.detail) closeDetail(c);
+          if (!tipEl.hidden) closeTip();
+          else if (c && c.detail) closeDetail(c);
           else if (c && c.find) closeFind(c);
           else selectCell(null);
           return true;
@@ -6946,6 +7148,12 @@
             return openReport();
           case 'checkUpdates':
             return checkUpdates(true);
+          case 'welcome':
+            if (!settings.visible) toggle(true);
+            return openWelcome();
+          case 'tip':
+            if (!settings.visible) toggle(true);
+            return showTip(false);
           case 'github':
             return openUrl('https://github.com/starl3xx/sweeter');
           case 'skin':

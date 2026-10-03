@@ -14,7 +14,7 @@
     names: 'both',
     media: 'full', // whole images, nothing cropped
     autoplayVideo: false,
-    autoplayGifs: true,
+    autoplayGifs: false, // looping GIFs redraw constantly; on in Preferences ▸ Media
     cards: 'medium', // link previews at two-thirds width save vertical space
     links: 'short',
     quoteMedia: true,
@@ -263,6 +263,10 @@
     // the top counted everything it had loaded as read: off, once, for all.
     if (!settings.dedupeV2) settings.dedupe = 'off';
     settings.dedupeV2 = 1;
+    // 0.18.3 turned GIF autoplay off by default (energy): off once for
+    // everyone, after which a choice is kept.
+    if (!settings.gifsV2) settings.autoplayGifs = false;
+    settings.gifsV2 = 1;
     const version = opts.version || '';
     // Present only inside the native Sweeter app (a bridge to Swift).
     const native = opts.native || null;

@@ -25,6 +25,7 @@
     round: true,
     tokenLookup: true, // a click on a contract address shows DexScreener's numbers
     tickerPrices: true, // ticker cards on screen show DexScreener's price
+    updateCheck: true, // look for a newer release on GitHub once a day
     dateFormat: 'relative',
     pinToTop: true,
     counts: true,
@@ -371,6 +372,7 @@
       '<div class="ip-head"><span class="ip-prev"></span><input class="ip-q" type="search" placeholder="Search icons" aria-label="Search icons" autocomplete="off" spellcheck="false"></div>' +
       '<div class="ip-colors" role="radiogroup" aria-label="Color"></div><div class="ip-body" role="radiogroup" aria-label="Icon"></div>' +
       '<div class="ip-foot"><button type="button" data-cmd="ip-reset">Use Defaults</button><span class="grow"></span><button type="button" data-cmd="ip-cancel">Cancel</button><button type="button" class="done" data-cmd="ip-done">Done</button></div></div></div>' +
+      '<div class="up-back" hidden><div class="ask nt up" role="alertdialog" aria-modal="true" aria-labelledby="up-t" aria-describedby="up-b"><div class="nt-head"><span class="nt-ic"></span><div class="ask-t" id="up-t"></div></div><p class="nt-b" id="up-b"></p><p class="up-notes"></p><p class="up-how">Download it, unzip it, and drag Sweeter to Applications, replacing this one.</p><div class="ask-b"><button type="button" data-cmd="up-skip">Not Now</button><button type="button" data-cmd="up-notes">Release Notes</button><button type="button" class="done" data-cmd="up-get">Download</button></div></div></div>' +
       '<div class="nt-back" hidden><div class="ask nt" role="alertdialog" aria-modal="true" aria-labelledby="nt-t" aria-describedby="nt-b"><div class="nt-head"><span class="nt-ic"></span><div class="ask-t" id="nt-t">Turn on notifications for Sweeter</div></div><p class="nt-b" id="nt-b"></p><div class="ask-b"><button type="button" data-cmd="nt-no">Not Now</button><button type="button" class="done" data-cmd="nt-go">Open Notification Settings</button></div></div></div>' +
       '<div class="utoast" hidden role="status" aria-live="polite"></div>' +
       '<div class="toast" hidden role="status" aria-live="polite"></div></div>' +
@@ -420,6 +422,7 @@
     const ovBack = shadow.querySelector('.ov-back');
     const ipBack = shadow.querySelector('.ip-back');
     const ntBack = shadow.querySelector('.nt-back');
+    const upBack = shadow.querySelector('.up-back');
     const fab = shadow.querySelector('.fab');
 
     // Column identity: every column on screen has a view id. An X Pro
@@ -2153,6 +2156,7 @@
     function finishBoot() {
       booting = false;
       setTimeout(checkNewAlerts, 1500);
+      setTimeout(autoCheckUpdates, 8000);
       colsEl.classList.remove('hold');
       let i = 0;
       for (const el of colsEl.children) {
@@ -3867,6 +3871,54 @@
       ntBack.hidden = true;
       app.focus({ preventScroll: true });
     }
+    // ---------- updates ----------
+    // Until the builds are notarized, Sweeter can't replace itself: it
+    // looks for a newer release on GitHub (once a day, or when asked) and
+    // offers the download. Nothing is downloaded until the reader chooses.
+    const isNewer = (a, b) => {
+      const pa = String(a).replace(/^v/, '').split('.').map((x) => parseInt(x, 10) || 0);
+      const pb = String(b).replace(/^v/, '').split('.').map((x) => parseInt(x, 10) || 0);
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+      return false;
+    };
+    let upRel = null;
+    async function checkUpdates(manual) {
+      const get = native && native.latestRelease ? native.latestRelease : opts.latestRelease;
+      if (!get) return manual && toast('Updates can’t be checked from here.', 'info');
+      let rel = null;
+      try {
+        rel = await get();
+        if (typeof rel === 'string') rel = JSON.parse(rel);
+      } catch (e) {}
+      if (!manual) {
+        settings.updateCheckedAt = Date.now();
+        persist();
+      }
+      if (!rel || !rel.tag) return manual && toast('Sweeter couldn’t reach GitHub to check for updates.', 'warn');
+      const latest = rel.tag.replace(/^v/, '');
+      if (!version || !isNewer(latest, version)) return manual && toast('Sweeter ' + (version || latest) + ' is the latest version.');
+      // An automatic check offers each version once (Not Now).
+      if (!manual && settings.updateSkip === latest) return;
+      upRel = Object.assign({}, rel, { latest });
+      upBack.querySelector('.nt-ic').innerHTML = icon('open');
+      upBack.querySelector('.ask-t').textContent = 'Sweeter ' + latest + ' is available';
+      upBack.querySelector('.nt-b').textContent = 'You have ' + version + '.';
+      // The first lines of the notes, without Markdown.
+      const notes = String(rel.notes || '').split('\n### ')[0].replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
+      upBack.querySelector('.up-notes').textContent = notes.length > 320 ? notes.slice(0, 317) + '…' : notes;
+      closePop();
+      upBack.hidden = false;
+      upBack.querySelector('[data-cmd="up-get"]').focus({ preventScroll: true });
+    }
+    function closeUpdate() {
+      upBack.hidden = true;
+      app.focus({ preventScroll: true });
+    }
+    function autoCheckUpdates() {
+      if (settings.updateCheck === false || Date.now() - (settings.updateCheckedAt || 0) < 864e5) return;
+      checkUpdates(false);
+    }
+
     // Back from System Settings: say so once notifications are on.
     window.addEventListener('focus', async () => {
       if (!ntWaiting || !native || !native.notifyStatus) return;
@@ -5229,6 +5281,23 @@
         case 'nt-no':
           closeNotify();
           break;
+        case 'up-skip':
+          if (upRel) {
+            settings.updateSkip = upRel.latest;
+            persist();
+          }
+          closeUpdate();
+          break;
+        case 'up-notes':
+          if (upRel) openUrl(upRel.page || 'https://github.com/starl3xx/sweeter/releases/latest');
+          break;
+        case 'up-get':
+          closeUpdate();
+          if (upRel) openUrl(upRel.zip || upRel.page);
+          break;
+        case 'check-updates':
+          checkUpdates(true);
+          break;
         case 'nt-go':
           closeNotify();
           ntWaiting = true;
@@ -5330,6 +5399,10 @@
       }
       if (t.closest('.nt-back')) {
         if (!t.closest('.nt')) closeNotify();
+        return;
+      }
+      if (t.closest('.up-back')) {
+        if (!t.closest('.up')) closeUpdate();
         return;
       }
       if (t.closest('.ip-back')) {
@@ -5783,6 +5856,7 @@
       add('lay-import', 'Import Layout', 'Layouts', importLayout);
       add('prefs', 'Preferences', 'Sweeter', openPrefs, { keys: ',', icon: 'gear' });
       add('report', 'Report a Problem…', 'Sweeter', openReport, { icon: 'warn' });
+      add('updates', 'Check for Updates…', 'Sweeter', () => checkUpdates(true), { icon: 'open' });
       add('keys', 'Keyboard Shortcuts', 'Sweeter', () => openPrefsTab('keys'), { icon: 'keyboard' });
       add('mutes', 'Edit Mute Filters', 'Sweeter', () => openPrefsTab('mutes'));
       add('filters', 'Edit Filters', 'Sweeter', () => openPrefsTab('filters'));
@@ -6229,6 +6303,7 @@
         '<div class="sep"></div>' +
         row('Avatars:', check('round', 'Round avatars')) +
         row('Contract addresses:', check('tokenLookup', 'Show token details on click'), 'Asks DexScreener only when you click an address or ticker card. Off: they open DexScreener.', 'tokenLookup') +
+        row('Updates:', check('updateCheck', 'Check for updates once a day') + ' <button class="lnk" type="button" data-cmd="check-updates">Check Now</button>', 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', 'updateCheck') +
         row('Ticker cards:', check('tickerPrices', 'Show prices'), 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most.', 'tickerPrices') +
         row('Checkmarks:', check('badges', 'Show verified checkmarks and organization badges')) +
         row('Counts:', check('counts', 'Show reply, repost and like counts')) +
@@ -6428,9 +6503,10 @@
         return true;
       }
       if (!settings.visible) return false;
-      if (!askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden) {
+      if (!askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden || !upBack.hidden) {
         if (e.key === 'Escape') {
-          if (!ntBack.hidden) closeNotify();
+          if (!upBack.hidden) closeUpdate();
+          else if (!ntBack.hidden) closeNotify();
           else if (!askBack.hidden) closeAsk();
           else if (!ipBack.hidden) closePicker(false);
           else closeOverview();
@@ -6864,6 +6940,8 @@
             return arg ? openPrefsTab(arg) : openPrefs();
           case 'report':
             return openReport();
+          case 'checkUpdates':
+            return checkUpdates(true);
           case 'github':
             return openUrl('https://github.com/starl3xx/sweeter');
           case 'skin':

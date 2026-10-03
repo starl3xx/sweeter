@@ -131,6 +131,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     func setUpMenus() {
         guard let main = NSApp.mainMenu else { return }
         let appMenu = main.items.first?.submenu
+        // About shows where updates live; Check for Updates… sits under it.
+        if let about = appMenu?.items.first(where: { $0.action == #selector(NSApplication.orderFrontStandardAboutPanel(_:)) }), let menu = appMenu {
+            about.action = #selector(showAbout)
+            about.target = self
+            menu.insertItem(menuItem("Check for Updates…", "checkUpdates", "", [], "arrow.down.circle"), at: menu.index(of: about) + 1)
+        }
         if let settings = appMenu?.items.first(where: { $0.keyEquivalent == "," }) {
             settings.title = "Settings…"
             settings.action = #selector(openSettings)
@@ -338,6 +344,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         item.submenu = menu
         let index = main.items.firstIndex(where: { $0.submenu?.title == title }).map { $0 + 1 } ?? main.items.count
         main.insertItem(item, at: index)
+    }
+
+    /// The standard About panel, with where updates and help live.
+    @objc func showAbout() {
+        let releases = "https://github.com/starl3xx/sweeter/releases"
+        let text = NSMutableAttributedString(string: "Updates and release notes:\n", attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor])
+        text.append(NSAttributedString(string: "github.com/starl3xx/sweeter/releases", attributes: [.font: NSFont.systemFont(ofSize: 11), .link: URL(string: releases)!]))
+        text.append(NSAttributedString(string: "\n\nSweeter ▸ Check for Updates… looks for a newer version.\nHelp ▸ Report a Problem… if something breaks.", attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]))
+        let center = NSMutableParagraphStyle()
+        center.alignment = .center
+        text.addAttribute(.paragraphStyle, value: center, range: NSRange(location: 0, length: text.length))
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: text])
     }
 
     @objc func runCommand(_ sender: NSMenuItem) {

@@ -82,6 +82,9 @@
         dex: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
           ? (address) => Promise.resolve(api.runtime.sendMessage({ type: 'dex', address })).then((r) => (r && r.ok ? r.body : Promise.reject(new Error('lookup failed'))))
           : null,
+        latestRelease: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
+          ? () => Promise.resolve(api.runtime.sendMessage({ type: 'latestRelease' })).then((r) => (r && r.ok ? r.body : Promise.reject(new Error('no answer'))))
+          : null,
         dexLogo: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
           ? (url) => Promise.resolve(api.runtime.sendMessage({ type: 'dexLogo', url })).then((r) => (r && r.ok ? r.body : ''))
           : null,

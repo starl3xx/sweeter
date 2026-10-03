@@ -30,7 +30,20 @@
       .catch(() => sendResponse({ ok: false }));
     return true;
   }
+  // The latest Sweeter release on GitHub, for Check for Updates: its tag,
+  // the start of its notes, its page and its zip. Nothing is downloaded.
+  function latestRelease(sendResponse) {
+    fetch('https://api.github.com/repos/starl3xx/sweeter/releases/latest', { credentials: 'omit', headers: { accept: 'application/vnd.github+json' } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then((j) => {
+        const zip = (j.assets || []).find((a) => /\.zip$/i.test(a.name || ''));
+        sendResponse({ ok: true, body: { tag: String(j.tag_name || ''), notes: String(j.body || '').slice(0, 2000), page: String(j.html_url || ''), zip: zip ? String(zip.browser_download_url || '') : '' } });
+      })
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
   api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg && msg.type === 'latestRelease') return latestRelease(sendResponse);
     if (msg && msg.type === 'dexLogo') return logo(msg.url, sendResponse);
     if (!msg || msg.type !== 'dex' || !ADDRESSES.test(String(msg.address || ''))) return false;
     fetch('https://api.dexscreener.com/latest/dex/tokens/' + msg.address, { credentials: 'omit' })

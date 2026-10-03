@@ -182,6 +182,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             allowPopup: () => post({ type: 'allowPopup' }),
             show: () => post({ type: 'show' }),
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
+            latestRelease: () => post({ type: 'latestRelease' }),
             dexLogo: (u) => post({ type: 'dexLogo', url: String(u || '') }),
             notifyStatus: () => post({ type: 'notifyStatus' }),
             notifyRequest: () => post({ type: 'notifyRequest' }),
@@ -257,6 +258,28 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                     return
                 }
                 replyHandler(String(data: data, encoding: .utf8), nil)
+            }
+        // The latest Sweeter release on GitHub, for Check for Updates: its
+        // tag, the start of its notes, its page and its zip. Nothing is
+        // downloaded here; Download opens the zip in the browser.
+        case "latestRelease":
+            var req = URLRequest(url: URL(string: "https://api.github.com/repos/starl3xx/sweeter/releases/latest")!)
+            req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            Task {
+                guard let (data, response) = try? await URLSession.shared.data(for: req),
+                      let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                      let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    replyHandler(nil, "no answer")
+                    return
+                }
+                let assets = j["assets"] as? [[String: Any]] ?? []
+                let zip = assets.first(where: { ($0["name"] as? String ?? "").lowercased().hasSuffix(".zip") })?["browser_download_url"] as? String ?? ""
+                replyHandler([
+                    "tag": j["tag_name"] as? String ?? "",
+                    "notes": String((j["body"] as? String ?? "").prefix(2000)),
+                    "page": j["html_url"] as? String ?? "",
+                    "zip": zip,
+                ], nil)
             }
         // A token logo from DexScreener's image server, as a data: URL (X's
         // page allows no other image host). Only https on dexscreener.com,

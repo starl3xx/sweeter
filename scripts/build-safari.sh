@@ -13,7 +13,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DD="$ROOT/build/DerivedData"
 VERSION=$(node -e "console.log(require('$ROOT/extension/manifest.json').version)")
 PROJ="$ROOT/safari/Sweeter/Sweeter.xcodeproj"
-sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $VERSION;/" "$PROJ/project.pbxproj"
+# The version comes from extension/manifest.json, passed to Xcode below
+# (building never edits a tracked file).
 
 node "$ROOT/tests/run.js"
 
@@ -22,7 +23,7 @@ if [ -n "${SWEETER_TEAM:-}" ]; then
 else
   SIGN=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="")
 fi
-xcodebuild -project "$PROJ" -scheme Sweeter -configuration Release \
+xcodebuild -project "$PROJ" -scheme Sweeter -configuration Release MARKETING_VERSION="$VERSION" \
   -destination 'platform=macOS' -derivedDataPath "$DD" "${SIGN[@]}" \
   clean build -quiet
 

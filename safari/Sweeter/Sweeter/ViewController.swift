@@ -250,7 +250,8 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             let name = body["name"] as? String ?? ""
             var parameters: [String: String] = [:]
             if let d = (body["json"] as? String)?.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
-                for (k, v) in o.prefix(8) { if let s = v as? String, k.count <= 40, s.count <= 80 { parameters[k] = s } }
+                // 120: room for a warning's key (util.problemKey keeps 100).
+                for (k, v) in o.prefix(8) { if let s = v as? String, k.count <= 40, s.count <= 120 { parameters[k] = s } }
             }
             if name.range(of: "^Sweeter\\.[A-Za-z][A-Za-z.]{0,60}$", options: .regularExpression) != nil { Telemetry.signal(name, parameters) }
             replyHandler(nil, nil)

@@ -151,8 +151,10 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 .compactMap { try? String(contentsOf: resources.appendingPathComponent($0), encoding: .utf8) }
                 .joined(separator: "\n;\n")
             // A web view runs user scripts on every page, unlike the
-            // extension’s match patterns: keep Sweeter off X’s sign-in pages.
-            let source = "if (location.hostname === 'pro.x.com') {\n" + joined + "\n}"
+            // extension’s match patterns: keep Sweeter off X’s sign-in pages,
+            // and out of its own pop-out windows (named sweeter-…), whose
+            // page takes pro.x.com’s address once Sweeter writes into it.
+            let source = "if (location.hostname === 'pro.x.com' && !/^sweeter-/.test(window.name)) {\n" + joined + "\n}"
             if (entry["world"] as? String) == "MAIN" {
                 // The recorder must run in X Pro’s own page, before X’s code.
                 controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
@@ -189,6 +191,8 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             notifySettings: () => post({ type: 'notifySettings' }),
             notify: (n) => { post({ type: 'notify', title: String(n.title || ''), body: String(n.body || ''), url: String(n.url || ''), subtitle: String(n.subtitle || ''), thread: String(n.thread || ''), key: String(n.key || ''), sound: !!n.sound }); },
             log: (m) => { post({ type: 'log', message: String(m) }); },
+            signal: (n, p) => { post({ type: 'signal', name: String(n || ''), json: JSON.stringify(p || {}) }); },
+            telemetry: (on) => { post({ type: 'telemetry', on: !!on }); },
           };
           globalThis.browser = {
             runtime: { getManifest: () => ({ version: '\(version)' }) },
@@ -239,6 +243,19 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 pageState = o
                 NotificationCenter.default.post(name: .sweeterState, object: nil)
             }
+            replyHandler(nil, nil)
+        // A usage count (Telemetry): a name the page chose and a few short
+        // string values, never anything from X.
+        case "signal":
+            let name = body["name"] as? String ?? ""
+            var parameters: [String: String] = [:]
+            if let d = (body["json"] as? String)?.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                for (k, v) in o.prefix(8) { if let s = v as? String, k.count <= 40, s.count <= 80 { parameters[k] = s } }
+            }
+            if name.range(of: "^Sweeter\\.[A-Za-z][A-Za-z.]{0,60}$", options: .regularExpression) != nil { Telemetry.signal(name, parameters) }
+            replyHandler(nil, nil)
+        case "telemetry":
+            Telemetry.setEnabled(body["on"] as? Bool ?? false)
             replyHandler(nil, nil)
         // Tokens' pairs from DexScreener's public API, for a contract address
         // the reader clicked or ticker cards on screen (up to 30 addresses,

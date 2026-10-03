@@ -7,6 +7,10 @@
 # with your Apple Development certificate. Without it the build is signed
 # ad hoc, and Safari shows the extension only with Develop > Allow Unsigned
 # Extensions turned on. The Sweeter app itself works either way.
+#
+# Usage counts: SWEETER_TELEMETRY=<TelemetryDeck App ID> in scripts/local.env
+# turns them on. This install is the developer's own, so it sends test
+# signals (TelemetryDeck shows them only in Test Mode).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 [ -f "$ROOT/scripts/local.env" ] && . "$ROOT/scripts/local.env"
@@ -25,6 +29,7 @@ else
 fi
 xcodebuild -project "$PROJ" -scheme Sweeter -configuration Release MARKETING_VERSION="$VERSION" \
   -destination 'platform=macOS' -derivedDataPath "$DD" "${SIGN[@]}" \
+  SWEETER_TELEMETRY_APP_ID="${SWEETER_TELEMETRY:-}" SWEETER_TELEMETRY_TEST_MODE=YES \
   clean build -quiet
 
 APP="$DD/Build/Products/Release/Sweeter.app"

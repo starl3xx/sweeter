@@ -20,6 +20,7 @@
 		4A5B8F5C306AC8D80046AF31 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F59306AC8D80046AF31 /* icons */; };
 		4A5B8F5D306AC8D80046AF31 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F5A306AC8D80046AF31 /* manifest.json */; };
 		4A5B8F5E306AC8D80046AF31 /* src in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F5B306AC8D80046AF31 /* src */; };
+		4A5B8F60306AC8D80046AF31 /* TelemetryDeck in Frameworks */ = {isa = PBXBuildFile; productRef = 4A5B8F61306AC8D80046AF31 /* TelemetryDeck */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +68,7 @@
 		4A5B8F29306AC8D60046AF31 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				4A5B8F60306AC8D80046AF31 /* TelemetryDeck in Frameworks */,
 			);
 		};
 		4A5B8F44306AC8D80046AF31 /* Frameworks */ = {
@@ -158,6 +160,9 @@
 				4A5B8F4A306AC8D80046AF31 /* PBXTargetDependency */,
 			);
 			name = "Sweeter";
+			packageProductDependencies = (
+				4A5B8F61306AC8D80046AF31 /* TelemetryDeck */,
+			);
 			productName = "Sweeter";
 			productReference = 4A5B8F2C306AC8D60046AF31 /* Sweeter.app */;
 			productType = "com.apple.product-type.application";
@@ -204,6 +209,9 @@
 			);
 			mainGroup = 4A5B8F23306AC8D60046AF31;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4A5B8F62306AC8D80046AF31 /* XCRemoteSwiftPackageReference "SwiftSDK" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4A5B8F2D306AC8D60046AF31 /* Products */;
 			projectDirPath = "";
@@ -579,6 +587,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4A5B8F62306AC8D80046AF31 /* XCRemoteSwiftPackageReference "SwiftSDK" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/TelemetryDeck/SwiftSDK";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.14.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4A5B8F61306AC8D80046AF31 /* TelemetryDeck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4A5B8F62306AC8D80046AF31 /* XCRemoteSwiftPackageReference "SwiftSDK" */;
+			productName = TelemetryDeck;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 4A5B8F24306AC8D60046AF31 /* Project object */;
 	validationLevel = 1;

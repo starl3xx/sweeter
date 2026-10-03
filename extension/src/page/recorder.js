@@ -6,7 +6,8 @@
 // calls with XMLHttpRequest (verified 2026-09-28); fetch is covered too.
 (function () {
   'use strict';
-  if (window.__sweeterRecorder || !/^pro\.(x|twitter)\.com$/.test(location.hostname)) return;
+  // Not in a pop-out window Sweeter writes into (named sweeter-…; see main.js).
+  if (window.__sweeterRecorder || !/^pro\.(x|twitter)\.com$/.test(location.hostname) || /^sweeter-/.test(window.name)) return;
   window.__sweeterRecorder = true;
 
   const OPS = new Set([

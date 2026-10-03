@@ -4,6 +4,10 @@
 <dict>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
+	<key>SweeterTelemetryAppID</key>
+	<string>$(SWEETER_TELEMETRY_APP_ID)</string>
+	<key>SweeterTelemetryTestMode</key>
+	<string>$(SWEETER_TELEMETRY_TEST_MODE)</string>
 	<key>SFSafariWebExtensionConverterVersion</key>
 	<string>27.0</string>
 </dict>

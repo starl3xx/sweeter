@@ -11,6 +11,7 @@ import Carbon.HIToolbox
 import Cocoa
 import SafariServices
 import ServiceManagement
+import TelemetryDeck
 import UserNotifications
 
 extension Notification.Name {
@@ -44,6 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Permission is asked for when alerts are turned on (the page calls
         // notifyRequest), not here: a prompt at launch has no context.
         UNUserNotificationCenter.current().delegate = self
+        Telemetry.start()
         setUpStatusItem()
         setUpMenus()
         registerHotKeys()
@@ -293,8 +295,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         insert(window, after: "Go", in: main)
         NSApp.windowsMenu = window
 
-        // Help: report a problem (a filled-in GitHub issue) or visit the repo.
+        // Help: the welcome and a tip again, report a problem (a filled-in
+        // GitHub issue) or visit the repo.
         let help = NSMenu(title: "Help")
+        help.addItem(menuItem("Welcome to Sweeter", "welcome", "", [], "hand.wave"))
+        help.addItem(menuItem("Show a Tip", "tip", "", [], "lightbulb"))
+        help.addItem(.separator())
         help.addItem(menuItem("Report a Problem…", "report", "", [], "exclamationmark.bubble"))
         help.addItem(menuItem("Sweeter on GitHub", "github", "", [], "arrow.up.right.square"))
         insert(help, after: "Window", in: main)
@@ -551,5 +557,42 @@ extension AppDelegate: NSMenuDelegate {
         for (i, title) in titles.prefix(9).enumerated() {
             menu.addItem(menuItem(title, "column:\(i + 1)", String(i + 1), [.command], nil))
         }
+    }
+}
+
+/// Anonymous usage counts through TelemetryDeck. Only a build made with an
+/// App ID sends anything (scripts/local.env sets it; a source build has
+/// none), and nothing while Usage Data is off in Preferences. The SDK counts
+/// new installs and sessions; the page adds a few named events (signal).
+enum Telemetry {
+    private static let appID = (Bundle.main.object(forInfoDictionaryKey: "SweeterTelemetryAppID") as? String ?? "").trimmingCharacters(in: .whitespaces)
+
+    /// At launch, unless the saved settings turned it off.
+    static func start() {
+        let settings = NativeStorage().get(["settings"])["settings"] as? [String: Any] ?? [:]
+        setEnabled(settings["telemetry"] as? Bool != false)
+    }
+
+    /// The SDK's live settings: the same object it was given, so turning
+    /// Usage Data off later silences it (its own signals too).
+    private static var config: TelemetryDeck.Config?
+
+    static func setEnabled(_ on: Bool) {
+        guard !appID.isEmpty else { return }
+        if let config {
+            config.analyticsDisabled = !on
+            return
+        }
+        guard on else { return }
+        let c = TelemetryDeck.Config(appID: appID)
+        // The build-safari.sh install (the developer’s own) counts as a test.
+        if (Bundle.main.object(forInfoDictionaryKey: "SweeterTelemetryTestMode") as? String) == "YES" { c.testMode = true }
+        config = c
+        TelemetryDeck.initialize(config: c)
+    }
+
+    static func signal(_ name: String, _ parameters: [String: String]) {
+        guard let config, !config.analyticsDisabled else { return }
+        TelemetryDeck.signal(name, parameters: parameters)
     }
 }

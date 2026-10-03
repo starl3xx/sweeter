@@ -227,7 +227,7 @@
   ];
   // What a layout holds: Sweeter’s own arrangement, never X Pro’s decks.
   const LAYOUT_KEYS = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
-  const REBUILD = new Set(['tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
+  const REBUILD = new Set(['actions', 'tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
   const REPLY_OPTIONS = ['Everyone', 'Accounts you follow', 'Accounts you follow and who they follow', 'Only accounts you mention', 'Verified accounts'];
   const EMOJI = '😂 ❤️ 🔥 👀 🙏 😭 🫡 💯 🚀 ✅ 👍 👏 🤝 🎉 😅 🤔 🙌 😎 🥲 😬 💀 🤯 🫠 ✨ ⚡️ 🧠 📈 📉 💰 🪙 🎯 🛠️ 🤖 🙃 ☕️ 🍿 ⚾️ 🏈 🐐 👋'.split(' ');
   const ACCEPT = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime'];
@@ -1620,6 +1620,23 @@
       if (dataChanged || c.markerSort == null) c.markerSort = s.readSort;
       if (dataChanged) notifyNew(c, s);
       if (c.marker) c.marker.remove();
+      // Long columns draw a window: the newest blocks (WIN, more as the
+      // reader scrolls down, onScroll), always covering the read marker, the
+      // selection and the post on screen, so nothing near the reader is ever
+      // dropped. Unread counts and alerts use the whole list (visSorts).
+      let limit = c.findPred ? Infinity : c.limit || WIN;
+      if (limit < vis.length) {
+        const at = (pred) => {
+          for (let k = 0; k < vis.length; k++) if (pred(vis[k].b)) return k;
+          return -1;
+        };
+        if (c.markerSort) limit = Math.max(limit, at((b) => compareSort(b.sortIndex, c.markerSort) <= 0) + 50);
+        if (c.selId) limit = Math.max(limit, at((b) => blockHas(b, c.selId)) + 50);
+        if (anchor && anchor.dataset.key) limit = Math.max(limit, at((b) => b.key === anchor.dataset.key) + 100);
+      }
+      const drawn = limit < vis.length ? vis.slice(0, limit) : vis;
+      c.drawnCount = drawn.length;
+      c.visCount = vis.length;
       // The post that was on top before this refresh; new posts land above it.
       const prevFirst = pinned && dataChanged && c.rendered ? firstNode(c) : null;
 
@@ -1627,8 +1644,8 @@
       const wanted = new Set();
       let prev = null;
       let boundary = null;
-      c.visSorts = [];
-      for (const { b, posts } of vis) {
+      c.visSorts = vis.map((x) => x.b.sortIndex);
+      for (const { b, posts } of drawn) {
         wanted.add(b.key);
         let node = c.nodes.get(b.key);
         if (!node || c.full || node.__b !== b || (posts && node.__n !== posts.length)) {
@@ -1648,7 +1665,6 @@
           node.__seenObs = true;
           seenIO.observe(node);
         }
-        c.visSorts.push(b.sortIndex);
         if (!boundary && c.markerSort && compareSort(b.sortIndex, c.markerSort) <= 0) boundary = node;
       }
       for (const [k, node] of c.nodes) {
@@ -1698,6 +1714,7 @@
       else c.foot.innerHTML = 'No posts here yet. X Pro checks for new ones every 30 seconds.<br><button class="more" type="button" data-cmd="reload">Reload X Pro</button>';
       reselect(c);
       watchTickers(c.el);
+      fillActs(c.list.querySelector('.cell[data-id]:hover'));
       checkRead(c);
       updatePill(c);
       observeVideos(c.list);
@@ -1971,8 +1988,15 @@
         if (!prog) c.pinned = top && (c.pinned || settings.pinToTop);
         if (was !== c.pinned) c.el.classList.toggle('pinned', !!c.pinned);
         checkRead(c);
+        // Back at the top: the window shrinks again at the next redraw
+        // (only posts below the screen go, so nothing moves).
+        if (top && c.limit) c.limit = 0;
         const sc = c.scroll;
-        if (sc.scrollTop + sc.clientHeight > sc.scrollHeight - 900 && Date.now() - c.lastOlder > 5000) {
+        const nearEnd = sc.scrollTop + sc.clientHeight > sc.scrollHeight - 900;
+        if (nearEnd && c.drawnCount < c.visCount) {
+          c.limit = c.drawnCount + 100;
+          renderColumn(c, false);
+        } else if (nearEnd && Date.now() - c.lastOlder > 5000) {
           let m = mapOf(c);
           if (c.merge) {
             // The source whose oldest post is newest holds the rest back.
@@ -2236,7 +2260,10 @@
         c.full = true;
         renderColumn(c, false);
       }
-      for (const rec of popouts.values()) drawPop(rec);
+      for (const rec of popouts.values()) {
+        rec.full = true;
+        drawPop(rec);
+      }
     }
 
     store.subscribe((key) => {
@@ -2285,6 +2312,36 @@
       return cols.get(focusVid) || null;
     }
 
+    const WIN = 200;
+    // Does this block show the post (or notification) with this id?
+    function blockHas(b, id) {
+      if (!b || !id) return false;
+      if (b.key === id || (b.post && b.post.id === id) || (b.n && b.n.id === id)) return true;
+      return !!(b.posts && b.posts.some((x) => x && x.id === id));
+    }
+    // A post's action bar, built when the pointer or the selection reaches
+    // it (hover mode draws an empty placeholder; render.js acts).
+    function fillActs(cell) {
+      if (!cell || !cell.dataset || !cell.dataset.id) return;
+      const box = cell.querySelector('.acts[data-lazy]');
+      if (!box || box.closest('.cell') !== cell) return;
+      const p = findPost(cell.dataset.id);
+      if (!p) return;
+      const colEl = cell.closest('.col');
+      const c = colEl && colEl.dataset.vid ? cols.get(colEl.dataset.vid) : null;
+      const t = cell.ownerDocument.createElement('template');
+      t.innerHTML = R.acts(p, { settings: c ? colSettings(c) : settings, now: Date.now(), viewer, expanded });
+      box.replaceWith(t.content.firstElementChild);
+    }
+    app.addEventListener(
+      'pointerover',
+      (e) => {
+        const cell = e.target.closest && e.target.closest('.cell[data-id]');
+        if (cell) fillActs(cell);
+      },
+      { passive: true },
+    );
+
     function rootOf(c) {
       return c.detail && c.dlist ? c.dlist : c.list;
     }
@@ -2294,6 +2351,7 @@
     }
 
     function selectCell(cell, scroll) {
+      fillActs(cell);
       for (const s of shadow.querySelectorAll('.cell.sel')) s.classList.remove('sel');
       // One selection at a time. A column that loses it forgets it, or its
       // next redraw (every poll) would select the post again.
@@ -2316,16 +2374,26 @@
     function reselect(c) {
       if (!c.selId) return;
       const cell = c.list.querySelector('.cell[data-id="' + CSS.escape(c.selId) + '"], .cell[data-note="' + CSS.escape(c.selId) + '"]');
-      if (cell) cell.classList.add('sel');
+      if (cell) {
+        cell.classList.add('sel');
+        fillActs(cell);
+      }
     }
 
     function move(dir) {
       const c = focusCol();
       if (!c) return;
-      const cells = cellsOf(c);
+      let cells = cellsOf(c);
       if (!cells.length) return;
       const cur = rootOf(c).querySelector('.cell.sel');
-      const i = cur ? cells.indexOf(cur) : -1;
+      let i = cur ? cells.indexOf(cur) : -1;
+      // At the end of the drawn window: draw more first.
+      if (dir > 0 && !c.detail && i >= cells.length - 2 && c.drawnCount < c.visCount) {
+        c.limit = c.drawnCount + 100;
+        renderColumn(c, false);
+        cells = cellsOf(c);
+        i = cur ? cells.indexOf(cur) : -1;
+      }
       if (i < 0 && c.detail) {
         selectCell(rootOf(c).querySelector('.cell.focal') || cells[0], true);
         return;
@@ -2358,6 +2426,10 @@
       if (!c) return;
       if (end) {
         c.pinned = false;
+        if (c.drawnCount < c.visCount) {
+          c.limit = Infinity;
+          renderColumn(c, false);
+        }
         c.scroll.scrollTop = c.scroll.scrollHeight;
       } else pinTop(c);
     }
@@ -3851,7 +3923,7 @@
         c.title.textContent = titleOf(vid);
         c.title.title = c.title.textContent;
       }
-      redrawPopFor(vid);
+      redrawPopFor(vid, true);
       renderTabs();
       reportState();
     }
@@ -4407,7 +4479,17 @@
         if (hit) renderColumn(c, false);
         if (c.detail) renderDetail(c, false);
       }
-      for (const rec of popouts.values()) if (!rec.w.closed && rec.list.querySelector('.cell[data-id="' + CSS.escape(id) + '"]')) redrawPop(rec);
+      for (const rec of popouts.values()) {
+        if (rec.w.closed || !rec.nodes) continue;
+        let hit = false;
+        for (const node of rec.nodes.values()) {
+          if (node.querySelector('.cell[data-id="' + CSS.escape(id) + '"]') || node.dataset.id === id) {
+            node.__b = null;
+            hit = true;
+          }
+        }
+        if (hit) redrawPop(rec);
+      }
     }
 
     function copyText(text, done) {
@@ -5743,6 +5825,14 @@
       const rec = { w, c, root, list: root.querySelector('.list'), scroll: root.querySelector('.scroll'), title: root.querySelector('.ct'), sub: root.querySelector('.cs'), cic: root.querySelector('.cic'), col: root.querySelector('.col') };
       popouts.set(c.vid, rec);
       root.addEventListener('click', (e) => popClick(rec, e));
+      root.addEventListener(
+        'pointerover',
+        (e) => {
+          const cell = e.target.closest && e.target.closest('.cell[data-id]');
+          if (cell) fillActs(cell);
+        },
+        { passive: true },
+      );
       root.addEventListener('dblclick', (e) => {
         const cell = e.target.closest('.cell[data-id]');
         const p = cell && findPost(cell.dataset.id);
@@ -5771,7 +5861,12 @@
         drawPop(rec);
       });
     }
-    const redrawPopFor = (vid) => redrawPop(popouts.get(vid));
+    // full: the column's look changed, so every post is built again.
+    const redrawPopFor = (vid, full) => {
+      const rec = popouts.get(vid);
+      if (rec && full) rec.full = true;
+      redrawPop(rec);
+    };
 
     function drawPop(rec) {
       if (rec.w.closed) return popouts.delete(rec.c.vid);
@@ -5813,10 +5908,38 @@
       // The main column’s Find is not the pop-out’s (and its Unread only
       // state is the column’s own, kept off the main column).
       const vis = visibleBlocks(s, Object.assign(Object.create(c), { findPred: null, findNote: null }));
-      rec.list.innerHTML = vis.map(({ b, posts }) => R.block(b, ctx, posts || (b.kind === 'thread' ? b.posts : null))).join('');
-      Array.from(rec.list.children).forEach((n, i) => {
-        if (vis[i]) n.dataset.key = vis[i].b.key;
-      });
+      // Reuse each post's node, as the main column does: only new or changed
+      // blocks are built (a redraw used to re-parse the whole column).
+      if (!rec.nodes) rec.nodes = new Map();
+      const doc = rec.w.document;
+      const wanted = new Set();
+      let prev = null;
+      for (const { b, posts } of vis) {
+        wanted.add(b.key);
+        const n = posts ? posts.length : 0;
+        let node = rec.nodes.get(b.key);
+        if (!node || rec.full || node.__b !== b || node.__n !== n) {
+          const t = doc.createElement('template');
+          t.innerHTML = R.block(b, ctx, posts || (b.kind === 'thread' ? b.posts : null));
+          const fresh = t.content.firstElementChild;
+          fresh.dataset.key = b.key;
+          fresh.__b = b;
+          fresh.__n = n;
+          if (node) node.replaceWith(fresh);
+          node = fresh;
+          rec.nodes.set(b.key, node);
+        }
+        const next = prev ? prev.nextSibling : rec.list.firstChild;
+        if (next !== node) rec.list.insertBefore(node, next);
+        prev = node;
+      }
+      for (const [k, node] of rec.nodes) {
+        if (!wanted.has(k)) {
+          node.remove();
+          rec.nodes.delete(k);
+        }
+      }
+      rec.full = false;
       rec.root.querySelector('.foot').textContent = vis.length ? '' : 'No posts here yet.';
       if (anchor) {
         const n = Array.from(rec.list.children).find((x) => x.dataset.key === anchor);
@@ -5886,6 +6009,8 @@
         if (a === 'more-text') {
           if (expanded.has(id)) expanded.delete(id);
           else expanded.add(id);
+          const own = cell.closest('[data-key]');
+          if (own) own.__b = null;
           return drawPop(rec);
         }
         return openUrl(cell.dataset.url);
@@ -6806,7 +6931,17 @@
             for (const e of order) {
               const c = cols.get(e.vid);
               if (!c) continue;
-              const node = (e.vid === vid && bkey && c.nodes.get(bkey)) || (sid && c.list.querySelector('.cell[data-id="' + sid + '"]'));
+              let node = (e.vid === vid && bkey && c.nodes.get(bkey)) || (sid && c.list.querySelector('.cell[data-id="' + sid + '"]'));
+              if (!node && c.drawnCount < c.visCount) {
+                // Beyond the drawn window: draw down to it.
+                const s2 = store.get(c.key);
+                const k = s2 ? visibleBlocks(s2, c).findIndex((x) => (e.vid === vid && x.b.key === bkey) || blockHas(x.b, sid)) : -1;
+                if (k >= 0) {
+                  c.limit = k + 50;
+                  renderColumn(c, false);
+                  node = (e.vid === vid && bkey && c.nodes.get(bkey)) || (sid && c.list.querySelector('.cell[data-id="' + sid + '"]'));
+                }
+              }
               if (!node) continue;
               goCol(e.vid, true);
               const cell = node.matches('.cell') ? node : node.querySelector('.cell[data-id], .cell[data-note]');

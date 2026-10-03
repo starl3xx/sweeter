@@ -20,4 +20,10 @@ Updated 2026-10-03 by `.github/workflows/stats.yml` on main. The CSV files here 
 | v0.17.1 | Sweeter-0.17.1.zip | 0 |
 | v0.17.0 | Sweeter-0.17.0.zip | 1 |
 
-Repo traffic was not recorded on 2026-10-03 (/traffic/views: HTTP 401): the TRAFFIC_TOKEN secret is wrong or expired. Earlier days stay in the CSV files.
+## Repo traffic, last 14 days
+
+27 views from 4 unique visitors. History: `views.csv`, `clones.csv`, `referrers.csv`.
+
+| Referrer | Views | Unique |
+|---|---:|---:|
+| github.com | 9 | 1 |

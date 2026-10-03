@@ -665,7 +665,8 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .app.popout .ch{cursor:default}
 .ask-back,.ov-back,.ip-back,.nt-back,.up-back{position:absolute;inset:0;background:rgba(0,0,0,.28);display:grid;place-items:center;z-index:6;padding:24px}
 .ask-back[hidden],.ov-back[hidden],.ip-back[hidden],.nt-back[hidden],.up-back[hidden]{display:none}
-.up .up-notes{margin:0;font-size:12px;line-height:1.45;color:var(--t2);white-space:pre-line;max-height:9.5em;overflow:hidden}
+.up .up-notes{margin:0;font-size:12px;line-height:1.45;color:var(--t2);white-space:pre-line;max-height:11.6em;overflow-y:auto;overscroll-behavior:contain}
+.up .up-notes.more{-webkit-mask-image:linear-gradient(#000 calc(100% - 2.2em),transparent);mask-image:linear-gradient(#000 calc(100% - 2.2em),transparent)}
 .up .up-notes:empty{display:none}
 .up .up-how{margin:0;font-size:12px;color:var(--t3)}
 .nt{width:min(390px,100%)}

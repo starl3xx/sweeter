@@ -3948,13 +3948,25 @@
       upBack.querySelector('.nt-ic').innerHTML = icon('open');
       upBack.querySelector('.ask-t').textContent = 'Sweeter ' + latest + ' is available';
       upBack.querySelector('.nt-b').textContent = 'You have ' + version + '.';
-      // The first lines of the notes, without Markdown.
+      // The notes up to their first ### heading, without Markdown. Long
+      // notes scroll in their box (a fixed cut once split a line in half);
+      // release notes lead with a short summary, so the sheet shows that.
       const notes = String(rel.notes || '').split('\n### ')[0].replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
-      upBack.querySelector('.up-notes').textContent = notes.length > 320 ? notes.slice(0, 317) + '…' : notes;
+      const notesEl = upBack.querySelector('.up-notes');
+      notesEl.textContent = notes;
+      notesEl.scrollTop = 0;
       closePop();
       upBack.hidden = false;
+      fadeNotes();
       upBack.querySelector('[data-cmd="up-get"]').focus({ preventScroll: true });
     }
+    // A fade at the bottom while more notes are below (macOS hides the
+    // scroll bar until the notes move).
+    function fadeNotes() {
+      const n = upBack.querySelector('.up-notes');
+      n.classList.toggle('up-fade', n.scrollTop + n.clientHeight < n.scrollHeight - 2);
+    }
+    upBack.querySelector('.up-notes').addEventListener('scroll', fadeNotes, { passive: true });
     function closeUpdate() {
       upBack.hidden = true;
       app.focus({ preventScroll: true });

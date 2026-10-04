@@ -193,6 +193,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             log: (m) => { post({ type: 'log', message: String(m) }); },
             signal: (n, p) => { post({ type: 'signal', name: String(n || ''), json: JSON.stringify(p || {}) }); },
             telemetry: (on) => { post({ type: 'telemetry', on: !!on }); },
+            alert: (o) => post({ type: 'alert', json: JSON.stringify(o || {}) }),
           };
           globalThis.browser = {
             runtime: { getManifest: () => ({ version: '\(version)' }) },
@@ -244,6 +245,15 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 NotificationCenter.default.post(name: .sweeterState, object: nil)
             }
             replyHandler(nil, nil)
+        // A question the page asks (a name, a confirmation, the update): a
+        // real alert sheet on the window. Replies { button, text }: the
+        // button's index (-1 when none) and the text field's value.
+        case "alert":
+            guard let d = (body["json"] as? String)?.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else {
+                replyHandler(nil, "bad alert")
+                return
+            }
+            presentAlert(o) { button, text in replyHandler(["button": button, "text": text], nil) }
         // A usage count (Telemetry): a name the page chose and a few short
         // string values, never anything from X.
         case "signal":
@@ -396,6 +406,53 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     /// Runs code in Sweeter’s world (menus and hotkeys call into the page).
     func run(_ js: String) {
         webView.evaluateJavaScript(js, in: nil, in: world) { _ in }
+    }
+
+    /// The page's question as an NSAlert sheet: a title, text, up to three
+    /// buttons (the first is the default; a "Cancel" or "Not Now" takes Esc),
+    /// and either a text field (`input`) or release notes in a scrolling box.
+    func presentAlert(_ o: [String: Any], done: @escaping (Int, String) -> Void) {
+        let alert = NSAlert()
+        alert.messageText = o["title"] as? String ?? ""
+        alert.informativeText = o["text"] as? String ?? ""
+        for (i, title) in (o["buttons"] as? [String] ?? ["OK"]).prefix(3).enumerated() {
+            let button = alert.addButton(withTitle: title)
+            if i == 0, o["destructive"] as? Bool == true { button.hasDestructiveAction = true }
+            if title == "Cancel" || title == "Not Now" { button.keyEquivalent = "\u{1b}" }
+        }
+        var field: NSTextField?
+        if let value = o["input"] as? String {
+            let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+            f.stringValue = value
+            f.lineBreakMode = .byTruncatingTail
+            alert.accessoryView = f
+            alert.window.initialFirstResponder = f
+            field = f
+        } else if let notes = o["notes"] as? String, !notes.isEmpty {
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 320, height: 120))
+            scroll.hasVerticalScroller = true
+            scroll.borderType = .bezelBorder
+            let text = NSTextView(frame: scroll.bounds)
+            text.string = notes
+            text.isEditable = false
+            text.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+            text.textContainerInset = NSSize(width: 4, height: 4)
+            text.autoresizingMask = [.width]
+            scroll.documentView = text
+            // As tall as the notes, up to 120 points; longer notes scroll.
+            if let lm = text.layoutManager, let tc = text.textContainer {
+                lm.ensureLayout(for: tc)
+                scroll.frame.size.height = min(120, ceil(lm.usedRect(for: tc).height) + 2 * text.textContainerInset.height + 4)
+            }
+            alert.accessoryView = scroll
+        }
+        let finish = { (response: NSApplication.ModalResponse) in
+            done(response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue, field?.stringValue ?? "")
+        }
+        showWindow()
+        guard let window = view.window else { return finish(alert.runModal()) }
+        alert.beginSheetModal(for: window, completionHandler: finish)
+        field?.selectText(nil)
     }
 
     /// Closes the page's top sheet, if one is open (true then).

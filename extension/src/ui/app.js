@@ -1267,7 +1267,25 @@
 
     // A small sheet that asks for a name.
     let askDone = null;
+    // In the Mac app Sweeter’s questions are real macOS alert sheets on the
+    // window (Return, Esc and VoiceOver work as in every Mac app); Safari
+    // draws its own. Resolves { button: index, -1 for none, text }, or null
+    // where there are no native sheets.
+    function macAlert(o) {
+      if (!native || !native.alert) return null;
+      closePop();
+      return Promise.resolve(native.alert(o)).then((r) => (r && typeof r.button === 'number' ? r : { button: -1, text: '' }), () => ({ button: -1, text: '' }));
+    }
     function askText(title, value, onOk) {
+      const a = macAlert({ title, input: value || '', buttons: ['OK', 'Cancel'] });
+      if (a) {
+        a.then((r) => {
+          app.focus({ preventScroll: true });
+          const v = String(r.text || '').trim().slice(0, 40);
+          if (r.button === 0 && v) onOk(v);
+        });
+        return;
+      }
       askBack.querySelector('.ask-t').textContent = title;
       const input = askBack.querySelector('.ask-in');
       input.value = value || '';
@@ -3198,13 +3216,8 @@
       if (p.status === 'loading' && !store.profile(p.handle)) note = '<div class="pf-note">Opening the profile in X Pro…</div>';
       else if (p.status === 'failed') note = '<div class="pf-note">X Pro couldn’t open this profile from here, so Follow and posts aren’t available. <button class="lnk" type="button" data-cmd="prof-web">Open on X</button></div>';
       let confirm = '';
-      if (p.confirm) {
-        const q = {
-          unfollow: ['Unfollow @' + p.handle + '?', 'Their posts will no longer show in your Home timeline.', 'Unfollow'],
-          block: ['Block @' + p.handle + '?', 'They can’t follow you or see your posts, and you won’t see their posts.', 'Block'],
-          unblock: ['Unblock @' + p.handle + '?', 'They can follow you and see your posts again.', 'Unblock'],
-          remove: ['Remove @' + p.handle + ' as a follower?', 'They won’t be told. They can follow you again.', 'Remove'],
-        }[p.confirm.kind];
+      if (p.confirm && !p.confirm.native) {
+        const q = profQuestion(p.confirm.kind, p.handle);
         confirm = '<div class="pf-confirm" role="alertdialog" aria-label="' + h(q[0]) + '"><div><b>' + h(q[0]) + '</b><span>' + h(q[1]) + '</span></div>' +
           '<button type="button" data-cmd="prof-cancel">Cancel</button><button class="danger" type="button" data-cmd="prof-do">' + h(q[2]) + '</button></div>';
       }
@@ -3351,12 +3364,10 @@
             return profMenuAction(x.mute.text, { set: { muting: on }, done: (on ? 'Muted @' : 'Unmuted @') + handle });
           }
           case 'remove':
-            prof.confirm = { kind: 'remove', text: x.remove.text };
-            return renderProfile();
+            return profAsk('remove', x.remove.text);
           case 'block':
             if (/^Unblock/i.test(x.block.text)) return profMenuAction(x.block.text, { confirm: true, set: { blocking: false }, done: 'Unblocked @' + handle });
-            prof.confirm = { kind: 'block', text: x.block.text };
-            return renderProfile();
+            return profAsk('block', x.block.text);
           case 'report':
             return profMenuAction(x.report.text, { dialog: true });
           default:
@@ -3371,6 +3382,29 @@
     }
 
     // Unfollow, block, unblock and remove-follower ask first, inside the sheet.
+    function profQuestion(kind, handle) {
+      return {
+        unfollow: ['Unfollow @' + handle + '?', 'Their posts will no longer show in your Home timeline.', 'Unfollow'],
+        block: ['Block @' + handle + '?', 'They can’t follow you or see your posts, and you won’t see their posts.', 'Block'],
+        unblock: ['Unblock @' + handle + '?', 'They can follow you and see your posts again.', 'Unblock'],
+        remove: ['Remove @' + handle + ' as a follower?', 'They won’t be told. They can follow you again.', 'Remove'],
+      }[kind];
+    }
+    // Unfollow, block, unblock and remove ask first: a sheet on the Mac
+    // app’s window, or a bar inside the profile in Safari.
+    function profAsk(kind, text) {
+      const p = prof;
+      if (!p) return;
+      const q = profQuestion(kind, p.handle);
+      const a = macAlert({ title: q[0], text: q[1], buttons: [q[2], 'Cancel'], destructive: true });
+      p.confirm = { kind, text, native: !!a };
+      if (!a) return renderProfile();
+      a.then((r) => {
+        if (prof !== p || !p.confirm || p.confirm.kind !== kind) return;
+        if (r.button === 0) profConfirmed();
+        else p.confirm = null;
+      });
+    }
     function profConfirmed() {
       const p = prof;
       if (!p || !p.confirm) return;
@@ -3909,8 +3943,19 @@
         persist();
       }
       const what = l.length === 1 ? '“' + titleOf(l[0].vid) + '”' : l.length ? l.length + ' columns' : 'Sweeter';
+      const why = 'Alerts are on for ' + what + ', but notifications for Sweeter are turned off in macOS, so none can show. Turn on Allow Notifications for Sweeter in System Settings.';
+      const a = macAlert({ title: 'Turn on notifications for Sweeter', text: why, buttons: ['Open Notification Settings', 'Not Now'] });
+      if (a) {
+        a.then((r) => {
+          app.focus({ preventScroll: true });
+          if (r.button !== 0) return;
+          ntWaiting = true;
+          native.notifySettings();
+        });
+        return;
+      }
       ntBack.querySelector('.nt-ic').innerHTML = icon('bell');
-      ntBack.querySelector('.nt-b').textContent = 'Alerts are on for ' + what + ', but notifications for Sweeter are turned off in macOS, so none can show. Turn on Allow Notifications for Sweeter in System Settings.';
+      ntBack.querySelector('.nt-b').textContent = why;
       closePop();
       ntBack.hidden = false;
       ntBack.querySelector('[data-cmd="nt-go"]').focus({ preventScroll: true });
@@ -3940,6 +3985,10 @@
       return false;
     };
     let upRel = null;
+    // The notes up to their first ### heading, without Markdown. Long notes
+    // scroll in their box (a fixed cut once split a line in half); release
+    // notes lead with a short summary, so the window shows that.
+    const releaseNotes = (rel) => String(rel.notes || '').split('\n### ')[0].replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
     async function checkUpdates(manual) {
       const get = native && native.latestRelease ? native.latestRelease : opts.latestRelease;
       if (!get) return manual && toast('Updates can’t be checked from here.', 'info');
@@ -3966,13 +4015,24 @@
       // An automatic check offers each version once (Not Now).
       if (!manual && settings.updateSkip === latest) return;
       upRel = Object.assign({}, rel, { latest });
+      const a = macAlert({ title: 'Sweeter ' + latest + ' is available', text: 'You have ' + version + '. Download it, unzip it, and drag Sweeter to Applications, replacing this one.', notes: releaseNotes(rel), buttons: ['Download', 'Release Notes', 'Not Now'] });
+      if (a) {
+        const u = upRel;
+        a.then((r) => {
+          app.focus({ preventScroll: true });
+          if (r.button === 0) openUrl(u.zip || u.page);
+          else if (r.button === 1) openUrl(u.page || 'https://github.com/starl3xx/sweeter/releases/latest');
+          else {
+            settings.updateSkip = u.latest;
+            persist();
+          }
+        });
+        return;
+      }
       upBack.querySelector('.nt-ic').innerHTML = icon('open');
       upBack.querySelector('.ask-t').textContent = 'Sweeter ' + latest + ' is available';
       upBack.querySelector('.nt-b').textContent = 'You have ' + version + '.';
-      // The notes up to their first ### heading, without Markdown. Long
-      // notes scroll in their box (a fixed cut once split a line in half);
-      // release notes lead with a short summary, so the sheet shows that.
-      const notes = String(rel.notes || '').split('\n### ')[0].replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim();
+      const notes = releaseNotes(rel);
       const notesEl = upBack.querySelector('.up-notes');
       notesEl.textContent = notes;
       notesEl.scrollTop = 0;
@@ -4380,6 +4440,14 @@
       }, ms);
     }
     function showConfirm(msg, yes, onYes) {
+      const a = macAlert({ title: msg, buttons: [yes, 'Cancel'], destructive: true });
+      if (a) {
+        a.then((r) => {
+          app.focus({ preventScroll: true });
+          if (r.button === 0) onYes();
+        });
+        return;
+      }
       endUndo();
       clearTimeout(undoTimer);
       utoastKind = 'confirm';
@@ -5421,10 +5489,7 @@
           profFollow(true);
           break;
         case 'prof-ask':
-          if (prof) {
-            prof.confirm = { kind: el.dataset.v };
-            renderProfile();
-          }
+          profAsk(el.dataset.v);
           break;
         case 'prof-cancel':
           if (prof) {

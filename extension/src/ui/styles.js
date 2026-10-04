@@ -38,15 +38,22 @@
   // ones; each dark rule sets every token its light rule sets.
   const light = (sel, body) => `.app[data-skin="light"]${sel},.app[data-skin="system"]${sel}{${body}}`;
   const dark = (sel, body) => `.app[data-skin="dark"]${sel}{${body}}\n@media (prefers-color-scheme:dark){.app[data-skin="system"]${sel}{${body}}}`;
+  const HIGH_LIGHT = '--t1:#000000;--t2:#1F1F1F;--t3:#595959;--div:#C7C7C7;--sep:#CFCFCF;--thread:#A3A8AE;--img-ring:rgba(0,0,0,.16)';
+  const HIGH_DARK = '--t1:#FFFFFF;--t2:#EBEBEB;--t3:#BDBDBD;--div:#5C5C5C;--sep:#4A4A4A;--thread:#6B6F75;--img-ring:rgba(255,255,255,.16)';
   const THEMES = [
     light('[data-accent]', '--accent:var(--al);--accent-solid:var(--al);--accent-solid-press:color-mix(in srgb,var(--al) 86%,#000);--accent-hl:color-mix(in srgb,var(--al) 50%,transparent);--tint:color-mix(in srgb,var(--al) 10%,#fff);--sel:color-mix(in srgb,var(--al) 10%,#fff);--selsep:color-mix(in srgb,var(--al) 18%,#fff);--mention:color-mix(in srgb,var(--al) 5%,#fff);--mquote:color-mix(in srgb,var(--al) 7%,#F7F7F7)'),
-    light('[data-contrast="high"]', '--t1:#000000;--t2:#1F1F1F;--t3:#595959;--div:#C7C7C7;--sep:#CFCFCF;--thread:#A3A8AE;--img-ring:rgba(0,0,0,.16)'),
+    light('[data-contrast="high"]', HIGH_LIGHT),
+    // Standard contrast follows macOS’s Increase Contrast (System Settings ▸
+    // Accessibility ▸ Display): High’s tokens, while it is on.
+    '@media (prefers-contrast:more){' + light(':not([data-contrast])', HIGH_LIGHT) + '}',
     light('[data-contrast="low"]', '--t1:#262626;--t2:#5E5E5E;--t3:#8A8A8A;--div:#EFEFEF;--sep:#F2F2F2;--thread:#DADDE1;--img-ring:rgba(0,0,0,.05)'),
     dark('[data-accent]', '--accent:var(--ad);--accent-solid:var(--al);--accent-solid-press:color-mix(in srgb,var(--al) 86%,#000);--accent-hl:color-mix(in srgb,var(--ad) 50%,transparent);--tint:#45484C;--sel:#45484C;--selsep:#5C6166;--mention:color-mix(in srgb,var(--al) 12%,#262626);--mquote:#45484C'),
-    dark('[data-contrast="high"]', '--t1:#FFFFFF;--t2:#EBEBEB;--t3:#BDBDBD;--div:#5C5C5C;--sep:#4A4A4A;--thread:#6B6F75;--img-ring:rgba(255,255,255,.16)'),
+    dark('[data-contrast="high"]', HIGH_DARK),
+    '@media (prefers-contrast:more){' + dark(':not([data-contrast])', HIGH_DARK) + '}',
     dark('[data-contrast="low"]', '--t1:#E0E0E0;--t2:#ADADAD;--t3:#8A8A8A;--div:#353535;--sep:#2E2E2E;--thread:#3E4146;--img-ring:rgba(255,255,255,.05)'),
     dark('[data-black]', '--bg:#000000;--sub:#0A0A0A;--quote:#161616;--mquote:#1C1C1E;--div:#262626;--sep:#1C1C1C;--gutter:#1C1C1E;--mention:#0E1216;--sel:#1C1F24;--selsep:#2A2F36;--tint:#1C1F24;--sheet:#1C1C1E;--field:#0A0A0A;--side:#000000'),
     dark('[data-black][data-contrast="high"]', '--div:#3D3D3D;--sep:#2E2E2E'),
+    '@media (prefers-contrast:more){' + dark('[data-black]:not([data-contrast])', '--div:#3D3D3D;--sep:#2E2E2E') + '}',
     // A column’s own color: the light or the dark shade of it.
     light(' .col[data-tint]', '--ctint:var(--cl)'),
     dark(' .col[data-tint]', '--ctint:var(--cd)'),
@@ -371,8 +378,8 @@ img{display:block}
 .marker{position:relative;height:0;border-top:2px solid var(--accent);margin-top:-1px;z-index:1}
 .marker span{position:absolute;right:10px;top:-9px;font-size:10px;font-weight:600;letter-spacing:.04em;background:var(--accent);color:var(--bg);border-radius:3px;padding:0 5px;line-height:16px;text-transform:uppercase}
 
-/* Preferences window, laid out like a Mac preferences pane */
-/* Profile sheet: the size of Preferences, over the columns. */
+/* Settings window, laid out like a Mac settings pane */
+/* Profile sheet: the size of Settings, over the columns. */
 .prof-back{position:absolute;inset:0;background:rgba(0,0,0,.28);display:grid;place-items:center;z-index:5;padding:24px}
 .prof-back[hidden]{display:none}
 .prof{position:relative;width:min(600px,100%);height:min(720px,100%);display:flex;flex-direction:column;background:var(--bg);color:var(--t2);border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px rgba(0,0,0,.12);overflow:hidden;animation:sweeter-sheet .22s cubic-bezier(.2,.85,.25,1)}
@@ -867,6 +874,9 @@ button:active:not([disabled]){scale:.97}
 .skip:focus-visible{transform:none}
 
 @media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+/* macOS’s Reduce Transparency: solid where Sweeter blurs (the Mac app’s own
+   sidebar, an NSVisualEffectView, turns solid by itself). */
+@media (prefers-reduced-transparency:reduce){.pf-close{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(0,0,0,.75)}.pf-tabs{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--bg)}}
 
 /* hover only where a pointer can hover (a tap leaves :hover stuck on touch screens) */
 @media (hover:hover){

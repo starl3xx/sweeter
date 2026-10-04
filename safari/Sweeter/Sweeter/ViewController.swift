@@ -398,6 +398,13 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         webView.evaluateJavaScript(js, in: nil, in: world) { _ in }
     }
 
+    /// Closes the page's top sheet, if one is open (true then).
+    func closeTop(_ done: @escaping (Bool) -> Void) {
+        webView.evaluateJavaScript("!!(Sweeter.native && Sweeter.native.closeTop && Sweeter.native.closeTop())", in: nil, in: world) { result in
+            done((try? result.get()) as? Bool == true)
+        }
+    }
+
     /// A command for Sweeter’s page, from a menu item or a hotkey.
     func command(_ name: String) {
         let arg = (try? JSONSerialization.data(withJSONObject: [name])).flatMap { String(data: $0, encoding: .utf8) } ?? "[\"\"]"

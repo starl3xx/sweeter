@@ -153,7 +153,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         let file = NSMenu(title: "File")
         file.addItem(menuItem("New Post", "newPost", "n", [.command], "square.and.pencil"))
         file.addItem(.separator())
-        file.addItem(standard("Close", #selector(NSWindow.performClose(_:)), "w", [.command]))
+        let close = NSMenuItem(title: "Close", action: #selector(closeFront(_:)), keyEquivalent: "w")
+        close.target = self
+        file.addItem(close)
         main.insertItem(wrap(file), at: min(1, main.items.count))
 
         let edit = NSMenu(title: "Edit")
@@ -379,6 +381,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         ViewController.shared?.command(command)
     }
 
+    /// ⌘W: in Sweeter's window, its top sheet (Settings, the composer, a
+    /// profile…) closes first, as a Mac sheet would; then the window.
+    @objc func closeFront(_ sender: Any?) {
+        guard let window = NSApp.keyWindow else { return }
+        guard let vc = ViewController.shared, window === vc.view.window else { return window.performClose(sender) }
+        vc.closeTop { closed in
+            if !closed { window.performClose(sender) }
+        }
+    }
+
     @objc func openSettings() {
         ViewController.shared?.showWindow()
         ViewController.shared?.command("prefs")
@@ -514,6 +526,8 @@ extension AppDelegate: NSMenuDelegate {
         }
         guard menu === goMenu else { return }
         menu.removeAllItems()
+        menu.addItem(menuItem("Back", "back", "[", [.command], "chevron.backward"))
+        menu.addItem(.separator())
         menu.addItem(menuItem("Next Unread", "nextUnread", "j", [.command], "arrow.down.circle"))
         menu.addItem(menuItem("Previous Unread", "nextUnread:back", "j", [.command, .shift], "arrow.up.circle"))
         menu.addItem(.separator())
@@ -562,7 +576,7 @@ extension AppDelegate: NSMenuDelegate {
 
 /// Anonymous usage counts through TelemetryDeck. Only a build made with an
 /// App ID sends anything (scripts/local.env sets it; a source build has
-/// none), and nothing while Usage Data is off in Preferences. The SDK counts
+/// none), and nothing while Usage Data is off in Settings. The SDK counts
 /// new installs and sessions; the page adds a few named events (signal).
 enum Telemetry {
     private static let appID = (Bundle.main.object(forInfoDictionaryKey: "SweeterTelemetryAppID") as? String ?? "").trimmingCharacters(in: .whitespaces)

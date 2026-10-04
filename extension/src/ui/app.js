@@ -4440,6 +4440,8 @@
       }, ms);
     }
     function showConfirm(msg, yes, onYes) {
+      // A pending removal is committed now, whichever way this is asked.
+      endUndo();
       const a = macAlert({ title: msg, buttons: [yes, 'Cancel'], destructive: true });
       if (a) {
         a.then((r) => {

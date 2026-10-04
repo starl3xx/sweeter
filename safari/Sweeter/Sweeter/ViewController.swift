@@ -432,18 +432,25 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 320, height: 120))
             scroll.hasVerticalScroller = true
             scroll.borderType = .bezelBorder
-            let text = NSTextView(frame: scroll.bounds)
-            text.string = notes
+            // A text view that grows with its text, inside the scroll view.
+            let size = scroll.contentSize
+            // One point tall to start: sizeToFit only grows it.
+            let text = NSTextView(frame: NSRect(x: 0, y: 0, width: size.width, height: 1))
+            text.minSize = NSSize(width: 0, height: 0)
+            text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+            text.isVerticallyResizable = true
+            text.isHorizontallyResizable = false
+            text.autoresizingMask = [.width]
+            text.textContainer?.containerSize = NSSize(width: size.width, height: CGFloat.greatestFiniteMagnitude)
+            text.textContainer?.widthTracksTextView = true
             text.isEditable = false
             text.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
             text.textContainerInset = NSSize(width: 4, height: 4)
-            text.autoresizingMask = [.width]
+            text.string = notes
+            text.sizeToFit()
             scroll.documentView = text
             // As tall as the notes, up to 120 points; longer notes scroll.
-            if let lm = text.layoutManager, let tc = text.textContainer {
-                lm.ensureLayout(for: tc)
-                scroll.frame.size.height = min(120, ceil(lm.usedRect(for: tc).height) + 2 * text.textContainerInset.height + 4)
-            }
+            scroll.frame.size.height = min(120, text.frame.height + 4)
             alert.accessoryView = scroll
         }
         let finish = { (response: NSApplication.ModalResponse) in

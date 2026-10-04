@@ -21,6 +21,7 @@
 		4A5B8F5D306AC8D80046AF31 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F5A306AC8D80046AF31 /* manifest.json */; };
 		4A5B8F5E306AC8D80046AF31 /* src in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F5B306AC8D80046AF31 /* src */; };
 		4A5B8F60306AC8D80046AF31 /* TelemetryDeck in Frameworks */ = {isa = PBXBuildFile; productRef = 4A5B8F61306AC8D80046AF31 /* TelemetryDeck */; };
+		4A5B8F64306AC8D80046AF31 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F63306AC8D80046AF31 /* SettingsWindow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 		4A5B8F59306AC8D80046AF31 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = ../../../extension/icons; sourceTree = "<group>"; };
 		4A5B8F5A306AC8D80046AF31 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = ../../../extension/manifest.json; sourceTree = "<group>"; };
 		4A5B8F5B306AC8D80046AF31 /* src */ = {isa = PBXFileReference; lastKnownFileType = folder; name = src; path = ../../../extension/src; sourceTree = "<group>"; };
+		4A5B8F63306AC8D80046AF31 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,6 +104,7 @@
 			children = (
 				4A5B8F2F306AC8D60046AF31 /* AppDelegate.swift */,
 				4A5B8F3B306AC8D60046AF31 /* ViewController.swift */,
+				4A5B8F63306AC8D80046AF31 /* SettingsWindow.swift */,
 				4A5B8F3D306AC8D60046AF31 /* Main.storyboard */,
 				4A5B8F40306AC8D70046AF31 /* Assets.xcassets */,
 				4A5B8F42306AC8D70046AF31 /* Info.plist */,
@@ -251,6 +254,7 @@
 			files = (
 				4A5B8F3C306AC8D60046AF31 /* ViewController.swift in Sources */,
 				4A5B8F30306AC8D60046AF31 /* AppDelegate.swift in Sources */,
+				4A5B8F64306AC8D80046AF31 /* SettingsWindow.swift in Sources */,
 			);
 		};
 		4A5B8F43306AC8D80046AF31 /* Sources */ = {

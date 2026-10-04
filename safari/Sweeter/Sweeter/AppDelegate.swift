@@ -392,8 +392,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     @objc func openSettings() {
-        ViewController.shared?.showWindow()
-        ViewController.shared?.command("prefs")
+        SettingsWindowController.shared.show(tab: "")
     }
 
     /// Theme checkmarks follow what the page reports.

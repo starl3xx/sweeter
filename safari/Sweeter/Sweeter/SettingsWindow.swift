@@ -147,9 +147,15 @@ final class SettingsModel: ObservableObject {
                 set: { self.set(key, .string($0)) })
     }
 
-    func number(_ key: String, fallback: Double) -> Binding<Double> {
+    /// Rounded to `step` here, as the page would, so a dragged thumb never
+    /// jumps back to the page's rounding.
+    func number(_ key: String, fallback: Double, step: Double = 1) -> Binding<Double> {
         Binding(get: { if case .number(let n) = self.values[key] { return n } else { return fallback } },
-                set: { self.set(key, .number($0)) })
+                set: { v in
+                    let rounded = step > 0 ? (v / step).rounded() * step : v
+                    if case .number(let n) = self.values[key], n == rounded { return }
+                    self.set(key, .number(rounded))
+                })
     }
 
     var hint: [String: String] { snap?.hints ?? [:] }
@@ -161,6 +167,8 @@ final class SettingsModel: ObservableObject {
 /// link in the page): one per app, reopened where it was.
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let shared = SettingsWindowController()
+    /// The window exists (so a page reload may need to reach it).
+    private(set) static var made = false
     let model = SettingsModel()
     private let tabs = NSTabViewController()
     private static let panes: [(id: String, title: String, symbol: String)] = [
@@ -189,6 +197,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.toolbarStyle = .preference
         window.setFrameAutosaveName("SweeterSettings")
         window.delegate = self
+        Self.made = true
         model.send = { op, arg, done in
             guard let vc = ViewController.shared else { return done(nil) }
             vc.prefs(op, arg, done: done)
@@ -210,6 +219,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             NSApp.activate(ignoringOtherApps: true)
             self.showWindow(nil)
             self.window?.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    /// The page (re)mounted: X Pro finished loading after the window
+    /// opened, or Reload X Pro started a new page that knows nothing of it.
+    /// An open window asks again for the snapshot and the changes.
+    func pageMounted() {
+        guard window?.isVisible == true else { return }
+        model.send("watch", true) { _ in }
+        model.send("snapshot", nil) { [weak self] reply in
+            if let text = reply as? String { self?.model.apply(json: text) }
         }
     }
 
@@ -313,9 +333,9 @@ struct PrefRowView: View {
                     // Ticks only where they can be told apart (font size's
                     // 11); the page rounds column width to its 5 px anyway.
                     if (hi - lo) / step <= 12 {
-                        Slider(value: model.number(key, fallback: lo), in: lo...hi, step: step)
+                        Slider(value: model.number(key, fallback: lo, step: step), in: lo...hi, step: step)
                     } else {
-                        Slider(value: model.number(key, fallback: lo), in: lo...hi)
+                        Slider(value: model.number(key, fallback: lo, step: step), in: lo...hi)
                     }
                     Text("\(Int(model.number(key, fallback: lo).wrappedValue)) \(row.unit ?? "")")
                         .monospacedDigit()

@@ -239,6 +239,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             Log.write(text)
             if text == "mounted" {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.dismissCover() }
+                if SettingsWindowController.made { SettingsWindowController.shared.pageMounted() }
             }
             replyHandler(nil, nil)
         case "state":

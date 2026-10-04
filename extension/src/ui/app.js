@@ -9,7 +9,8 @@
   const R = Sweeter.render;
 
   const DEFAULTS = {
-    skin: 'light',
+    theme: 'classic', // or a palette in styles.js PALETTES
+    skin: 'light', // the appearance: 'system' | 'light' | 'dark'
     fontSize: 14,
     names: 'both',
     media: 'full', // whole images, nothing cropped
@@ -235,8 +236,9 @@
   // the Mac app only.
   const PREF_ROWS = {
     general: [
-      { k: 'select', key: 'skin', label: 'Theme', opts: [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark']] },
-      { k: 'swatches', key: 'accent', label: 'Accent color' },
+      { k: 'select', key: 'theme', label: 'Theme', opts: [['classic', 'Classic']].concat(Object.entries(Sweeter.PALETTES || {}).map(([id, p]) => [id, p.name])) },
+      { k: 'select', key: 'skin', label: 'Appearance', opts: [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark']] },
+      { k: 'swatches', key: 'accent', label: 'Accent color', note: 'For the Classic theme; the others bring their own.' },
       { k: 'select', key: 'contrast', label: 'Contrast', opts: [['low', 'Low'], ['standard', 'Standard'], ['high', 'High']] },
       { k: 'check', key: 'pureBlack', label: 'Dark mode', text: 'Pure black background', note: 'For OLED displays and dark rooms.' },
       { k: 'sep' },
@@ -568,6 +570,9 @@
 
     function applySettings() {
       app.dataset.skin = settings.skin;
+      // A palette theme (styles.js PALETTES), or Classic: no attribute.
+      if (settings.theme !== 'classic' && Sweeter.PALETTES && Sweeter.PALETTES[settings.theme]) app.dataset.palette = settings.theme;
+      else delete app.dataset.palette;
       app.dataset.round = String(settings.round);
       app.dataset.names = settings.names;
       app.dataset.media = settings.media;
@@ -581,8 +586,8 @@
       if (settings.snap) app.dataset.snap = '';
       else delete app.dataset.snap;
       requestAnimationFrame(fitWidth);
-      // Blue keeps Tweetbot’s exact tokens.
-      const ac = settings.accent !== 'blue' ? ACCENTS.find((a) => a[0] === settings.accent) : null;
+      // Blue keeps Tweetbot’s exact tokens; the other themes bring their own.
+      const ac = !app.dataset.palette && settings.accent !== 'blue' ? ACCENTS.find((a) => a[0] === settings.accent) : null;
       if (ac) {
         app.dataset.accent = ac[0];
         app.style.setProperty('--al', ac[2]);
@@ -1971,6 +1976,7 @@
       const on = fc ? filterIds(fc) : [];
       native.state({
         skin: settings.skin,
+        theme: settings.theme,
         accent: settings.accent,
         filters: (fc ? filterList(fc) : XF.all(custom)).map((f) => ({ title: f.name, on: on.includes(f.id) })),
         filtersEnabled: !!fc,
@@ -6266,7 +6272,8 @@
       for (const [v, label] of [['fill', 'Fill the Window'], ['equal', 'Equal Widths'], ['fixed', 'Fixed Width'], ['fit2', 'Fit 2'], ['fit3', 'Fit 3'], ['fit4', 'Fit 4'], ['fit5', 'Fit 5']]) add('fit:' + v, 'Column Layout: ' + label + (settings.fit === v ? ' (on)' : ''), 'Sweeter', () => (v === 'equal' ? equalWidths() : setOne('fit', v)));
       add('snap', 'Snap Columns: ' + (settings.snap ? 'Off' : 'On'), 'Sweeter', () => setOne('snap', !settings.snap));
       add('density', 'Density: ' + (settings.density === 'compact' ? 'Comfortable' : 'Compact'), 'Sweeter', () => setOne('density', settings.density === 'compact' ? 'comfortable' : 'compact'));
-      for (const [v, label] of [['system', 'Match System'], ['light', 'Light'], ['dark', 'Dark']]) add('skin:' + v, 'Theme: ' + label + (settings.skin === v ? ' (on)' : ''), 'Sweeter', () => setOne('skin', v));
+      for (const [v, label] of [['system', 'Match System'], ['light', 'Light'], ['dark', 'Dark']]) add('skin:' + v, 'Appearance: ' + label + (settings.skin === v ? ' (on)' : ''), 'Sweeter', () => setOne('skin', v));
+      for (const [v, label] of [['classic', 'Classic']].concat(Object.entries(Sweeter.PALETTES || {}).map(([id, p]) => [id, p.name]))) add('theme:' + v, 'Theme: ' + label + (settings.theme === v ? ' (on)' : ''), 'Sweeter', () => setOne('theme', v), { keywords: ['color theme'] });
       add('lay-save', 'Save Current Layout', 'Layouts', saveLayout);
       for (const l of settings.layouts || []) add('lay:' + l.name, 'Restore Layout ' + l.name, 'Layouts', () => restoreLayout(l.name));
       add('lay-export', 'Export Layout', 'Layouts', exportLayout);
@@ -6348,7 +6355,7 @@
     }
     // The look follows the main window (skin, accent, size, density).
     function popLook(rec) {
-      for (const k of ['skin', 'round', 'names', 'media', 'links', 'actions', 'counts', 'accent', 'contrast', 'black', 'density']) {
+      for (const k of ['skin', 'palette', 'round', 'names', 'media', 'links', 'actions', 'counts', 'accent', 'contrast', 'black', 'density']) {
         if (app.dataset[k] != null) rec.root.dataset[k] = app.dataset[k];
         else delete rec.root.dataset[k];
       }
@@ -6881,7 +6888,7 @@
     }
 
     function setOne(key, val) {
-      if (key === 'skin' || key === 'accent' || key === 'contrast' || key === 'pureBlack') {
+      if (key === 'skin' || key === 'theme' || key === 'accent' || key === 'contrast' || key === 'pureBlack') {
         app.classList.add('switching');
         requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('switching')));
       }
@@ -7546,6 +7553,8 @@
             return openUrl('https://github.com/starl3xx/sweeter');
           case 'skin':
             return setOne('skin', arg);
+          case 'theme':
+            return arg === 'classic' || (Sweeter.PALETTES && Sweeter.PALETTES[arg]) ? setOne('theme', arg) : undefined;
           case 'bigger':
             return setOne('fontSize', Math.min(21, settings.fontSize + 1));
           case 'smaller':

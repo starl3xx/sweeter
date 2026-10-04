@@ -876,7 +876,7 @@ button:active:not([disabled]){scale:.97}
 .app[data-actions="always"] .acts,.cell:hover .acts,.cell.sel .acts{display:flex}
 .acts button:hover,.acts a:hover{color:var(--accent)}
 .pop button:hover,.pop button:focus-visible{background:var(--accent-solid);color:var(--on-accent);outline:none}
-.pop button:hover svg,.pop button:focus-visible svg{color:#fff}
+.pop button:hover svg,.pop button:focus-visible svg{color:var(--on-accent)}
 .pop button:hover kbd,.pop button:focus-visible kbd{color:color-mix(in srgb,var(--on-accent) 80%,transparent)}
 .pop button[disabled]:hover{background:none;color:var(--t3)}
 .lnk:hover{text-decoration:underline}

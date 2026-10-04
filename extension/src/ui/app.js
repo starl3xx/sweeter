@@ -235,8 +235,8 @@
   // the Mac app only.
   const PREF_ROWS = {
     general: [
-      { k: 'select', key: 'skin', label: 'Theme', opts: [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark'], ['winamp', 'Winamp Classic']] },
-      { k: 'swatches', key: 'accent', label: 'Accent color', note: 'Winamp Classic keeps its own colors.' },
+      { k: 'select', key: 'skin', label: 'Theme', opts: [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark']] },
+      { k: 'swatches', key: 'accent', label: 'Accent color' },
       { k: 'select', key: 'contrast', label: 'Contrast', opts: [['low', 'Low'], ['standard', 'Standard'], ['high', 'High']] },
       { k: 'check', key: 'pureBlack', label: 'Dark mode', text: 'Pure black background', note: 'For OLED displays and dark rooms.' },
       { k: 'sep' },
@@ -340,6 +340,8 @@
     // the top counted everything it had loaded as read: off, once, for all.
     if (!settings.dedupeV2) settings.dedupe = 'off';
     settings.dedupeV2 = 1;
+    // 0.20 retired the Winamp Classic theme: its readers get Dark.
+    if (settings.skin === 'winamp') settings.skin = 'dark';
     // 0.18.3 turned GIF autoplay off by default (energy): off once for
     // everyone, after which a choice is kept.
     if (!settings.gifsV2) settings.autoplayGifs = false;
@@ -579,16 +581,16 @@
       if (settings.snap) app.dataset.snap = '';
       else delete app.dataset.snap;
       requestAnimationFrame(fitWidth);
-      // Blue keeps Tweetbot’s exact tokens; Winamp keeps its own colors.
-      const ac = settings.skin !== 'winamp' && settings.accent !== 'blue' ? ACCENTS.find((a) => a[0] === settings.accent) : null;
+      // Blue keeps Tweetbot’s exact tokens.
+      const ac = settings.accent !== 'blue' ? ACCENTS.find((a) => a[0] === settings.accent) : null;
       if (ac) {
         app.dataset.accent = ac[0];
         app.style.setProperty('--al', ac[2]);
         app.style.setProperty('--ad', ac[3]);
       } else delete app.dataset.accent;
-      if (settings.skin !== 'winamp' && settings.contrast !== 'standard') app.dataset.contrast = settings.contrast;
+      if (settings.contrast !== 'standard') app.dataset.contrast = settings.contrast;
       else delete app.dataset.contrast;
-      if (settings.skin !== 'winamp' && settings.pureBlack) app.dataset.black = '';
+      if (settings.pureBlack) app.dataset.black = '';
       else delete app.dataset.black;
       app.hidden = !settings.visible || passthrough;
       fab.hidden = settings.visible || passthrough;
@@ -6264,7 +6266,7 @@
       for (const [v, label] of [['fill', 'Fill the Window'], ['equal', 'Equal Widths'], ['fixed', 'Fixed Width'], ['fit2', 'Fit 2'], ['fit3', 'Fit 3'], ['fit4', 'Fit 4'], ['fit5', 'Fit 5']]) add('fit:' + v, 'Column Layout: ' + label + (settings.fit === v ? ' (on)' : ''), 'Sweeter', () => (v === 'equal' ? equalWidths() : setOne('fit', v)));
       add('snap', 'Snap Columns: ' + (settings.snap ? 'Off' : 'On'), 'Sweeter', () => setOne('snap', !settings.snap));
       add('density', 'Density: ' + (settings.density === 'compact' ? 'Comfortable' : 'Compact'), 'Sweeter', () => setOne('density', settings.density === 'compact' ? 'comfortable' : 'compact'));
-      for (const [v, label] of [['system', 'Match System'], ['light', 'Light'], ['dark', 'Dark'], ['winamp', 'Winamp Classic']]) add('skin:' + v, 'Theme: ' + label + (settings.skin === v ? ' (on)' : ''), 'Sweeter', () => setOne('skin', v));
+      for (const [v, label] of [['system', 'Match System'], ['light', 'Light'], ['dark', 'Dark']]) add('skin:' + v, 'Theme: ' + label + (settings.skin === v ? ' (on)' : ''), 'Sweeter', () => setOne('skin', v));
       add('lay-save', 'Save Current Layout', 'Layouts', saveLayout);
       for (const l of settings.layouts || []) add('lay:' + l.name, 'Restore Layout ' + l.name, 'Layouts', () => restoreLayout(l.name));
       add('lay-export', 'Export Layout', 'Layouts', exportLayout);

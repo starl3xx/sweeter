@@ -241,7 +241,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             view.removeItem(item)
         }
         let theme = NSMenu(title: "Theme")
-        for (title, value) in [("Match System", "system"), ("Light", "light"), ("Dark", "dark"), ("Winamp Classic", "winamp")] {
+        for (title, value) in [("Match System", "system"), ("Light", "light"), ("Dark", "dark")] {
             let i = menuItem(title, "skin:" + value, "", [], nil)
             i.tag = 1
             theme.addItem(i)

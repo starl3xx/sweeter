@@ -7259,6 +7259,10 @@
           // Go ▸ Back (⌘[): out of the media viewer, a profile, or the
           // focused column’s conversation.
           case 'back': {
+            if (!pop.hidden) return closePop();
+            // Only what is in front: under a sheet, Back would close
+            // something the reader cannot see.
+            if ((palette && palette.isOpen()) || !prefsEl.hidden || !cmpBack.hidden || !wcBack.hidden || !upBack.hidden || !ntBack.hidden || !askBack.hidden || !ovBack.hidden || !ipBack.hidden || !addBack.hidden) return;
             if (lb) return closeLightbox();
             if (!profBack.hidden) return closeProfile();
             const fc = focusCol();

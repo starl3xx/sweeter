@@ -7531,6 +7531,8 @@
             return openReport();
           case 'checkUpdates':
             return checkUpdates(true);
+          case 'developer':
+            return openProfile(T.DEVELOPER);
           case 'welcome':
             if (!settings.visible) toggle(true);
             return openWelcome();

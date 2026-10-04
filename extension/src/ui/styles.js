@@ -94,6 +94,8 @@ img{display:block}
 .app.native .cols{background:var(--gutter)}
 .app.native.translucent .side{background:transparent;border-right-color:rgba(0,0,0,.45)}
 .app.native.translucent[data-skin="winamp"] .side{background:var(--side)}
+/* macOS 26: the glass panel floats with its own edge; no divider line. */
+.app.native.translucent.glass:not([data-skin="winamp"]) .side{border-right-color:transparent}
 .app.native button,.app.native .ch,.app.native .tab,.app.native .round,.app.native .pill,.app.native .media .m,.app.native .quote,.app.native .card{cursor:default}
 .app.native .tx,.app.native .quote .tx,.app.native .fmeta,.app.native textarea,.app.native input{-webkit-user-select:text;user-select:text;cursor:auto}
 .app.native .tx a,.app.native .rtop a,.app.native .meta a,.app.native .atx a{cursor:pointer}

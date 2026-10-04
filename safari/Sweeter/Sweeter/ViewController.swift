@@ -434,7 +434,6 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             scroll.borderType = .bezelBorder
             // A text view that grows with its text, inside the scroll view.
             let size = scroll.contentSize
-            // One point tall to start: sizeToFit only grows it.
             let text = NSTextView(frame: NSRect(x: 0, y: 0, width: size.width, height: 1))
             text.minSize = NSSize(width: 0, height: 0)
             text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -447,10 +446,16 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             text.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
             text.textContainerInset = NSSize(width: 4, height: 4)
             text.string = notes
-            text.sizeToFit()
+            // As tall as the notes, measured, up to 120 points; longer notes
+            // scroll (sizeToFit kept the box's own height for a short note).
+            var height: CGFloat = 20
+            if let lm = text.layoutManager, let tc = text.textContainer {
+                lm.ensureLayout(for: tc)
+                height = ceil(lm.usedRect(for: tc).height) + 2 * text.textContainerInset.height
+            }
+            text.setFrameSize(NSSize(width: size.width, height: height))
             scroll.documentView = text
-            // As tall as the notes, up to 120 points; longer notes scroll.
-            scroll.frame.size.height = min(120, text.frame.height + 4)
+            scroll.frame.size.height = min(120, height + 4)
             alert.accessoryView = scroll
         }
         let finish = { (response: NSApplication.ModalResponse) in

@@ -35,8 +35,6 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     private var cover: LaunchCover?
     /// Whether the page can let the translucent sidebar show through.
     private var translucentSidebar = false
-    /// macOS 26's floating glass panel is behind the sidebar.
-    private var glassSidebar = false
     /// Last state the page reported (theme, font size, column titles), for menus.
     private(set) var pageState: [String: Any] = [:]
     /// Sweeter is drawn in the page and takes commands (App Intents wait for it).
@@ -95,26 +93,6 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             sidebar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             sidebar.widthAnchor.constraint(equalToConstant: 76),
         ])
-        // macOS 26: on it floats a Liquid Glass panel, inset from the
-        // window's edges as Finder's sidebar is, its corners concentric
-        // with the window's; still dark, so the page's light icons read.
-        // macOS 14 and 15 keep the plain sidebar.
-        if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView()
-            glass.style = .regular
-            glass.cornerRadius = 12
-            glass.tintColor = NSColor.black.withAlphaComponent(0.25)
-            glass.appearance = NSAppearance(named: .darkAqua)
-            glass.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(glass, positioned: .below, relativeTo: webView)
-            NSLayoutConstraint.activate([
-                glass.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
-                glass.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
-                glass.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
-                glass.widthAnchor.constraint(equalToConstant: 64),
-            ])
-            glassSidebar = true
-        }
         // WebKit exposes this only as _setDrawsBackground: (verified on this
         // SDK); key-value coding reaches it through the key "drawsBackground".
         if webView.responds(to: NSSelectorFromString("_setDrawsBackground:")) {
@@ -207,7 +185,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 // The recorder must run in X Pro’s own page, before X’s code.
                 controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
             } else {
-                controller.addUserScript(WKUserScript(source: Self.bridge(version: version, translucent: translucentSidebar, glass: glassSidebar) + "\n;\n" + source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world))
+                controller.addUserScript(WKUserScript(source: Self.bridge(version: version, translucent: translucentSidebar) + "\n;\n" + source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world))
             }
         }
         controller.addScriptMessageHandler(self, contentWorld: world, name: "sweeter")
@@ -216,13 +194,12 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
 
     /// Stands in for the WebExtension APIs Sweeter uses (storage, manifest) and
     /// adds the native hooks (counts, notifications, log).
-    static func bridge(version: String, translucent: Bool, glass: Bool) -> String {
+    static func bridge(version: String, translucent: Bool) -> String {
         """
         (function () {
           const post = (m) => window.webkit.messageHandlers.sweeter.postMessage(m);
           globalThis.SweeterNative = {
             translucent: \(translucent ? "true" : "false"),
-            glass: \(glass ? "true" : "false"),
             osVersion: '\(ProcessInfo.processInfo.operatingSystemVersion.majorVersion).\(ProcessInfo.processInfo.operatingSystemVersion.minorVersion).\(ProcessInfo.processInfo.operatingSystemVersion.patchVersion)',
             counts: (c) => { post({ type: 'counts', notifications: c.notifications | 0, posts: c.posts | 0, columns: JSON.stringify(c.columns || []) }); },
             state: (s) => { post({ type: 'state', json: JSON.stringify(s) }); },

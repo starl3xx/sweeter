@@ -146,10 +146,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             about.target = self
             menu.insertItem(menuItem("Check for Updates…", "checkUpdates", "", [], "arrow.down.circle"), at: menu.index(of: about) + 1)
         }
-        if let settings = appMenu?.items.first(where: { $0.keyEquivalent == "," }) {
-            settings.title = "Settings…"
-            settings.action = #selector(openSettings)
+        // Settings… (⌘,) and Services, where every Mac app has them: the
+        // template's app menu has neither.
+        if let menu = appMenu, !menu.items.contains(where: { $0.keyEquivalent == "," }) {
+            let at = (menu.items.firstIndex { $0.representedObject as? String == "checkUpdates" } ?? 0) + 1
+            let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
             settings.target = self
+            settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
+            let services = NSMenu(title: "Services")
+            let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
+            servicesItem.submenu = services
+            for (i, item) in [NSMenuItem.separator(), settings, NSMenuItem.separator(), servicesItem].enumerated() {
+                menu.insertItem(item, at: at + i)
+            }
+            NSApp.servicesMenu = services
         }
         // The template’s Format and Help menus do nothing in Sweeter.
         for title in ["Format", "Help"] {

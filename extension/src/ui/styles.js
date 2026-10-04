@@ -22,15 +22,6 @@
     --act:#666666; --side:#1C1C1E; --sheet:#2E2E30; --field:#1A1A1A; --shadow:rgba(0,0,0,.6);
     --img-ring:rgba(255,255,255,.08); --ring:rgba(255,255,255,.1); --thumb:rgba(255,255,255,.38);
     --thread:#4A4D52;`;
-  const WINAMP = `
-    --bg:#000000; --sub:#000000; --tint:#0000C6; --div:#1C2A1C; --sep:#0F1A0F;
-    --t1:#00FF00; --t2:#00E000; --t3:#00A800; --accent:#FFFFFF; --accent-hl:rgba(255,255,255,.5);
-    --mention:#001A00; --sel:#0000C6; --selsep:#0000C6; --gutter:#2A2A3E; --quote:#001400; --mquote:#002200;
-    --fav:#FF4040; --rt:#FFD200; --likeic:#FF4040; --act:#00A800;
-    --side:#3A3A52; --side-fg:#BDBDD6; --side-on:#FFFFFF;
-    --pill:#000000; --pill-fg:#00FF00; --sheet:#23233A; --field:#000000; --shadow:rgba(0,0,0,.7);
-    --accent-solid:#5C5C80; --accent-solid-press:#4A4A66; --img-ring:rgba(0,255,0,.12); --ring:rgba(0,255,0,.18); --thumb:#8C8CAA;
-    --thread:#1C2A1C;`;
 
   // Accent color, contrast and pure black (from Ivory’s theme options).
   // The page sets --al and --ad (the accent for light and dark themes).
@@ -78,7 +69,6 @@
 .app[hidden]{display:none}
 .app[data-skin="dark"]{${DARK}}
 @media (prefers-color-scheme:dark){.app[data-skin="system"]{${DARK}}}
-.app[data-skin="winamp"]{${WINAMP} --font:Arial,Helvetica,sans-serif}
 ${THEMES}
 a{color:inherit;text-decoration:none;text-underline-position:from-font;text-decoration-skip-ink:auto}
 button{font:inherit;color:inherit}
@@ -93,7 +83,6 @@ img{display:block}
 .app.native.translucent{background:transparent}
 .app.native .cols{background:var(--gutter)}
 .app.native.translucent .side{background:transparent;border-right-color:rgba(0,0,0,.45)}
-.app.native.translucent[data-skin="winamp"] .side{background:var(--side)}
 .app.native button,.app.native .ch,.app.native .tab,.app.native .round,.app.native .pill,.app.native .media .m,.app.native .quote,.app.native .card{cursor:default}
 .app.native .tx,.app.native .quote .tx,.app.native .fmeta,.app.native textarea,.app.native input{-webkit-user-select:text;user-select:text;cursor:auto}
 .app.native .tx a,.app.native .rtop a,.app.native .meta a,.app.native .atx a{cursor:pointer}
@@ -140,7 +129,6 @@ img{display:block}
 .ch{cursor:pointer}
 .ch .live{display:none;width:6px;height:6px;border-radius:50%;background:var(--accent);flex:0 0 auto}
 .col.pinned .ch .live{display:block}
-.app[data-skin="winamp"] .ch .live{position:absolute;left:8px;border-radius:0;background:#00FF00}
 .ch .cs{font-weight:400;color:var(--t3);font-size:10.5px;white-space:nowrap}
 /* A column X Pro shows as another account: readable, never acted from. */
 .col.delegated .ch .cs{color:var(--rt);font-weight:600}
@@ -174,7 +162,6 @@ img{display:block}
 .sbar[hidden]{display:none}
 .sthumb{position:absolute;right:2px;top:0;width:6px;border-radius:3px;background:var(--thumb);transition:width .12s ease-out;will-change:transform}
 .sbar.drag .sthumb{width:8px}
-.app[data-skin="winamp"] .sthumb{border-radius:0;box-shadow:inset 1px 1px 0 #BDBDD6,inset -1px -1px 0 #14141F}
 .empty{padding:40px 16px;text-align:center;color:var(--t3)}
 .foot{padding:14px;text-align:center;color:var(--t3);font-size:.86em}
 
@@ -229,8 +216,6 @@ img{display:block}
 .rtop .ri{display:flex;justify-content:flex-end}
 .rtop svg{width:14px;height:14px;color:var(--rt)}
 .rtop span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.app[data-skin="winamp"] .rtop{display:block;margin:0}
-.app[data-skin="winamp"] .rtop .ri{display:none}
 .ctx svg{width:13px;height:13px;color:var(--rt);flex:0 0 auto}
 .quote{margin-top:7px;background:var(--quote);border-radius:6px;padding:7px 9px;font-size:.93em;cursor:pointer}
 .cell.mention .quote{background:var(--mquote)}
@@ -558,7 +543,6 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .fcounts{font-variant-numeric:tabular-nums;margin-top:8px;padding-top:8px;border-top:1px solid var(--div);display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.86em;color:var(--t3)}
 .fcounts b{color:var(--t1)}
 .dlist .ancestor{border-bottom:0}
-.app[data-skin="winamp"] .dhead{font-family:ui-monospace,Menlo,monospace;background:#23233A;color:#E8D48A}
 
 /* lightbox */
 .lb{position:fixed;inset:0;z-index:8;background:rgba(8,8,10,.94);display:flex;flex-direction:column;animation:sweeter-in .16s ease-out;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
@@ -666,9 +650,6 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .col.collapsed:hover .ch{background:var(--sub)}
 .col[data-tint] .ch{box-shadow:inset 0 3px 0 var(--ctint)}
 .col.focus[data-tint] .ch{box-shadow:inset 0 3px 0 var(--ctint),inset 0 -2px 0 var(--accent)}
-.app[data-skin="winamp"] .col[data-tint]{--ctint:var(--cd)}
-.app[data-skin="winamp"] .ip[data-tint]{--ipc:var(--cd)}
-.app[data-skin="winamp"] .ipsw{--sw:var(--cd)}
 .tab[data-tint]{color:var(--cd)}
 .tab.off{opacity:.38}
 .app.popout .col{flex:1 1 0;max-width:none;min-width:0}
@@ -807,30 +788,6 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .fab[hidden]{display:none}
 .fab i{width:9px;height:9px;border-radius:50%;background:#F2A93B;display:block}
 
-/* Winamp Classic */
-.app[data-skin="winamp"] .side{border-right:2px solid #08080F;gap:6px}
-.app[data-skin="winamp"] .tab,.app[data-skin="winamp"] .round{border-radius:0;background:#4A4A66;box-shadow:inset 1px 1px 0 #8C8CAA,inset -1px -1px 0 #14141F;width:46px;height:30px;color:#D8D8EE}
-.app[data-skin="winamp"] .round.upd{color:#00FF00}
-.app[data-skin="winamp"] .round.upd::after{background:#00FF00;box-shadow:0 0 0 2px #14141F}
-.app[data-skin="winamp"] .tab.on{background:#5C5C80;color:#fff}
-.app[data-skin="winamp"] .tab .dot{background:#00FF00;border-radius:0}
-.app[data-skin="winamp"] .tab .num{background:#000;color:#00FF00;border-radius:0}
-.app[data-skin="winamp"] .me{border-radius:0}
-.app[data-skin="winamp"] .cols{gap:4px;padding:4px}
-.app[data-skin="winamp"] .col{border:2px solid #08080F}
-.app[data-skin="winamp"] .ch{height:var(--chh);justify-content:center;position:relative;font:10px/1 ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:#E8D48A;background:repeating-linear-gradient(180deg,#23233A 0 2px,#3D3A2A 2px 3px);border-bottom:2px solid #08080F}
-.app[data-skin="winamp"] .ch .ct,.app[data-skin="winamp"] .ch .cs{background:#23233A;padding:0 5px;color:#E8D48A;font-weight:700}
-.app[data-skin="winamp"] .pill{position:absolute;right:28px;border-radius:0;border:1px solid #1E3A1E;font-family:ui-monospace,Menlo,monospace}
-.app[data-skin="winamp"] .ch .mini{position:absolute;right:4px;color:#E8D48A}
-.app[data-skin="winamp"] .scroll{counter-reset:pl;font-size:.93em}
-.app[data-skin="winamp"] .cell{grid-template-columns:minmax(0,1fr);padding:3px 8px;border-bottom:0;counter-increment:pl}
-.app[data-skin="winamp"] .cell > .avl,.app[data-skin="winamp"] .act-ic,.app[data-skin="winamp"] .minis,.app[data-skin="winamp"] .media,.app[data-skin="winamp"] .card,.app[data-skin="winamp"] .quote{display:none}
-.app[data-skin="winamp"] .cell .main::before{content:counter(pl) ". ";color:var(--t1);float:left;margin-right:4px}
-.app[data-skin="winamp"] .cell.sel *{color:#FFFFFF}
-.app[data-skin="winamp"] .cell .tx{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.app[data-skin="winamp"] .thread .cell + .cell::before,.app[data-skin="winamp"] .thread .cell::after{display:none}
-.app[data-skin="winamp"] .marker{border-top:1px dashed #FFD200}
-.app[data-skin="winamp"] .marker span{background:#FFD200;color:#000;border-radius:0;font-family:ui-monospace,Menlo,monospace}
 
 /* loading screen: the Sweeter mark over a bouncing amber VU meter */
 .boot{position:absolute;inset:0 0 0 76px;z-index:3;display:grid;place-items:center;background:var(--bg);transition:opacity .4s ease,filter .4s ease,transform .4s ease}
@@ -843,7 +800,6 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 @keyframes sweeter-vu{0%,100%{transform:scaleY(.18)}35%{transform:scaleY(1)}60%{transform:scaleY(.45)}80%{transform:scaleY(.8)}}
 .boot-t{font-weight:600;color:var(--t1);font-size:14px}
 .boot-s{font-variant-numeric:tabular-nums}
-.app[data-skin="winamp"] .boot{font-family:ui-monospace,Menlo,monospace}
 /* columns arrive one after another once all have loaded */
 .cols.hold{visibility:hidden}
 .boot.stuck .vu i{animation:none}

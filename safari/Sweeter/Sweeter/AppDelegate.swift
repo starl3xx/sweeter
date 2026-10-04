@@ -500,15 +500,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         DispatchQueue.main.async {
             // The column that alerted and the post’s block, then its URL.
             let target = column + "\n" + key + "\n" + url
-            switch action {
-            case "like":
-                ViewController.shared?.command("notifyLike:" + target)
-            case "reply":
-                ViewController.shared?.showWindow()
-                ViewController.shared?.command("notifyReply:" + target)
-            default:
-                ViewController.shared?.showWindow()
-                if !url.isEmpty || !key.isEmpty { ViewController.shared?.command("openPost:" + target) }
+            guard let vc = ViewController.shared else { return }
+            if action != "like" { vc.showWindow() }
+            // After a quit or a reload the page needs a moment first.
+            vc.whenMounted {
+                switch action {
+                case "like": vc.command("notifyLike:" + target)
+                case "reply": vc.command("notifyReply:" + target)
+                default: if !url.isEmpty || !key.isEmpty { vc.command("openPost:" + target) }
+                }
             }
         }
         completionHandler()

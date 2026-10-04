@@ -5015,6 +5015,7 @@
         updatePost(id, flip(!want));
         toast(FAIL[r.reason] || 'X Pro didn’t confirm that. Try again.', 'warn');
       }
+      return r.ok;
     }
 
     // X Pro bookmarks only from an opened conversation, so this takes a
@@ -7614,14 +7615,20 @@
             const [vid, , url] = String(arg || '').split('\n');
             const sid = (/\/status\/(\d+)/.exec(url || '') || [])[1];
             const p = sid && findPost(sid);
-            if (!p || p.unavailable) return toast('That post isn’t loaded any more.', 'info');
+            // Like runs in the background: anything that goes wrong brings
+            // the window forward, so its message is seen.
+            const seen = () => native && native.show && native.show();
+            if (!p || p.unavailable) {
+              seen();
+              return toast('That post isn’t loaded any more.', 'info');
+            }
             const e = layout.find((x) => x.vid === vid) || layout.find((x) => store.get(x.key) && store.get(x.key).sorted.some((b) => blockHas(b, sid)));
             const key = e ? e.key : null;
             if (c === 'notifyReply') {
               if (!settings.visible) toggle(true);
               return openCompose('reply', sid, key);
             }
-            if (!p.state.liked) doLike(sid, key);
+            if (!p.state.liked) doLike(sid, key).then((ok) => ok || seen());
             return;
           }
           case 'quicklook':

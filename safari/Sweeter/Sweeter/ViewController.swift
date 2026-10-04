@@ -40,6 +40,27 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     /// Sweeter is drawn in the page and takes commands (App Intents wait for it).
     private(set) var mounted = false
     let quickLook = QuickLookPhotos()
+    /// The Share submenus' pickers, alive until the next context menu.
+    private var sharePickers: [NSSharingServicePicker] = []
+
+    /// Runs `body` once Sweeter is drawn and takes commands (after a launch
+    /// or a reload, that can take a few seconds); after 20 s the window
+    /// comes forward instead, so the reader sees why nothing happened.
+    func whenMounted(_ body: @escaping () -> Void) {
+        if mounted { return body() }
+        var tries = 0
+        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] timer in
+            tries += 1
+            guard let self else { return timer.invalidate() }
+            if self.mounted {
+                timer.invalidate()
+                body()
+            } else if tries >= 80 {
+                timer.invalidate()
+                self.showWindow()
+            }
+        }
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -540,6 +561,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
               let spec = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
               let items = spec["items"] as? [[String: Any]] else { return nil }
         let target = MenuTarget()
+        sharePickers = []
         // Items may carry `children`: a submenu, built the same way.
         func build(_ items: [[String: Any]]) -> NSMenu {
             let menu = NSMenu()
@@ -584,7 +606,11 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 // Share: the system's own Share submenu (Messages, AirDrop,
                 // Notes…), as in Safari's context menus.
                 if let share = it["share"] as? String, let url = URL(string: share), ["http", "https"].contains(url.scheme ?? "") {
-                    menu.addItem(NSSharingServicePicker(items: [url]).standardShareMenuItem)
+                    // The item does not keep its picker; Sweeter does, until
+                    // the next menu (a service may run after this one closes).
+                    let picker = NSSharingServicePicker(items: [url])
+                    sharePickers.append(picker)
+                    menu.addItem(picker.standardShareMenuItem)
                     continue
                 }
                 if let children { item.submenu = build(children) }

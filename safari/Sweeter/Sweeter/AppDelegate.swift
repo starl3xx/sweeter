@@ -9,6 +9,7 @@
 
 import Carbon.HIToolbox
 import Cocoa
+import os
 import SafariServices
 import ServiceManagement
 import TelemetryDeck
@@ -622,7 +623,18 @@ enum Telemetry {
     /// At launch, unless the saved settings turned it off.
     static func start() {
         let settings = NativeStorage().get(["settings"])["settings"] as? [String: Any] ?? [:]
+        noteLook(settings)
         setEnabled(settings["telemetry"] as? Bool != false)
+    }
+
+    /// Sent with every signal (the SDK's defaultParameters): the theme and
+    /// appearance, from the saved settings at launch, then from each state
+    /// the page reports. The SDK reads them off the main thread.
+    nonisolated private static let look = OSAllocatedUnfairLock(initialState: [String: String]())
+
+    static func noteLook(_ settings: [String: Any]) {
+        let now = ["theme": settings["theme"] as? String ?? "classic", "appearance": settings["skin"] as? String ?? "light"]
+        look.withLock { $0 = now }
     }
 
     /// The SDK's live settings: the same object it was given, so turning
@@ -637,6 +649,7 @@ enum Telemetry {
         }
         guard on else { return }
         let c = TelemetryDeck.Config(appID: appID, namespace: namespace.isEmpty ? nil : namespace)
+        c.defaultParameters = { look.withLock { $0 } }
         // The build-safari.sh install (the developer’s own) counts as a test.
         if (Bundle.main.object(forInfoDictionaryKey: "SweeterTelemetryTestMode") as? String) == "YES" { c.testMode = true }
         config = c

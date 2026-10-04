@@ -275,6 +275,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             if let d = (body["json"] as? String)?.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
                 let before = pageState["columns"] as? [String]
                 pageState = o
+                Telemetry.noteLook(o)
                 NotificationCenter.default.post(name: .sweeterState, object: nil)
                 // Shortcuts and Spotlight list the columns (Open Column).
                 if (o["columns"] as? [String]) != before { SweeterShortcuts.updateAppShortcutParameters() }

@@ -7617,7 +7617,10 @@
             const p = sid && findPost(sid);
             // Like runs in the background: anything that goes wrong brings
             // the window forward, so its message is seen.
-            const seen = () => native && native.show && native.show();
+            const seen = () => {
+              if (!settings.visible) toggle(true);
+              if (native && native.show) native.show();
+            };
             if (!p || p.unavailable) {
               seen();
               return toast('That post isn’t loaded any more.', 'info');

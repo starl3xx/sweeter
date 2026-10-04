@@ -287,6 +287,7 @@
     ['⌘ Return', 'Send from the compose window'], ['Esc', 'Close compose, keep the draft'],
     ['⌘ B', 'Bold selected text'], ['⌘ I', 'Italic selected text'],
     ['o', 'Open media or link'], ['Return  →', 'Open the conversation here'],
+    ['⌘ Y', 'Quick Look the post’s photos (Mac app)'],
     ['←', 'Back from a conversation'], ['← →', 'Previous, next photo in the viewer'],
     ['Tab', 'Next column'], ['1 to 9', 'Jump to a column'],
     ['Space', 'Page down'], ['⌘ ↑  ⌘ ↓', 'Top (pins), bottom'],
@@ -2032,8 +2033,8 @@
       const at = (b) => Object.assign({ key: b.key }, base);
       for (const b of fresh) {
         if (b.kind === 'notification') native.notify(Object.assign({ title: b.n.plain, body: b.n.target ? b.n.target.plain : '', url: b.n.target ? b.n.target.url : b.n.url }, at(b)));
-        else if (b.kind === 'post') native.notify(Object.assign({ title: b.post.author.name + ' (@' + b.post.author.handle + ')', body: b.post.plain, url: b.post.url }, at(b)));
-        else if (b.kind === 'thread' && b.posts[0]) native.notify(Object.assign({ title: b.posts[0].author.name + ' (@' + b.posts[0].author.handle + ')', body: b.posts[0].plain, url: b.posts[0].url }, at(b)));
+        else if (b.kind === 'post') native.notify(Object.assign({ title: b.post.author.name + ' (@' + b.post.author.handle + ')', body: b.post.plain, url: b.post.url, post: true }, at(b)));
+        else if (b.kind === 'thread' && b.posts[0]) native.notify(Object.assign({ title: b.posts[0].author.name + ' (@' + b.posts[0].author.handle + ')', body: b.posts[0].plain, url: b.posts[0].url, post: true }, at(b)));
       }
     }
 
@@ -2606,6 +2607,24 @@
       const x = safeUrl(u);
       return x === '#' ? x : x + (x.includes('?') ? '&' : '?') + 'name=' + n;
     };
+
+    // ⌘Y (Mac app): the photos of the post in the viewer, or of the
+    // selected post, in Quick Look, as in Finder.
+    function quickLook() {
+      if (!native || !native.quickLook) return;
+      let post = null;
+      let first = null;
+      if (lb) {
+        post = lb.post;
+        first = lb.items[lb.i];
+      } else {
+        const sp = selectedPost();
+        post = sp ? findPost(sp.id) : null;
+      }
+      const photos = post && !post.unavailable ? (post.media || []).filter((m) => m.type === 'photo' && safeUrl(m.url) !== '#') : [];
+      if (!photos.length) return toast('Select a post with photos first.', 'info');
+      native.quickLook({ urls: photos.map((m) => sized(m.url, 'orig')), index: Math.max(0, photos.indexOf(first)) });
+    }
 
     // index is the position in post.media (photos and videos together).
     function openLightbox(post, index) {
@@ -4996,6 +5015,7 @@
         updatePost(id, flip(!want));
         toast(FAIL[r.reason] || 'X Pro didn’t confirm that. Try again.', 'warn');
       }
+      return r.ok;
     }
 
     // X Pro bookmarks only from an opened conversation, so this takes a
@@ -7588,6 +7608,34 @@
             setOne('alertsMuted', !settings.alertsMuted);
             if (!settings.alertsMuted) checkNotify(null, true);
             return toast(settings.alertsMuted ? 'Alerts muted' : 'Alerts on', 'bell');
+          // An alert's Like and Reply buttons: the post it showed, through
+          // the column that alerted (Like never unlikes).
+          case 'notifyLike':
+          case 'notifyReply': {
+            const [vid, , url] = String(arg || '').split('\n');
+            const sid = (/\/status\/(\d+)/.exec(url || '') || [])[1];
+            const p = sid && findPost(sid);
+            // Like runs in the background: anything that goes wrong brings
+            // the window forward, so its message is seen.
+            const seen = () => {
+              if (!settings.visible) toggle(true);
+              if (native && native.show) native.show();
+            };
+            if (!p || p.unavailable) {
+              seen();
+              return toast('That post isn’t loaded any more.', 'info');
+            }
+            const e = layout.find((x) => x.vid === vid) || layout.find((x) => store.get(x.key) && store.get(x.key).sorted.some((b) => blockHas(b, sid)));
+            const key = e ? e.key : null;
+            if (c === 'notifyReply') {
+              if (!settings.visible) toggle(true);
+              return openCompose('reply', sid, key);
+            }
+            if (!p.state.liked) doLike(sid, key).then((ok) => ok || seen());
+            return;
+          }
+          case 'quicklook':
+            return quickLook();
           case 'openPost': {
             // A click on an alert: “<column>\n<block key>\n<url>” (the URL
             // alone from older builds). The column that alerted comes first.

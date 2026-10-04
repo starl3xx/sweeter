@@ -8,7 +8,9 @@
 //  the data; Sweeter draws on top of it.
 //
 
+import AppIntents
 import Cocoa
+import QuickLookUI
 import UniformTypeIdentifiers
 import UserNotifications
 import WebKit
@@ -35,6 +37,30 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     private var translucentSidebar = false
     /// Last state the page reported (theme, font size, column titles), for menus.
     private(set) var pageState: [String: Any] = [:]
+    /// Sweeter is drawn in the page and takes commands (App Intents wait for it).
+    private(set) var mounted = false
+    let quickLook = QuickLookPhotos()
+    /// The Share submenus' pickers, alive until the next context menu.
+    private var sharePickers: [NSSharingServicePicker] = []
+
+    /// Runs `body` once Sweeter is drawn and takes commands (after a launch
+    /// or a reload, that can take a few seconds); after 20 s the window
+    /// comes forward instead, so the reader sees why nothing happened.
+    func whenMounted(_ body: @escaping () -> Void) {
+        if mounted { return body() }
+        var tries = 0
+        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] timer in
+            tries += 1
+            guard let self else { return timer.invalidate() }
+            if self.mounted {
+                timer.invalidate()
+                body()
+            } else if tries >= 80 {
+                timer.invalidate()
+                self.showWindow()
+            }
+        }
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -189,7 +215,8 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             notifyStatus: () => post({ type: 'notifyStatus' }),
             notifyRequest: () => post({ type: 'notifyRequest' }),
             notifySettings: () => post({ type: 'notifySettings' }),
-            notify: (n) => { post({ type: 'notify', title: String(n.title || ''), body: String(n.body || ''), url: String(n.url || ''), subtitle: String(n.subtitle || ''), thread: String(n.thread || ''), key: String(n.key || ''), sound: !!n.sound }); },
+            notify: (n) => { post({ type: 'notify', title: String(n.title || ''), body: String(n.body || ''), url: String(n.url || ''), subtitle: String(n.subtitle || ''), thread: String(n.thread || ''), key: String(n.key || ''), sound: !!n.sound, post: !!n.post }); },
+            quickLook: (o) => post({ type: 'quickLook', json: JSON.stringify(o || {}) }),
             log: (m) => { post({ type: 'log', message: String(m) }); },
             signal: (n, p) => { post({ type: 'signal', name: String(n || ''), json: JSON.stringify(p || {}) }); },
             telemetry: (on) => { post({ type: 'telemetry', on: !!on }); },
@@ -232,22 +259,37 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             replyHandler(nil, nil)
         case "notify":
             notify(title: body["title"] as? String ?? "", body: body["body"] as? String ?? "", url: body["url"] as? String ?? "",
-                   subtitle: body["subtitle"] as? String ?? "", thread: body["thread"] as? String ?? "", key: body["key"] as? String ?? "", sound: body["sound"] as? Bool ?? true)
+                   subtitle: body["subtitle"] as? String ?? "", thread: body["thread"] as? String ?? "", key: body["key"] as? String ?? "", sound: body["sound"] as? Bool ?? true,
+                   isPost: body["post"] as? Bool ?? false)
             replyHandler(nil, nil)
         case "log":
             let text = body["message"] as? String ?? ""
             Log.write(text)
             if text == "mounted" {
+                mounted = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.dismissCover() }
                 if SettingsWindowController.made { SettingsWindowController.shared.pageMounted() }
             }
             replyHandler(nil, nil)
         case "state":
             if let d = (body["json"] as? String)?.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                let before = pageState["columns"] as? [String]
                 pageState = o
                 NotificationCenter.default.post(name: .sweeterState, object: nil)
+                // Shortcuts and Spotlight list the columns (Open Column).
+                if (o["columns"] as? [String]) != before { SweeterShortcuts.updateAppShortcutParameters() }
             }
             replyHandler(nil, nil)
+        // ⌘Y: a post's photos in Quick Look (full size, downloaded first).
+        case "quickLook":
+            guard let d = (body["json"] as? String)?.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else {
+                replyHandler(nil, "bad request")
+                return
+            }
+            // Only X's photo server (pbs.twimg.com), over https.
+            let urls = (o["urls"] as? [String] ?? []).compactMap(URL.init(string:)).filter { $0.scheme == "https" && $0.host == "pbs.twimg.com" }
+            quickLook.show(urls, at: o["index"] as? Int ?? 0)
+            replyHandler(true, nil)
         // A question the page asks (a name, a confirmation, the update): a
         // real alert sheet on the window. Replies { button, text }: the
         // button's index (-1 when none) and the text field's value.
@@ -519,7 +561,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
               let spec = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
               let items = spec["items"] as? [[String: Any]] else { return nil }
         let target = MenuTarget()
-        var shares: [String: String] = [:]
+        sharePickers = []
         // Items may carry `children`: a submenu, built the same way.
         func build(_ items: [[String: Any]]) -> NSMenu {
             let menu = NSMenu()
@@ -561,7 +603,16 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                     }
                     item.keyEquivalentModifierMask = mods
                 }
-                if let id = it["id"] as? String, let share = it["share"] as? String { shares[id] = share }
+                // Share: the system's own Share submenu (Messages, AirDrop,
+                // Notes…), as in Safari's context menus.
+                if let share = it["share"] as? String, let url = URL(string: share), ["http", "https"].contains(url.scheme ?? "") {
+                    // The item does not keep its picker; Sweeter does, until
+                    // the next menu (a service may run after this one closes).
+                    let picker = NSSharingServicePicker(items: [url])
+                    sharePickers.append(picker)
+                    menu.addItem(picker.standardShareMenuItem)
+                    continue
+                }
                 if let children { item.submenu = build(children) }
                 menu.addItem(item)
             }
@@ -570,11 +621,6 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         let menu = build(items)
         let point = webView.convert(view.window?.mouseLocationOutsideOfEventStream ?? .zero, from: nil)
         menu.popUp(positioning: nil, at: point, in: webView)
-        if let chosen = target.chosen, let s = shares[chosen], let url = URL(string: s) {
-            let picker = NSSharingServicePicker(items: [url])
-            picker.show(relativeTo: NSRect(origin: point, size: NSSize(width: 1, height: 1)), of: webView, preferredEdge: .minY)
-            return nil
-        }
         return target.chosen
     }
 
@@ -656,6 +702,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     }
 
     func reloadXPro() {
+        mounted = false
         closePopouts()
         webView.load(URLRequest(url: xProURL))
     }
@@ -675,7 +722,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
 
     /// One alert. The subtitle names the column and the thread groups a
     /// column’s alerts; a column set to Banner comes without a sound.
-    func notify(title: String, body: String, url: String, subtitle: String, thread: String, key: String, sound: Bool) {
+    func notify(title: String, body: String, url: String, subtitle: String, thread: String, key: String, sound: Bool, isPost: Bool) {
         if NSApp.isActive, view.window?.isKeyWindow == true { return }
         let content = UNMutableNotificationContent()
         content.title = title
@@ -683,8 +730,23 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         content.body = body
         content.threadIdentifier = thread
         content.sound = sound ? .default : nil
+        // A post's alert has Like and Reply (AppDelegate registers "post").
+        if isPost { content.categoryIdentifier = "post" }
         content.userInfo = ["url": url, "column": thread, "key": key]
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+    }
+
+    // Quick Look takes its items from whoever controls the panel: this
+    // window's controller, while Sweeter's window is key.
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        panel.dataSource = quickLook
+        panel.currentPreviewItemIndex = quickLook.start
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        panel.dataSource = nil
     }
 
     // MARK: - Navigation
@@ -911,4 +973,47 @@ final class PopoutNavigation: NSObject, WKNavigationDelegate {
         if ["http", "https"].contains(url.scheme ?? "") { NSWorkspace.shared.open(url) }
         decisionHandler(.cancel)
     }
+}
+
+/// Photos for Quick Look: downloaded into the app's temporary folder (the
+/// panel previews files), then shown starting at the chosen one.
+final class QuickLookPhotos: NSObject, QLPreviewPanelDataSource {
+    private var files: [URL] = []
+    private(set) var start = 0
+    private var token = 0
+
+    func show(_ urls: [URL], at index: Int) {
+        guard !urls.isEmpty else { return }
+        token += 1
+        let mine = token
+        Task {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Quick Look", isDirectory: true)
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            var saved: [URL] = []
+            for (i, url) in urls.prefix(4).enumerated() {
+                guard let (data, response) = try? await URLSession.shared.data(from: url),
+                      let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                      let type = http.value(forHTTPHeaderField: "Content-Type"), type.hasPrefix("image/") else { continue }
+                let ext = UTType(mimeType: type.split(separator: ";").first.map(String.init) ?? "")?.preferredFilenameExtension ?? "jpg"
+                let file = dir.appendingPathComponent("Photo \(i + 1).\(ext)")
+                if (try? data.write(to: file)) != nil { saved.append(file) }
+            }
+            await MainActor.run {
+                guard mine == self.token, !saved.isEmpty, let panel = QLPreviewPanel.shared() else { return }
+                self.files = saved
+                self.start = min(max(0, index), saved.count - 1)
+                if panel.isVisible {
+                    panel.reloadData()
+                    panel.currentPreviewItemIndex = self.start
+                } else {
+                    panel.makeKeyAndOrderFront(nil)
+                }
+            }
+        }
+    }
+
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { files.count }
+
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! { files[index] as NSURL }
 }

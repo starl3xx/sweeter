@@ -45,6 +45,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Permission is asked for when alerts are turned on (the page calls
         // notifyRequest), not here: a prompt at launch has no context.
         UNUserNotificationCenter.current().delegate = self
+        // A post's alert: Like (in the background) and Reply (opens Sweeter).
+        UNUserNotificationCenter.current().setNotificationCategories([
+            UNNotificationCategory(identifier: "post", actions: [
+                UNNotificationAction(identifier: "like", title: "Like", options: []),
+                UNNotificationAction(identifier: "reply", title: "Reply", options: [.foreground]),
+            ], intentIdentifiers: [], options: []),
+        ])
         Telemetry.start()
         setUpStatusItem()
         setUpMenus()
@@ -182,6 +189,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         post.addItem(.separator())
         post.addItem(menuItem("Open Conversation", "open", "o", [.command], "bubble.left.and.bubble.right"))
         post.addItem(menuItem("Open in Browser", "browser", "t", [.command], "safari"))
+        post.addItem(menuItem("Quick Look", "quicklook", "y", [.command], "eye"))
         post.addItem(menuItem("Copy Link to Post", "copyLink", "c", [.command, .shift], "link"))
         post.addItem(.separator())
         post.addItem(menuItem("View Profile", "profile", "u", [.command, .shift], "person.crop.circle"))
@@ -488,10 +496,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         let url = info["url"] as? String ?? ""
         let column = info["column"] as? String ?? ""
         let key = info["key"] as? String ?? ""
+        let action = response.actionIdentifier
         DispatchQueue.main.async {
-            ViewController.shared?.showWindow()
             // The column that alerted and the post’s block, then its URL.
-            if !url.isEmpty || !key.isEmpty { ViewController.shared?.command("openPost:" + column + "\n" + key + "\n" + url) }
+            let target = column + "\n" + key + "\n" + url
+            guard let vc = ViewController.shared else { return }
+            if action != "like" { vc.showWindow() }
+            // After a quit or a reload the page needs a moment first.
+            vc.whenMounted {
+                switch action {
+                case "like": vc.command("notifyLike:" + target)
+                case "reply": vc.command("notifyReply:" + target)
+                default: if !url.isEmpty || !key.isEmpty { vc.command("openPost:" + target) }
+                }
+            }
         }
         completionHandler()
     }

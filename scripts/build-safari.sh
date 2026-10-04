@@ -19,7 +19,10 @@ DD="$ROOT/build/DerivedData"
 VERSION=$(node -e "console.log(require('$ROOT/extension/manifest.json').version)")
 PROJ="$ROOT/safari/Sweeter/Sweeter.xcodeproj"
 # The version comes from extension/manifest.json, passed to Xcode below
-# (building never edits a tracked file).
+# (building never edits a tracked file). The build number is the count of
+# commits (releases build from main), so every build counts up: About shows
+# "0.20.0 (27)", and an updater can compare it.
+BUILD=$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)
 
 node "$ROOT/tests/run.js"
 
@@ -28,7 +31,7 @@ if [ -n "${SWEETER_TEAM:-}" ]; then
 else
   SIGN=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="")
 fi
-xcodebuild -project "$PROJ" -scheme Sweeter -configuration Release MARKETING_VERSION="$VERSION" \
+xcodebuild -project "$PROJ" -scheme Sweeter -configuration Release MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
   -destination 'platform=macOS' -derivedDataPath "$DD" "${SIGN[@]}" \
   SWEETER_TELEMETRY_APP_ID="${SWEETER_TELEMETRY:-}" SWEETER_TELEMETRY_NAMESPACE="${SWEETER_TELEMETRY_NAMESPACE:-}" SWEETER_TELEMETRY_TEST_MODE=YES \
   clean build -quiet

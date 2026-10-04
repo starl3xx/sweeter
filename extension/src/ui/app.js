@@ -257,7 +257,7 @@
       { k: 'check', key: 'round', label: 'Avatars', text: 'Round avatars' },
       { k: 'check', key: 'updateCheck', label: 'Updates', text: 'Check for updates once a day', btn: ['Check Now', 'check-updates'], note: 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', lbl: true },
       { k: 'check', key: 'tips', label: 'Tips', text: 'Show a tip when Sweeter opens', btn: ['Show One Now', 'tip-show'], lbl: true },
-      { k: 'check', key: 'telemetry', label: 'Usage data', text: 'Send anonymous usage counts', note: 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, tips turned off, and the warnings Sweeter shows (without names or links), with the Sweeter version and facts about the Mac such as its macOS version, model, and language. Never anything from X.', lbl: true, app: true },
+      { k: 'check', key: 'telemetry', label: 'Usage data', text: 'Send anonymous usage counts', note: 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, tips turned off, and the warnings Sweeter shows (without names or links), with the Sweeter version, the theme and appearance you use, and facts about the Mac such as its macOS version, model, and language. Never anything from X.', lbl: true, app: true },
       { k: 'check', key: 'badges', label: 'Checkmarks', text: 'Show verified checkmarks and organization badges' },
       { k: 'check', key: 'counts', label: 'Counts', text: 'Show reply, repost and like counts' },
       { k: 'check', key: 'pinToTop', label: 'Timeline', text: 'Pin timeline to top when at top', note: 'Clicking a column header also jumps to the newest post and keeps it pinned.' },

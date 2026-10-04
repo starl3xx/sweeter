@@ -194,6 +194,8 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             signal: (n, p) => { post({ type: 'signal', name: String(n || ''), json: JSON.stringify(p || {}) }); },
             telemetry: (on) => { post({ type: 'telemetry', on: !!on }); },
             alert: (o) => post({ type: 'alert', json: JSON.stringify(o || {}) }),
+            openSettings: (tab) => post({ type: 'openSettings', tab: String(tab || '') }),
+            prefsChanged: (json) => post({ type: 'prefsChanged', json: String(json || '') }),
           };
           globalThis.browser = {
             runtime: { getManifest: () => ({ version: '\(version)' }) },
@@ -254,6 +256,14 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 return
             }
             presentAlert(o) { button, text in replyHandler(["button": button, "text": text], nil) }
+        // Settings is a native window (SettingsWindow.swift); the page opens
+        // it and, while it is open, sends every change to it.
+        case "openSettings":
+            SettingsWindowController.shared.show(tab: body["tab"] as? String ?? "")
+            replyHandler(nil, nil)
+        case "prefsChanged":
+            SettingsWindowController.shared.model.apply(json: body["json"] as? String ?? "")
+            replyHandler(nil, nil)
         // A usage count (Telemetry): a name the page chose and a few short
         // string values, never anything from X.
         case "signal":
@@ -465,6 +475,15 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         guard let window = view.window else { return finish(alert.runModal()) }
         alert.beginSheetModal(for: window, completionHandler: finish)
         field?.selectText(nil)
+    }
+
+    /// The page's Settings entry point (app.js prefsDo): a request in, its
+    /// JSON reply out (nil when X Pro's page is not open).
+    func prefs(_ op: String, _ arg: Any?, done: @escaping (Any?) -> Void) {
+        webView.callAsyncJavaScript("return Sweeter.native && Sweeter.native.prefs ? Sweeter.native.prefs(op, arg) : null",
+                                    arguments: ["op": op, "arg": arg ?? NSNull()], in: nil, in: world) { result in
+            done(try? result.get())
+        }
     }
 
     /// Closes the page's top sheet, if one is open (true then).

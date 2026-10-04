@@ -92,7 +92,7 @@
           : null,
       });
       // The native Mac app drives these from its menus and global hotkeys.
-      Sweeter.native = { compose: ui.compose, toggle: ui.toggle, cmd: ui.cmd, closeTop: ui.closeTop };
+      Sweeter.native = { compose: ui.compose, toggle: ui.toggle, cmd: ui.cmd, closeTop: ui.closeTop, prefs: ui.prefs };
       if (globalThis.SweeterNative) globalThis.SweeterNative.log('mounted');
     };
     if (document.body) start();

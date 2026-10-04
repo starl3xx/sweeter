@@ -228,6 +228,80 @@
     ['keys', 'Keyboard', 'keyboard'],
     ['extras', 'Extras', 'sparkle'],
   ];
+  // Settings rows for General, Media and Extras: the Settings sheet draws
+  // them (app.js prefRows), and the Mac app’s Settings window draws the
+  // same list natively. k: select, check, range, swatches, sep (a divider)
+  // or head (a titled group). lbl: the row’s label names a checkbox. app:
+  // the Mac app only.
+  const PREF_ROWS = {
+    general: [
+      { k: 'select', key: 'skin', label: 'Theme', opts: [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark'], ['winamp', 'Winamp Classic']] },
+      { k: 'swatches', key: 'accent', label: 'Accent color', note: 'Winamp Classic keeps its own colors.' },
+      { k: 'select', key: 'contrast', label: 'Contrast', opts: [['low', 'Low'], ['standard', 'Standard'], ['high', 'High']] },
+      { k: 'check', key: 'pureBlack', label: 'Dark mode', text: 'Pure black background', note: 'For OLED displays and dark rooms.' },
+      { k: 'sep' },
+      { k: 'range', key: 'fontSize', label: 'Font size', min: 11, max: 21, step: 1, unit: 'pt' },
+      { k: 'select', key: 'density', label: 'Density', opts: [['comfortable', 'Comfortable'], ['compact', 'Compact']] },
+      { k: 'range', key: 'colWidth', label: 'Column width', min: 280, max: 520, step: 5, unit: 'px' },
+      { k: 'select', key: 'fit', label: 'Columns', opts: [['fill', 'Fill the window'], ['equal', 'Equal widths, fill the window'], ['fixed', 'Fixed width, scroll sideways'], ['fit2', 'Fit 2 on screen'], ['fit3', 'Fit 3 on screen'], ['fit4', 'Fit 4 on screen'], ['fit5', 'Fit 5 on screen']], note: 'Fit ignores widths set on single columns.' },
+      { k: 'check', key: 'snap', label: '', text: 'Snap columns into place when scrolling sideways' },
+      { k: 'sep' },
+      { k: 'select', key: 'names', label: 'Display name', opts: [['full', 'Full name'], ['user', 'Username'], ['both', 'Both']] },
+      { k: 'select', key: 'dateFormat', label: 'Date format', opts: [['relative', 'Relative'], ['absolute', 'Absolute']] },
+      { k: 'select', key: 'repostLabel', label: 'Reposts', opts: [['above', '“Name reposted” above, like X Pro'], ['below', '“Reposted by” below, like Tweetbot']] },
+      { k: 'select', key: 'longPosts', label: 'Long posts', opts: [['collapsed', 'Fold after a few lines'], ['expanded', 'Show in full']], note: 'Posts longer than 280 characters. “Show more” opens one.' },
+      { k: 'select', key: 'actions', label: 'Post action buttons', opts: [['always', 'Show always'], ['hover', 'Show on mouseover']] },
+      { k: 'sep' },
+      { k: 'check', key: 'round', label: 'Avatars', text: 'Round avatars' },
+      { k: 'check', key: 'updateCheck', label: 'Updates', text: 'Check for updates once a day', btn: ['Check Now', 'check-updates'], note: 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', lbl: true },
+      { k: 'check', key: 'tips', label: 'Tips', text: 'Show a tip when Sweeter opens', btn: ['Show One Now', 'tip-show'], lbl: true },
+      { k: 'check', key: 'telemetry', label: 'Usage data', text: 'Send anonymous usage counts', note: 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, tips turned off, and the warnings Sweeter shows (without names or links), with the Sweeter version and facts about the Mac such as its macOS version, model, and language. Never anything from X.', lbl: true, app: true },
+      { k: 'check', key: 'badges', label: 'Checkmarks', text: 'Show verified checkmarks and organization badges' },
+      { k: 'check', key: 'counts', label: 'Counts', text: 'Show reply, repost and like counts' },
+      { k: 'check', key: 'pinToTop', label: 'Timeline', text: 'Pin timeline to top when at top', note: 'Clicking a column header also jumps to the newest post and keeps it pinned.' },
+      { k: 'check', key: 'pauseOnHover', label: '', text: 'Hold a pinned column still under the pointer', note: 'New posts wait above; the count shows how many.' },
+      { k: 'select', key: 'dedupe', label: 'Seen elsewhere', opts: [['off', 'Show every post as usual'], ['dim', 'Dim posts you saw earlier in another column'], ['hide', 'Hide them']], note: 'A post counts as seen after a second on screen. Two copies on screen together are never dimmed.' },
+    ],
+    media: [
+      { k: 'select', key: 'media', label: 'Images', opts: [['full', 'Full thumbnails'], ['cropped', 'Cropped grid'], ['small', 'Small'], ['none', 'None']], note: 'Full thumbnails keep each image’s own shape, so nothing is cropped.' },
+      { k: 'check', key: 'autoplayVideo', label: 'Videos', text: 'Auto-play in the timeline, muted' },
+      { k: 'check', key: 'autoplayGifs', label: 'GIFs', text: 'Auto-play and loop' },
+      { k: 'check', key: 'obscureSensitive', label: 'Sensitive media', text: 'Obscure possibly sensitive media' },
+      { k: 'sep' },
+      { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
+      { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
+      { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
+    ],
+    extras: [
+      { k: 'head', label: 'Crypto' },
+      { k: 'check', key: 'tokenLookup', label: 'Contract addresses', text: 'Show token details on click', note: 'Asks DexScreener only when you click an address or ticker card. Off: they open DexScreener.', lbl: true },
+      { k: 'check', key: 'tickerPrices', label: 'Ticker cards', text: 'Show prices', note: 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most.', lbl: true },
+    ],
+  };
+  // The Keyboard page’s list (the Settings sheet and the Mac app’s window).
+  const KEY_LIST = [
+    ['j k', 'Next, previous post'], ['l', 'Like or unlike'],
+    ['t', 'Repost or quote'], ['⌥ t', 'Quote'],
+    ['r', 'Reply'], ['n', 'New post'],
+    ['b', 'Bookmark or remove bookmark'],
+    ['⌘ Return', 'Send from the compose window'], ['Esc', 'Close compose, keep the draft'],
+    ['⌘ B', 'Bold selected text'], ['⌘ I', 'Italic selected text'],
+    ['o', 'Open media or link'], ['Return  →', 'Open the conversation here'],
+    ['←', 'Back from a conversation'], ['← →', 'Previous, next photo in the viewer'],
+    ['Tab', 'Next column'], ['1 to 9', 'Jump to a column'],
+    ['Space', 'Page down'], ['⌘ ↑  ⌘ ↓', 'Top (pins), bottom'],
+    ['⌘ K', 'Mark column as read'], [',  ⌘ ,', 'Settings'],
+    ['⌘ F  /', 'Find in the column'], ['⌥ 1', 'Filter 1 on or off (⌥2 to ⌥9: the others)'],
+    ['⌥ 0', 'All filters off'], ['Return', 'From Find to the results'],
+    ['c  n', 'Add a column (also ⌥⌘N)'], ['c  ⌫', 'Remove the column (asks first)'],
+    ['c  u', 'Undo removing a column'], ['c  o', 'Column menu'],
+    ['c  1', 'Column 1 (c 0: the last one)'], [']  [', 'Next, previous column'],
+    ['g  h', 'Go to Home (g n, g r, g i, g b)'], ['⌘ [', 'Back from a conversation or profile (Mac app)'],
+    ['⌘ J', 'Next column with unread posts (⇧⌘J: previous)'], ['⌥ ⌘ K', 'Clear every column (Sweeter only)'],
+    ['⌥ ⌘ ←', 'Move the column left in X Pro (⌥⌘→: right)'], ['d  1', 'Deck 1 (d n new, d e edit, d m manage)'],
+    ['⇧ ⌘ P', 'Command palette: every command, by typing'], ['⌥ ⌘ 1', 'Deck 1 (to ⌥⌘9)'], ['⌃ ⌘ 1', 'Group 1 (⌃⌘0: every column)'],
+    ['Esc', 'Deselect, close'], ['⌥ X', 'Switch to X Pro'],
+  ];
   // What a layout holds: Sweeter’s own arrangement, never X Pro’s decks.
   const LAYOUT_KEYS = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
   const REBUILD = new Set(['actions', 'tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
@@ -279,6 +353,10 @@
     let custom = (opts.filters || []).filter((f) => f && f.id);
     const save = opts.save || (() => {});
     const T = Sweeter.tips;
+    // The Mac app's Settings window is open and follows changes (prefsDo).
+    // Here, because persist() runs from the start.
+    let prefsWatch = false;
+    let prefsPush = 0;
 
     // Anonymous usage counts (Mac app only, through TelemetryDeck): a name
     // and a few short values Sweeter chooses, never anything from X.
@@ -540,6 +618,7 @@
 
     function persist() {
       save({ settings: Object.assign({}, settings) });
+      pushPrefs();
     }
 
     // The signed-in account, from X Pro’s account button. X Pro draws the
@@ -5436,8 +5515,7 @@
           el.closest('.banner').remove();
           break;
         case 'mute-del':
-          rules = rules.filter((r) => r.id !== el.dataset.id);
-          mutesChanged();
+          deleteMute(el.dataset.id);
           break;
         case 'filter':
           showFilterMenu(c, el);
@@ -5477,9 +5555,7 @@
           saveFilter();
           break;
         case 'flt-del':
-          custom = custom.filter((f) => f.id !== el.dataset.id);
-          if (editing && editing.id === el.dataset.id) editing = null;
-          filtersChanged();
+          deleteFilter(el.dataset.id);
           break;
         case 'find-close':
           closeFind(c);
@@ -5540,9 +5616,7 @@
           restoreLayout(el.dataset.v);
           break;
         case 'lay-del':
-          settings.layouts = (settings.layouts || []).filter((l) => l.name !== el.dataset.v);
-          persist();
-          renderPrefs();
+          deleteLayout(el.dataset.v);
           break;
         case 'lay-export':
           exportLayout();
@@ -6493,13 +6567,19 @@
       reportState();
     }
     function saveLayout() {
-      askText('Name this layout', '', (name) => {
-        const rest = (settings.layouts || []).filter((l) => l.name !== name);
-        settings.layouts = rest.concat([{ name, at: Date.now(), data: layoutData() }]);
-        persist();
-        if (!prefsEl.hidden) renderPrefs();
-        toast('Layout “' + name + '” saved');
-      });
+      askText('Name this layout', '', saveLayoutNamed);
+    }
+    function saveLayoutNamed(name) {
+      const rest = (settings.layouts || []).filter((l) => l.name !== name);
+      settings.layouts = rest.concat([{ name, at: Date.now(), data: layoutData() }]);
+      persist();
+      if (!prefsEl.hidden) renderPrefs();
+      toast('Layout “' + name + '” saved');
+    }
+    function deleteLayout(name) {
+      settings.layouts = (settings.layouts || []).filter((l) => l.name !== name);
+      persist();
+      if (!prefsEl.hidden) renderPrefs();
     }
     function restoreLayout(name) {
       const l = (settings.layouts || []).find((x) => x.name === name);
@@ -6509,9 +6589,9 @@
       applyLayout(d);
       showUndo('Layout “' + name + '” restored', () => applyLayout(before), 8000);
     }
+    const layoutFile = () => ({ name: 'Sweeter layout ' + new Date().toISOString().slice(0, 10) + '.json', text: JSON.stringify({ sweeterLayout: 1, version, exported: new Date().toISOString(), settings: layoutData() }, null, 2) });
     function exportLayout() {
-      const text = JSON.stringify({ sweeterLayout: 1, version, exported: new Date().toISOString(), settings: layoutData() }, null, 2);
-      const name = 'Sweeter layout ' + new Date().toISOString().slice(0, 10) + '.json';
+      const { name, text } = layoutFile();
       if (native && native.save) return native.save({ name, text });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -6521,6 +6601,19 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     }
+    // A layout file's text: applied, with Undo; or why not.
+    function importLayoutText(t) {
+      let j = null;
+      try {
+        j = JSON.parse(t);
+      } catch (e) {}
+      const d = j && j.sweeterLayout === 1 ? cleanLayout(j.settings) : null;
+      if (!d) return 'That file isn’t a Sweeter layout.';
+      const before = layoutData();
+      applyLayout(d);
+      showUndo('Layout imported', () => applyLayout(before), 8000);
+      return '';
+    }
     function importLayout() {
       const input = document.createElement('input');
       input.type = 'file';
@@ -6529,15 +6622,8 @@
         const f = input.files && input.files[0];
         if (!f) return;
         f.text().then((t) => {
-          let j = null;
-          try {
-            j = JSON.parse(t);
-          } catch (e) {}
-          const d = j && j.sweeterLayout === 1 ? cleanLayout(j.settings) : null;
-          if (!d) return toast('That file isn’t a Sweeter layout.', 'warn');
-          const before = layoutData();
-          applyLayout(d);
-          showUndo('Layout imported', () => applyLayout(before), 8000);
+          const m = importLayoutText(t);
+          if (m) toast(m, 'warn');
         });
       });
       input.click();
@@ -6605,10 +6691,16 @@
         '</div><div class="fbtns"><button type="button" data-cmd="flt-cancel">Cancel</button><button class="done" type="button" data-cmd="flt-save">Save filter</button></div></div>';
     }
 
-    function filtersPart() {
+    function filtersHint() {
       const quick = XF.QUICK.map((f, i) => h(f.name) + ' <kbd>⌥' + (i + 1) + '</kbd>').join(', ');
+      return 'A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '.';
+    }
+    const MUTES_HINT = 'Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd> or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists and searches.';
+    const MUTE_NOTES_NOTE = 'A like, repost or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.';
+    const LAYOUTS_HINT = 'A layout is Sweeter’s own arrangement: views, merged columns, groups, widths, filters, titles, icons, colors, media and the column layout. X Pro’s decks and columns stay as they are, so a layout fits the decks it was made with.';
+    function filtersPart() {
       const n0 = XF.QUICK.length;
-      return '<h3 class="psec">Filters</h3><div class="hint">A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '.</div>' +
+      return '<h3 class="psec">Filters</h3><div class="hint">' + filtersHint() + '</div>' +
         '<div class="mutes flist">' +
         (custom.length
           ? custom.map((f, i) => '<div class="mr"><span class="mk">' + h(f.name) + (n0 + i < 9 ? ' <kbd>⌥' + (n0 + i + 1) + '</kbd>' : '') + '</span><span class="me2">' + h(describe(f)) + '</span><button class="lnk" type="button" data-cmd="flt-edit" data-id="' + h(f.id) + '">Edit</button><button class="x" type="button" data-cmd="flt-del" data-id="' + h(f.id) + '" title="Delete" aria-label="Delete ' + h(f.name) + '">×</button></div>').join('')
@@ -6616,10 +6708,38 @@
         '</div>' +
         (editing ? filterEditor(editing) : '<div class="fnew"><button type="button" data-cmd="flt-new">New filter…</button></div>');
     }
+    // Draws a list of PREF_ROWS as the sheet’s label and control grid; a
+    // "head" row starts a new titled group.
+    function prefRows(rows) {
+      let out = '';
+      let open = false;
+      for (const r of rows) {
+        if (r.app && !native) continue;
+        if (r.k === 'head') {
+          out += (open ? '</div>' : '') + '<h3 class="psec">' + h(r.label) + '</h3>';
+          open = false;
+          continue;
+        }
+        if (!open) out += '<div class="pgrid">';
+        open = true;
+        if (r.k === 'sep') {
+          out += '<div class="sep"></div>';
+          continue;
+        }
+        const control =
+          r.k === 'select' ? select(r.key, r.opts)
+          : r.k === 'range' ? range(r.key, r.min, r.max, r.step, r.unit)
+          : r.k === 'swatches' ? swatches()
+          : check(r.key, r.text) + (r.btn ? ' <button class="lnk" type="button" data-cmd="' + r.btn[1] + '">' + h(r.btn[0]) + '</button>' : '');
+        out += row(r.label ? r.label + ':' : '', control, r.note || null, r.k === 'select' || r.k === 'range' || r.lbl ? r.key : undefined);
+      }
+      return out + (open ? '</div>' : '');
+    }
+
     // Mutes share a tab with Filters (before 0.19 they had their own).
     const mutesPane = () =>
-      '<div class="hint">Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd> or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists and searches.</div>' +
-      '<div class="pgrid">' + row('Notifications:', check('muteNotes', 'Mutes hide notifications too'), 'A like, repost or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.') + '</div>' +
+      '<div class="hint">' + MUTES_HINT + '</div>' +
+      '<div class="pgrid">' + row('Notifications:', check('muteNotes', 'Mutes hide notifications too'), MUTE_NOTES_NOTE) + '</div>' +
       '<div class="mute-add"><input type="text" id="mute-in" placeholder="airdrop, /^gm\\b/i, @someone" autocomplete="off" spellcheck="false" aria-label="Words, patterns or accounts to mute">' +
       '<select id="mute-dur" aria-label="How long to mute">' + Object.keys(DURATION_LABEL).map((k) => '<option value="' + k + '"' + (k === 'forever' ? ' selected' : '') + '>' + DURATION_LABEL[k] + '</option>').join('') + '</select>' +
       '<button type="button" data-cmd="mute-add">Mute</button></div>' +
@@ -6630,50 +6750,12 @@
       '</div>';
 
     const PANES = {
-      general: () =>
-        '<div class="pgrid">' +
-        row('Theme:', select('skin', [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark'], ['winamp', 'Winamp Classic']]), null, 'skin') +
-        row('Accent color:', swatches(), 'Winamp Classic keeps its own colors.') +
-        row('Contrast:', select('contrast', [['low', 'Low'], ['standard', 'Standard'], ['high', 'High']]), null, 'contrast') +
-        row('Dark mode:', check('pureBlack', 'Pure black background'), 'For OLED displays and dark rooms.') +
-        '<div class="sep"></div>' +
-        row('Font size:', range('fontSize', 11, 21, 1, 'pt'), null, 'fontSize') +
-        row('Density:', select('density', [['comfortable', 'Comfortable'], ['compact', 'Compact']]), null, 'density') +
-        row('Column width:', range('colWidth', 280, 520, 5, 'px'), null, 'colWidth') +
-        row('Columns:', select('fit', [['fill', 'Fill the window'], ['equal', 'Equal widths, fill the window'], ['fixed', 'Fixed width, scroll sideways'], ['fit2', 'Fit 2 on screen'], ['fit3', 'Fit 3 on screen'], ['fit4', 'Fit 4 on screen'], ['fit5', 'Fit 5 on screen']]), 'Fit ignores widths set on single columns.', 'fit') +
-        row('', check('snap', 'Snap columns into place when scrolling sideways')) +
-        '<div class="sep"></div>' +
-        row('Display name:', select('names', [['full', 'Full name'], ['user', 'Username'], ['both', 'Both']]), null, 'names') +
-        row('Date format:', select('dateFormat', [['relative', 'Relative'], ['absolute', 'Absolute']]), null, 'dateFormat') +
-        row('Reposts:', select('repostLabel', [['above', '“Name reposted” above, like X Pro'], ['below', '“Reposted by” below, like Tweetbot']]), null, 'repostLabel') +
-        row('Long posts:', select('longPosts', [['collapsed', 'Fold after a few lines'], ['expanded', 'Show in full']]), 'Posts longer than 280 characters. “Show more” opens one.', 'longPosts') +
-        row('Post action buttons:', select('actions', [['always', 'Show always'], ['hover', 'Show on mouseover']]), null, 'actions') +
-        '<div class="sep"></div>' +
-        row('Avatars:', check('round', 'Round avatars')) +
-        row('Updates:', check('updateCheck', 'Check for updates once a day') + ' <button class="lnk" type="button" data-cmd="check-updates">Check Now</button>', 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', 'updateCheck') +
-        row('Tips:', check('tips', 'Show a tip when Sweeter opens') + ' <button class="lnk" type="button" data-cmd="tip-show">Show One Now</button>', null, 'tips') +
-        (native ? row('Usage data:', check('telemetry', 'Send anonymous usage counts'), 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, tips turned off, and the warnings Sweeter shows (without names or links), with the Sweeter version and facts about the Mac such as its macOS version, model, and language. Never anything from X.', 'telemetry') : '') +
-        row('Checkmarks:', check('badges', 'Show verified checkmarks and organization badges')) +
-        row('Counts:', check('counts', 'Show reply, repost and like counts')) +
-        row('Timeline:', check('pinToTop', 'Pin timeline to top when at top'), 'Clicking a column header also jumps to the newest post and keeps it pinned.') +
-        row('', check('pauseOnHover', 'Hold a pinned column still under the pointer'), 'New posts wait above; the count shows how many.') +
-        row('Seen elsewhere:', select('dedupe', [['off', 'Show every post as usual'], ['dim', 'Dim posts you saw earlier in another column'], ['hide', 'Hide them']]), 'A post counts as seen after a second on screen. Two copies on screen together are never dimmed.', 'dedupe') +
-        '</div>',
-      media: () =>
-        '<div class="pgrid">' +
-        row('Images:', select('media', [['full', 'Full thumbnails'], ['cropped', 'Cropped grid'], ['small', 'Small'], ['none', 'None']]), 'Full thumbnails keep each image’s own shape, so nothing is cropped.', 'media') +
-        row('Videos:', check('autoplayVideo', 'Auto-play in the timeline, muted')) +
-        row('GIFs:', check('autoplayGifs', 'Auto-play and loop')) +
-        row('Sensitive media:', check('obscureSensitive', 'Obscure possibly sensitive media')) +
-        '<div class="sep"></div>' +
-        row('Link previews:', select('cards', [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']]), null, 'cards') +
-        row('Links:', select('links', [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']]), null, 'links') +
-        row('Quoted posts:', check('quoteMedia', 'Show a thumbnail of their media')) +
-        '</div>',
+      general: () => prefRows(PREF_ROWS.general),
+      media: () => prefRows(PREF_ROWS.media),
       filters: () => '<div class="pf-filters">' + filtersPart() + '</div><h3 class="psec" id="psec-mutes">Mutes</h3><div class="pf-mutes">' + mutesPane() + '</div>',
       layouts: () => {
         const ls = settings.layouts || [];
-        return '<div class="hint">A layout is Sweeter’s own arrangement: views, merged columns, groups, widths, filters, titles, icons, colors, media and the column layout. X Pro’s decks and columns stay as they are, so a layout fits the decks it was made with.</div>' +
+        return '<div class="hint">' + LAYOUTS_HINT + '</div>' +
           '<div class="mutes flist">' +
           (ls.length
             ? ls.map((l) => '<div class="mr"><span class="mk">' + h(l.name) + '</span><span class="me2">' + h(new Date(l.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })) + '</span><button class="lnk" type="button" data-cmd="lay-restore" data-v="' + h(l.name) + '">Restore</button><button class="x" type="button" data-cmd="lay-del" data-v="' + h(l.name) + '" title="Delete" aria-label="Delete ' + h(l.name) + '">×</button></div>').join('')
@@ -6682,37 +6764,11 @@
           '<div class="fnew"><button type="button" data-cmd="lay-save">Save Current Layout…</button> <button type="button" data-cmd="lay-export">Export…</button> <button type="button" data-cmd="lay-import">Import…</button></div>';
       },
       keys: () => {
-        const k = [
-          ['j k', 'Next, previous post'], ['l', 'Like or unlike'],
-          ['t', 'Repost or quote'], ['⌥ t', 'Quote'],
-          ['r', 'Reply'], ['n', 'New post'],
-          ['b', 'Bookmark or remove bookmark'],
-          ['⌘ Return', 'Send from the compose window'], ['Esc', 'Close compose, keep the draft'],
-          ['⌘ B', 'Bold selected text'], ['⌘ I', 'Italic selected text'],
-          ['o', 'Open media or link'], ['Return  →', 'Open the conversation here'],
-          ['←', 'Back from a conversation'], ['← →', 'Previous, next photo in the viewer'],
-          ['Tab', 'Next column'], ['1 to 9', 'Jump to a column'],
-          ['Space', 'Page down'], ['⌘ ↑  ⌘ ↓', 'Top (pins), bottom'],
-          ['⌘ K', 'Mark column as read'], [',  ⌘ ,', 'Settings'],
-          ['⌘ F  /', 'Find in the column'], ['⌥ 1', 'Filter 1 on or off (⌥2 to ⌥9: the others)'],
-          ['⌥ 0', 'All filters off'], ['Return', 'From Find to the results'],
-          ['c  n', 'Add a column (also ⌥⌘N)'], ['c  ⌫', 'Remove the column (asks first)'],
-          ['c  u', 'Undo removing a column'], ['c  o', 'Column menu'],
-          ['c  1', 'Column 1 (c 0: the last one)'], [']  [', 'Next, previous column'],
-          ['g  h', 'Go to Home (g n, g r, g i, g b)'], ['⌘ [', 'Back from a conversation or profile (Mac app)'],
-          ['⌘ J', 'Next column with unread posts (⇧⌘J: previous)'], ['⌥ ⌘ K', 'Clear every column (Sweeter only)'],
-          ['⌥ ⌘ ←', 'Move the column left in X Pro (⌥⌘→: right)'], ['d  1', 'Deck 1 (d n new, d e edit, d m manage)'],
-          ['⇧ ⌘ P', 'Command palette: every command, by typing'], ['⌥ ⌘ 1', 'Deck 1 (to ⌥⌘9)'], ['⌃ ⌘ 1', 'Group 1 (⌃⌘0: every column)'],
-          ['Esc', 'Deselect, close'], ['⌥ X', 'Switch to X Pro'],
-        ];
+        const k = KEY_LIST;
         return '<div class="keys">' + k.map(([keys, d]) => '<span class="k">' + keys.split(/\s{2}/).map((g) => g.split(' ').map((x) => '<kbd>' + h(x) + '</kbd>').join(' ')).join(' ') + '</span><span class="d">' + h(d) + '</span>').join('') + '</div>';
       },
       // Optional things, some of them experimental. More will join later.
-      extras: () =>
-        '<h3 class="psec">Crypto</h3><div class="pgrid">' +
-        row('Contract addresses:', check('tokenLookup', 'Show token details on click'), 'Asks DexScreener only when you click an address or ticker card. Off: they open DexScreener.', 'tokenLookup') +
-        row('Ticker cards:', check('tickerPrices', 'Show prices'), 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most.', 'tickerPrices') +
-        '</div>',
+      extras: () => prefRows(PREF_ROWS.extras),
     };
 
     // Filters and Mutes share a tab: a change to one redraws only its own
@@ -6731,6 +6787,7 @@
     }
 
     function openPrefsTab(tab) {
+      if (native && native.openSettings) return native.openSettings(tab);
       // 'mutes' (a tab of its own before 0.19) is the second half of Filters.
       prefsTab = tab === 'mutes' ? 'filters' : PANES[tab] ? tab : 'general';
       openPrefs();
@@ -6745,12 +6802,29 @@
       const val = (id) => pbody.querySelector(id).value.trim();
       const rs = [];
       for (const sel of pbody.querySelectorAll('[data-rule]')) if (sel.value) rs.push({ k: sel.dataset.rule, not: sel.value === 'no' });
-      const f = { id: editing.id || 'f:' + Date.now().toString(36), name: val('#fe-name') || 'Filter ' + (custom.length + 1), include: val('#fe-inc'), exclude: val('#fe-exc'), match: pbody.querySelector('#fe-match').value, rules: rs };
-      if (!f.include && !f.exclude && !rs.length) return toast('Add words or a rule first.', 'info');
-      custom = editing.id ? custom.map((x) => (x.id === f.id ? f : x)) : custom.concat([f]);
+      const e = { id: editing.id, name: val('#fe-name'), include: val('#fe-inc'), exclude: val('#fe-exc'), match: pbody.querySelector('#fe-match').value, rules: rs };
+      // Closed before it saves (the save redraws the list); back on a no.
+      const was = editing;
       editing = null;
+      const m = storeFilter(e);
+      if (!m) return;
+      editing = was;
+      toast(m, 'info');
+    }
+    // A custom filter, new (no id) or edited: saved, or why not.
+    function storeFilter(e) {
+      const rs = (Array.isArray(e.rules) ? e.rules : []).filter((r) => r && XF.CRITERIA.some((c) => c[0] === r.k)).map((r) => ({ k: r.k, not: !!r.not }));
+      const f = { id: e.id || 'f:' + Date.now().toString(36), name: String(e.name || '').trim() || 'Filter ' + (custom.length + 1), include: String(e.include || '').trim(), exclude: String(e.exclude || '').trim(), match: e.match === 'any' ? 'any' : 'all', rules: rs };
+      if (!f.include && !f.exclude && !rs.length) return 'Add words or a rule first.';
+      custom = e.id && custom.some((x) => x.id === e.id) ? custom.map((x) => (x.id === f.id ? f : x)) : custom.concat([f]);
       filtersChanged();
       toast('Saved “' + f.name + '”');
+      return '';
+    }
+    function deleteFilter(id) {
+      custom = custom.filter((f) => f.id !== id);
+      if (editing && editing.id === id) editing = null;
+      filtersChanged();
     }
 
     function filtersChanged() {
@@ -6772,6 +6846,7 @@
 
     function openPrefs() {
       closePop();
+      if (native && native.openSettings) return native.openSettings('');
       renderPrefs();
       prefsEl.hidden = false;
       const first = pbody.querySelector('select, input');
@@ -6813,28 +6888,134 @@
     });
 
     function addMutes() {
-      const input = pbody.querySelector('#mute-in');
-      const dur = pbody.querySelector('#mute-dur').value;
+      const m = addMuteText(pbody.querySelector('#mute-in').value, pbody.querySelector('#mute-dur').value);
+      toast(m.msg, m.ok ? 'mute' : 'warn');
+    }
+    // Mutes from text (commas between several) for a duration: { ok, msg }.
+    function addMuteText(text, dur) {
       const added = [];
-      for (const tok of input.value.split(',')) {
-        const r = Sweeter.mutes.parse(tok, dur);
+      for (const tok of String(text || '').split(',')) {
+        const r = Sweeter.mutes.parse(tok, DURATION_LABEL[dur] ? dur : 'forever');
         if (r) added.push(r);
       }
-      if (!added.length) {
-        toast('Nothing to mute. Check the pattern.', 'warn');
-        return;
-      }
+      if (!added.length) return { ok: false, msg: 'Nothing to mute. Check the pattern.' };
       rules = rules.concat(added);
       mutesChanged();
-      toast(added.length === 1 ? 'Muted ' + Sweeter.mutes.label(added[0]) : 'Added ' + added.length + ' mute filters', 'mute');
+      return { ok: true, msg: added.length === 1 ? 'Muted ' + Sweeter.mutes.label(added[0]) : 'Added ' + added.length + ' mute filters' };
+    }
+    function deleteMute(id) {
+      rules = rules.filter((r) => r.id !== id);
+      mutesChanged();
     }
 
     function mutesChanged() {
+      pushPrefs();
       match = Sweeter.mutes.compile(rules);
       noteMatch = Sweeter.mutes.compileNote ? Sweeter.mutes.compileNote(rules) : null;
       save({ mutes: rules });
       rebuildAll();
       redrawPrefs('mutes');
+    }
+
+    // ---------- the Mac app's Settings window ----------
+    // In the Mac app Settings is a native window (SettingsWindow.swift) that
+    // draws the same rows. It reads prefsSnapshot(), changes things through
+    // prefsDo(), and while it is open every change here is pushed to it.
+    const plain = (html) => {
+      const t = document.createElement('template');
+      t.innerHTML = html;
+      return t.content.textContent;
+    };
+    const prefRowList = () => [].concat(PREF_ROWS.general, PREF_ROWS.media, PREF_ROWS.extras).filter((r) => r.key && (!r.app || native));
+    function prefsSnapshot() {
+      const values = { muteNotes: !!settings.muteNotes };
+      for (const r of prefRowList()) values[r.key] = settings[r.key];
+      const n0 = XF.QUICK.length;
+      const keep = (rows) => rows.filter((r) => !r.app || native);
+      return {
+        version,
+        values,
+        rows: { general: keep(PREF_ROWS.general), media: keep(PREF_ROWS.media), extras: keep(PREF_ROWS.extras) },
+        accents: ACCENTS.map(([id, name, light]) => ({ id, name, color: id === 'system' ? '' : light })),
+        hints: { filters: plain(filtersHint()), mutes: plain(MUTES_HINT), muteNotes: MUTE_NOTES_NOTE, layouts: LAYOUTS_HINT },
+        filters: custom.map((f, i) => ({ id: f.id, name: f.name, desc: describe(f), key: n0 + i < 9 ? '⌥' + (n0 + i + 1) : '', include: f.include || '', exclude: f.exclude || '', match: f.match === 'any' ? 'any' : 'all', rules: (f.rules || []).map((r) => ({ k: r.k, not: !!r.not })) })),
+        criteria: XF.CRITERIA,
+        mutes: rules.map((r) => ({ id: r.id, label: Sweeter.mutes.label(r), expiry: expiry(r) })),
+        durations: Object.entries(DURATION_LABEL),
+        layouts: (settings.layouts || []).map((l) => ({ name: l.name, date: new Date(l.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) })),
+        keys: KEY_LIST,
+      };
+    }
+    function pushPrefs() {
+      if (!prefsWatch || prefsPush || !native || !native.prefsChanged) return;
+      prefsPush = setTimeout(() => {
+        prefsPush = 0;
+        if (prefsWatch) native.prefsChanged(JSON.stringify(prefsSnapshot()));
+      }, 30);
+    }
+    // One change from the window. Returns JSON: { ok, msg } (msg: what
+    // happened, or why not), or the snapshot, or a layout file to save.
+    function prefsDo(op, arg) {
+      const a = arg == null ? {} : arg;
+      const ok = (msg) => JSON.stringify({ ok: true, msg: msg || '' });
+      const no = (msg) => JSON.stringify({ ok: false, msg });
+      switch (op) {
+        case 'watch':
+          prefsWatch = !!arg;
+          return ok();
+        case 'snapshot':
+          return JSON.stringify(prefsSnapshot());
+        case 'set': {
+          if (a.key === 'muteNotes') return setOne('muteNotes', !!a.value), ok();
+          const r = prefRowList().find((x) => x.key === a.key);
+          if (!r) return no('Unknown setting.');
+          let v = a.value;
+          if (r.k === 'check') v = !!v;
+          else if (r.k === 'range') v = Math.min(r.max, Math.max(r.min, Math.round(Number(v) / r.step) * r.step));
+          else if (r.k === 'select' && !r.opts.some((o) => o[0] === v)) return no('Unknown value.');
+          else if (r.k === 'swatches' && !ACCENTS.some((x) => x[0] === v)) return no('Unknown value.');
+          setOne(a.key, v);
+          return ok();
+        }
+        case 'run':
+          if (a === 'check-updates') checkUpdates(true);
+          else if (a === 'tip-show') showTip(false);
+          else return no('Unknown command.');
+          return ok();
+        case 'filter-save': {
+          const m = storeFilter(a);
+          return m ? no(m) : ok();
+        }
+        case 'filter-delete':
+          deleteFilter(String(a));
+          return ok();
+        case 'mute-add': {
+          const m = addMuteText(a.text, a.dur);
+          return m.ok ? ok(m.msg) : no(m.msg);
+        }
+        case 'mute-delete':
+          deleteMute(String(a));
+          return ok();
+        case 'layout-save': {
+          const name = String(a).trim().slice(0, 40);
+          if (!name) return no('Name the layout first.');
+          saveLayoutNamed(name);
+          return ok('Layout “' + name + '” saved');
+        }
+        case 'layout-restore':
+          restoreLayout(String(a));
+          return ok();
+        case 'layout-delete':
+          deleteLayout(String(a));
+          return ok();
+        case 'layout-export':
+          return JSON.stringify(layoutFile());
+        case 'layout-import': {
+          const m = importLayoutText(String(a));
+          return m ? no(m) : ok('Layout imported');
+        }
+      }
+      return no('Unknown request.');
     }
 
     // ---------- keyboard ----------
@@ -7261,6 +7442,7 @@
       onWindowKey,
       toggle,
       host,
+      prefs: prefsDo,
       // ⌘W in the Mac app: the top sheet closes first, as on a Mac; false
       // when nothing was open, and the window closes instead.
       closeTop() {

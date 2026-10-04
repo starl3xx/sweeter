@@ -74,6 +74,9 @@ struct AboutView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                // Wraps: the window sizes to the view's ideal size, which
+                // is one line, cut short, without this.
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 10)
             HStack(spacing: 8) {
                 Button("Check for Updates…") {

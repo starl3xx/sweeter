@@ -7458,8 +7458,6 @@
     // Only when the app could turn off the web view’s own background does the
     // translucent AppKit sidebar show through; otherwise keep the solid one.
     if (native && native.translucent) app.classList.add('translucent');
-    // macOS 26: the sidebar is a floating glass panel (ViewController).
-    if (native && native.translucent && native.glass) app.classList.add('glass');
     return {
       onWindowKey,
       toggle,

@@ -7531,7 +7531,25 @@
             return openReport();
           case 'checkUpdates':
             return checkUpdates(true);
+          // About ▸ @starl3xx: the profile in front. What sits above it
+          // closes (closeTop’s order; a draft is kept), and the welcome
+          // steps aside and comes back, as for its own Follow.
           case 'developer':
+            if (!settings.visible) toggle(true);
+            if (palette && palette.isOpen()) closePalette();
+            if (!pop.hidden) closePop();
+            if (lb) closeLightbox();
+            if (!upBack.hidden) closeUpdate();
+            if (!ntBack.hidden) closeNotify();
+            if (!askBack.hidden) closeAsk();
+            if (!ipBack.hidden) closePicker(false);
+            if (!ovBack.hidden) closeOverview();
+            if (!addBack.hidden) closeAddSheet();
+            if (!cmpBack.hidden) closeCompose(true);
+            if (!wcBack.hidden) {
+              wcPaused = true;
+              wcBack.hidden = true;
+            }
             return openProfile(T.DEVELOPER);
           case 'welcome':
             if (!settings.visible) toggle(true);

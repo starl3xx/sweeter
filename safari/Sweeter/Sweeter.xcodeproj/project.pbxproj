@@ -23,6 +23,7 @@
 		4A5B8F60306AC8D80046AF31 /* TelemetryDeck in Frameworks */ = {isa = PBXBuildFile; productRef = 4A5B8F61306AC8D80046AF31 /* TelemetryDeck */; };
 		4A5B8F64306AC8D80046AF31 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F63306AC8D80046AF31 /* SettingsWindow.swift */; };
 		4A5B8F66306AC8D80046AF31 /* Intents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F65306AC8D80046AF31 /* Intents.swift */; };
+		4A5B8F68306AC8D80046AF31 /* AboutWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F67306AC8D80046AF31 /* AboutWindow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +67,7 @@
 		4A5B8F5B306AC8D80046AF31 /* src */ = {isa = PBXFileReference; lastKnownFileType = folder; name = src; path = ../../../extension/src; sourceTree = "<group>"; };
 		4A5B8F63306AC8D80046AF31 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 		4A5B8F65306AC8D80046AF31 /* Intents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Intents.swift; sourceTree = "<group>"; };
+		4A5B8F67306AC8D80046AF31 /* AboutWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,6 +110,7 @@
 				4A5B8F3B306AC8D60046AF31 /* ViewController.swift */,
 				4A5B8F63306AC8D80046AF31 /* SettingsWindow.swift */,
 				4A5B8F65306AC8D80046AF31 /* Intents.swift */,
+				4A5B8F67306AC8D80046AF31 /* AboutWindow.swift */,
 				4A5B8F3D306AC8D60046AF31 /* Main.storyboard */,
 				4A5B8F40306AC8D70046AF31 /* Assets.xcassets */,
 				4A5B8F42306AC8D70046AF31 /* Info.plist */,
@@ -259,6 +262,7 @@
 				4A5B8F30306AC8D60046AF31 /* AppDelegate.swift in Sources */,
 				4A5B8F64306AC8D80046AF31 /* SettingsWindow.swift in Sources */,
 				4A5B8F66306AC8D80046AF31 /* Intents.swift in Sources */,
+				4A5B8F68306AC8D80046AF31 /* AboutWindow.swift in Sources */,
 			);
 		};
 		4A5B8F43306AC8D80046AF31 /* Sources */ = {

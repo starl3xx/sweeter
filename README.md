@@ -15,9 +15,9 @@ It is in early testing. Things will break when X changes X Pro.
 3. **No X API.** Sweeter makes no API calls and has no API keys. It reads the timelines the X Pro page already loads in your own window, and when you like, reply or bookmark, it presses X Pro’s own button for you, once. It never sends a request of its own to X and never reads your cookies, passwords or tokens.
 4. **Anonymous usage counts, nothing more.** No accounts and no servers of its own. Your settings, filters, and reading positions stay on your Mac. Besides X Pro itself, Sweeter contacts only:
    - X’s public media server, for an image you ask it to copy or save (as Safari’s Save Image does);
-   - [TelemetryDeck](https://telemetrydeck.com), from the Mac app: anonymous counts of opens, of the welcome and its Follow button, of tips turned off, and of the warnings Sweeter shows (with names and links taken out), with the Sweeter version and facts about the Mac such as its macOS version, model, and language. TelemetryDeck gets a hash of a random ID made on your Mac, never your name, your X account, or anything from X. Turn it off in Preferences ▸ General ▸ Usage data. The Safari extension, and Sweeter built from source, send none.
-   - GitHub, to check for a newer version of Sweeter: once a day (you can turn this off in Preferences) and when you choose Check for Updates;
-   - [DexScreener](https://dexscreener.com)’s public API, for token prices and logos: when you click a crypto contract address, and for ticker cards ($RSR) on screen, every few minutes at most. DexScreener sees those requests like any website visit. Turn both off in Preferences ▸ Extras. (In Safari, logos also need Sweeter allowed on cdn.dexscreener.com: Safari ▸ Settings ▸ Extensions ▸ Sweeter ▸ Edit Websites.)
+   - [TelemetryDeck](https://telemetrydeck.com), from the Mac app: anonymous counts of opens, of the welcome and its Follow button, of tips turned off, and of the warnings Sweeter shows (with names and links taken out), with the Sweeter version and facts about the Mac such as its macOS version, model, and language. TelemetryDeck gets a hash of a random ID made on your Mac, never your name, your X account, or anything from X. Turn it off in Settings ▸ General ▸ Usage data. The Safari extension, and Sweeter built from source, send none.
+   - GitHub, to check for a newer version of Sweeter: once a day (you can turn this off in Settings) and when you choose Check for Updates;
+   - [DexScreener](https://dexscreener.com)’s public API, for token prices and logos: when you click a crypto contract address, and for ticker cards ($RSR) on screen, every few minutes at most. DexScreener sees those requests like any website visit. Turn both off in Settings ▸ Extras. (In Safari, logos also need Sweeter allowed on cdn.dexscreener.com: Safari ▸ Settings ▸ Extensions ▸ Sweeter ▸ Edit Websites.)
 
 ## Install
 
@@ -40,9 +40,9 @@ The Sweeter app needs none of this.
 
 ## Using it
 
-- The first time it opens, Sweeter shows a short welcome; after that, a tip when it opens (at most every few hours). Turn tips off in the tip itself or in Preferences. **Help ▸ Welcome to Sweeter** shows the welcome again (in Safari: the command palette).
+- The first time it opens, Sweeter shows a short welcome; after that, a tip when it opens (at most every few hours). Turn tips off in the tip itself or in Settings. **Help ▸ Welcome to Sweeter** shows the welcome again (in Safari: the command palette).
 - **⌥X** shows or hides Sweeter over X Pro. Anything Sweeter doesn’t do yet is one key away in X Pro itself.
-- **j / k** move through posts, **1–9** jump to a column, **n** writes a post, **/** finds in a column, **,** opens Preferences.
+- **j / k** move through posts, **1–9** jump to a column, **n** writes a post, **/** finds in a column, **,** opens Settings.
 - **⇧⌘P** opens the command palette: every command, found by typing.
 - Each column’s **…** menu holds its filters, width, Icon & Color, merge, groups and pop-out window.
 - Crypto contract addresses in posts are links: click one for its price, liquidity and market cap (⌘-click opens DexScreener). Tickers X tags, like $RSR, get a price card under the post.
@@ -51,7 +51,7 @@ Columns are X Pro’s own columns. When you add, remove, rename or reorder one i
 
 ## Report a problem
 
-In the Mac app choose **Help ▸ Report a Problem…**; in Safari open the command palette (⇧⌘P) and choose **Report a Problem…**, or use the link at the bottom of Preferences. It opens a [GitHub issue](https://github.com/starl3xx/sweeter/issues/new?template=bug_report.yml) already filled in with Sweeter’s version, your macOS or Safari version, X’s language and the last error Sweeter showed. Nothing else is included, and nothing is sent until you submit it. Issues are public, so leave out anything private.
+In the Mac app choose **Help ▸ Report a Problem…**; in Safari open the command palette (⇧⌘P) and choose **Report a Problem…**, or use the link at the bottom of Settings. It opens a [GitHub issue](https://github.com/starl3xx/sweeter/issues/new?template=bug_report.yml) already filled in with Sweeter’s version, your macOS or Safari version, X’s language and the last error Sweeter showed. Nothing else is included, and nothing is sent until you submit it. Issues are public, so leave out anything private.
 
 ## Build from source
 

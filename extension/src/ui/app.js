@@ -14,7 +14,7 @@
     names: 'both',
     media: 'full', // whole images, nothing cropped
     autoplayVideo: false,
-    autoplayGifs: false, // looping GIFs redraw constantly; on in Preferences ▸ Media
+    autoplayGifs: false, // looping GIFs redraw constantly; on in Settings ▸ Media
     cards: 'medium', // link previews at two-thirds width save vertical space
     links: 'short',
     quoteMedia: true,
@@ -333,7 +333,7 @@
       '<nav class="side"><button type="button" class="me" data-cmd="me" title="Your profile" aria-label="Your profile"></button><button class="deck" type="button" data-cmd="deckmenu" hidden></button><div class="tabs"></div><span class="spacer"></span>' +
       '<button class="round post" type="button" data-cmd="compose" title="New post (n)" aria-label="New post">' + icon('compose') + '</button>' +
       '<button class="round upd" type="button" data-cmd="update-show" hidden>' + icon('update') + '</button>' +
-      '<button class="round" type="button" data-cmd="settings" title="Preferences (,)" aria-label="Preferences">' + icon('gear') + '</button>' +
+      '<button class="round" type="button" data-cmd="settings" title="Settings (,)" aria-label="Settings">' + icon('gear') + '</button>' +
       '<button class="round" type="button" data-cmd="xpro" title="Show X Pro (⌥X)" aria-label="Show X Pro">' + icon('swap') + '</button></nav>' +
       (opts.late ? '<div class="banner"><span>Sweeter started after X Pro loaded, so these columns only show new posts.</span><button type="button" data-cmd="reload">Reload</button><button class="x" type="button" data-cmd="banner-close" aria-label="Dismiss">×</button></div>' : '') +
       '<div class="cols hold"><div class="nocols" hidden><div class="nocols-in"><b>No columns to show</b><span>This X Pro deck has no columns Sweeter can show yet.</span>' +
@@ -341,8 +341,8 @@
       '<div class="boot" role="status"><div class="boot-in"><img class="boot-mark" src="' + (Sweeter.MARK || '') + '" alt="">' +
       '<div class="vu" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
       '<div class="boot-t">Tuning in to X Pro</div><div class="boot-s">Loading your columns…</div></div></div>' +
-      '<div class="prefs-back" hidden><div class="prefs" role="dialog" aria-modal="true" aria-label="Sweeter preferences">' +
-      '<div class="ptitle">Sweeter preferences<button class="x" type="button" data-cmd="close" aria-label="Close preferences">×</button></div>' +
+      '<div class="prefs-back" hidden><div class="prefs" role="dialog" aria-modal="true" aria-label="Sweeter Settings">' +
+      '<div class="ptitle">Sweeter Settings<button class="x" type="button" data-cmd="close" aria-label="Close Settings">×</button></div>' +
       '<div class="ptabs" role="tablist">' + TABS.map(([id, label, ic]) => '<button class="ptab" type="button" role="tab" data-tab="' + id + '">' + icon(ic) + label + '</button>').join('') + '</div>' +
       '<div class="pbody"></div>' +
       '<div class="pfoot"><span>Sweeter' + (version ? ' ' + h(version) : '') + ' reads what X Pro loads and acts only through X Pro’s own buttons. <button class="lnk" type="button" data-cmd="report">Report a problem</button></span><button class="done" type="button" data-cmd="close">Close</button></div>' +
@@ -3065,7 +3065,7 @@
 
     // ---------- profile sheet ----------
     // Clicking a person opens their profile over the columns, the size of
-    // Preferences. X Pro opens the same profile underneath (as a stack in
+    // Settings. X Pro opens the same profile underneath (as a stack in
     // the column), so the data comes from X Pro’s own responses and Follow,
     // Mute and the rest press X Pro’s own buttons.
 
@@ -3482,7 +3482,7 @@
         { separator: true },
         { id: 'width', title: 'Width', symbol: 'arrow.left.and.right', children: WIDTHS.map(([n, label]) => ({ id: 'w:' + n, title: label, checked: w === n })).concat([{ separator: true }, { id: 'w:0', title: 'Default Width', checked: !w }, { id: 'equal', title: 'Make All Columns Equal', checked: settings.fit === 'equal' && !Object.keys(settings.colWidths || {}).length }]) },
         { id: 'look', title: 'Icon & Color…', symbol: 'paintpalette' },
-        { id: 'media', title: 'Media', symbol: 'photo', children: [['', 'Like Preferences'], ['full', 'Full Thumbnails'], ['cropped', 'Cropped Grid'], ['small', 'Small'], ['none', 'None']].map(([v, label]) => ({ id: 'm:' + v, title: label, checked: ((settings.colMedia || {})[c.vid] || '') === v })) },
+        { id: 'media', title: 'Media', symbol: 'photo', children: [['', 'As in Settings'], ['full', 'Full Thumbnails'], ['cropped', 'Cropped Grid'], ['small', 'Small'], ['none', 'None']].map(([v, label]) => ({ id: 'm:' + v, title: label, checked: ((settings.colMedia || {})[c.vid] || '') === v })) },
         s && s.kind !== 'notifications' ? { id: 'grid', title: (settings.colGrid || {})[c.vid] ? 'Show as Posts' : 'Show as Media Grid', symbol: 'square.grid.3x3' } : null,
         { id: 'rename', title: 'Rename…', symbol: 'pencil' },
         { id: 'collapse', title: collapsed ? 'Expand' : 'Collapse', symbol: collapsed ? 'arrow.up.left.and.arrow.down.right' : 'arrow.down.right.and.arrow.up.left' },
@@ -6108,7 +6108,7 @@
       for (const l of settings.layouts || []) add('lay:' + l.name, 'Restore Layout ' + l.name, 'Layouts', () => restoreLayout(l.name));
       add('lay-export', 'Export Layout', 'Layouts', exportLayout);
       add('lay-import', 'Import Layout', 'Layouts', importLayout);
-      add('prefs', 'Preferences', 'Sweeter', openPrefs, { keys: ',', icon: 'gear' });
+      add('prefs', 'Settings', 'Sweeter', openPrefs, { keys: ',', icon: 'gear', keywords: ['preferences'] });
       add('report', 'Report a Problem…', 'Sweeter', openReport, { icon: 'warn' });
       add('updates', 'Check for Updates…', 'Sweeter', () => checkUpdates(true), { icon: 'open' });
       add('keys', 'Keyboard Shortcuts', 'Sweeter', () => openPrefsTab('keys'), { icon: 'keyboard' });
@@ -6476,10 +6476,10 @@
       input.click();
     }
 
-    // ---------- Preferences window ----------
+    // ---------- Settings window ----------
 
     let prefsTab = 'general';
-    // The custom filter being edited in Preferences, or null.
+    // The custom filter being edited in Settings, or null.
     let editing = null;
 
     function select(key, options) {
@@ -6626,13 +6626,13 @@
           ['←', 'Back from a conversation'], ['← →', 'Previous, next photo in the viewer'],
           ['Tab', 'Next column'], ['1 to 9', 'Jump to a column'],
           ['Space', 'Page down'], ['⌘ ↑  ⌘ ↓', 'Top (pins), bottom'],
-          ['⌘ K', 'Mark column as read'], [',', 'Preferences'],
+          ['⌘ K', 'Mark column as read'], [',  ⌘ ,', 'Settings'],
           ['⌘ F  /', 'Find in the column'], ['⌥ 1', 'Filter 1 on or off (⌥2 to ⌥9: the others)'],
           ['⌥ 0', 'All filters off'], ['Return', 'From Find to the results'],
           ['c  n', 'Add a column (also ⌥⌘N)'], ['c  ⌫', 'Remove the column (asks first)'],
           ['c  u', 'Undo removing a column'], ['c  o', 'Column menu'],
           ['c  1', 'Column 1 (c 0: the last one)'], [']  [', 'Next, previous column'],
-          ['g  h', 'Go to Home (g n, g r, g i, g b)'], ['⌘ ,', 'Settings'],
+          ['g  h', 'Go to Home (g n, g r, g i, g b)'], ['⌘ [', 'Back from a conversation or profile (Mac app)'],
           ['⌘ J', 'Next column with unread posts (⇧⌘J: previous)'], ['⌥ ⌘ K', 'Clear every column (Sweeter only)'],
           ['⌥ ⌘ ←', 'Move the column left in X Pro (⌥⌘→: right)'], ['d  1', 'Deck 1 (d n new, d e edit, d m manage)'],
           ['⇧ ⌘ P', 'Command palette: every command, by typing'], ['⌥ ⌘ 1', 'Deck 1 (to ⌥⌘9)'], ['⌃ ⌘ 1', 'Group 1 (⌃⌘0: every column)'],
@@ -7194,6 +7194,24 @@
       onWindowKey,
       toggle,
       host,
+      // ⌘W in the Mac app: the top sheet closes first, as on a Mac; false
+      // when nothing was open, and the window closes instead.
+      closeTop() {
+        if (palette && palette.isOpen()) return closePalette(), true;
+        if (!pop.hidden) return closePop(), true;
+        if (lb) return closeLightbox(), true;
+        if (!wcBack.hidden) return closeWelcome(false), true;
+        if (!upBack.hidden) return closeUpdate(), true;
+        if (!ntBack.hidden) return closeNotify(), true;
+        if (!askBack.hidden) return closeAsk(), true;
+        if (!ipBack.hidden) return closePicker(false), true;
+        if (!ovBack.hidden) return closeOverview(), true;
+        if (!addBack.hidden) return closeAddSheet(), true;
+        if (!cmpBack.hidden) return closeCompose(true), true;
+        if (!prefsEl.hidden) return closePrefs(), true;
+        if (!profBack.hidden) return closeProfile(), true;
+        return false;
+      },
       compose() {
         if (!settings.visible) toggle(true);
         openCompose('new');
@@ -7238,6 +7256,14 @@
           case 'welcome':
             if (!settings.visible) toggle(true);
             return openWelcome();
+          // Go ▸ Back (⌘[): out of the media viewer, a profile, or the
+          // focused column’s conversation.
+          case 'back': {
+            if (lb) return closeLightbox();
+            if (!profBack.hidden) return closeProfile();
+            const fc = focusCol();
+            return fc && fc.detail ? closeDetail(fc) : undefined;
+          }
           case 'tip':
             if (!settings.visible) toggle(true);
             return showTip(false);

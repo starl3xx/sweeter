@@ -106,7 +106,7 @@
     { id: 'pasteMedia', text: 'Paste or drop photos and videos straight into the compose window.' },
     { id: 'views', text: 'Duplicate as View, in a column’s … menu, shows the same timeline twice, each copy with its own filters.', act: ['Open Column Menu', 'colMenu'] },
     { id: 'moveKeys', text: '{]} and {[} move between columns, and {Space} pages down.' },
-    { id: 'theme', text: 'Pick an accent color, or Match macOS to follow the Mac’s own: Settings ▸ General ▸ Accent color.', act: ['Open Settings', 'prefs:general'] },
+    { id: 'theme', text: 'Try the Sweeter, Catppuccin, Nord, or Dracula theme, each in light and dark: Settings ▸ General ▸ Theme.', act: ['Open Settings', 'prefs:general'] },
     { id: 'clearAll', text: '{⌥⌘K} clears every column in Sweeter. X Pro keeps its posts.' },
     { id: 'login', where: 'app', text: 'To start Sweeter when you log in, choose Open at Login from the bird in the menu bar.' },
     { id: 'moveColumn', text: '{⌥⌘←} and {⌥⌘→} move the selected column in X Pro, on all your devices.' },

@@ -240,7 +240,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         for item in view.items where [#selector(NSWindow.toggleToolbarShown(_:)), #selector(NSWindow.runToolbarCustomizationPalette(_:)), NSSelectorFromString("toggleSidebar:")].contains(item.action) {
             view.removeItem(item)
         }
+        // The themes (styles.js PALETTES, each with its own color), then
+        // the appearance they show in.
         let theme = NSMenu(title: "Theme")
+        for (title, value, hex) in [("Classic", "classic", 0x4590E6), ("Sweeter", "sweeter", 0xEE5A8E), ("Catppuccin", "catppuccin", 0x8839EF),
+                                    ("Nord", "nord", 0x5E81AC), ("Dracula", "dracula", 0xBD93F9)] {
+            let i = menuItem(title, "theme:" + value, "", [], nil)
+            i.tag = 7
+            i.image = swatch(NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1))
+            theme.addItem(i)
+        }
+        theme.addItem(.separator())
         for (title, value) in [("Match System", "system"), ("Light", "light"), ("Dark", "dark")] {
             let i = menuItem(title, "skin:" + value, "", [], nil)
             i.tag = 1
@@ -422,6 +432,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if item.tag == 2, let command = item.representedObject as? String {
             let accent = ViewController.shared?.pageState["accent"] as? String ?? "blue"
             item.state = command == "accent:" + accent ? .on : .off
+            // Accent colors belong to the Classic theme.
+            return (ViewController.shared?.pageState["theme"] as? String ?? "classic") == "classic"
+        }
+        if item.tag == 7, let command = item.representedObject as? String {
+            let theme = ViewController.shared?.pageState["theme"] as? String ?? "classic"
+            item.state = command == "theme:" + theme ? .on : .off
         }
         if item.tag == 3 {
             return ViewController.shared?.pageState["filtersEnabled"] as? Bool ?? false

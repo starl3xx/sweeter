@@ -44,6 +44,7 @@ The Sweeter app needs none of this.
 - **⌥X** shows or hides Sweeter over X Pro. Anything Sweeter doesn’t do yet is one key away in X Pro itself.
 - **j / k** move through posts, **1–9** jump to a column, **n** writes a post, **/** finds in a column, **,** opens Settings.
 - **⇧⌘P** opens the command palette: every command, found by typing.
+- **Themes:** Classic (Tweetbot’s colors), Sweeter, Catppuccin, Nord, and Dracula, each in light and dark, in Settings ▸ General ▸ Theme. Appearance follows macOS or stays light or dark.
 - Each column’s **…** menu holds its filters, width, Icon & Color, merge, groups and pop-out window.
 - In the Mac app, **⌘Y** shows a post’s photos in Quick Look, an alert for a post has **Like** and **Reply** buttons, every **Share** menu is the Mac’s own, and Shortcuts and Spotlight have **New Post**, **Next Unread**, **Open Column**, and **Show Sweeter**.
 - Crypto contract addresses in posts are links: click one for its price, liquidity and market cap (⌘-click opens DexScreener). Tickers X tags, like $RSR, get a price card under the post.

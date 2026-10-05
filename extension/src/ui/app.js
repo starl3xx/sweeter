@@ -6208,7 +6208,8 @@
       }
       // A second click on the address or ticker that opened the token card
       // closes it (and opens nothing).
-      const again = !pop.hidden && !!pop.querySelector('.tok') && !!tokenAnchor && tokenAnchor.contains(t);
+      // A modified click still goes on to open DexScreener.
+      const again = !pop.hidden && !!pop.querySelector('.tok') && !!tokenAnchor && tokenAnchor.contains(t) && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
       if (!pop.hidden && !t.closest('.pop')) closePop();
       if (again) {
         e.preventDefault();

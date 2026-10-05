@@ -868,7 +868,7 @@
           (data.priced ? '<div class="tk-price">' + h(usd(p.priceUsd)) + (chg != null ? ' <span class="' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% 24h</span>' : '') + '</div>' : '') +
           '<div class="tk-grid"><span>Market cap</span><b>' + h(usd(p.marketCap != null ? p.marketCap : p.fdv)) + '</b><span>Liquidity</span><b>' + h(usd((p.liquidity || {}).usd)) + '</b><span>24h volume</span><b>' + h(usd((p.volume || {}).h24)) + '</b></div>';
       }
-      return '<div class="tok" role="dialog" data-ca="' + h(a) + '" aria-label="Token ' + h(short) + '">' + body + '<div class="tk-a" title="' + h(a) + '">' + h(a) + '</div>' + foot + '<div class="tk-src">Data from DexScreener, fetched when you clicked.</div></div>';
+      return '<div class="tok" role="dialog" data-ca="' + h(a) + '" aria-label="Token ' + h(short) + '">' + body + '<span class="tk-a" role="button" tabindex="-1" data-cmd="tk-copy-a" data-v="' + h(a) + '" title="Copy the address">' + h(a) + '</span>' + foot + '<div class="tk-src">Data from DexScreener, fetched when you clicked.</div></div>';
     }
     let tokenFor = null;
     let tokenAnchor = null; // the address or ticker that opened the card
@@ -6633,6 +6633,14 @@
         case 'tk-copy':
           closePop();
           copyText(el.dataset.v, 'Address copied');
+          break;
+        // The address itself: a click copies it, and the card stays. (Not a
+        // <button>, so the card's first focus and arrow keys stay on its
+        // actions.)
+        case 'tk-copy-a':
+          copyText(el.dataset.v, 'Address copied');
+          el.classList.add('copied');
+          setTimeout(() => el.classList.remove('copied'), 900);
           break;
         case 'me':
           paintMe();

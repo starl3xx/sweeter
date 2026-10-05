@@ -4914,7 +4914,7 @@
             ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + '</div>'
             : '<p class="anote">You have no lists yet. Make one on x.com, then add it here.</p>';
       } else if (s.step === 'search') {
-        body = '<form class="asearch"><input id="add-q" type="search" placeholder="sweeter from:tapbots -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">Add Column</button></form><p class="anote">A search column shows the newest posts first.</p>' + searchCheats();
+        body = '<form class="asearch"><input id="add-q" type="search" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">Add Column</button></form><p class="anote">A search column shows the newest posts first.</p>' + searchCheats();
       } else {
         body = '<p class="anote busy">' + h(s.label || 'Adding the column in X Pro…') + '</p>';
       }

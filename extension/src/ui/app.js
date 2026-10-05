@@ -3983,7 +3983,9 @@
         opened = t.opened || null;
         if (!t.ok) return t;
         for (let i = 0; i < 40 && savedQ() !== q; i++) await new Promise((res) => setTimeout(res, 150));
-        return savedQ() === q ? { ok: true } : { ok: false, reason: 'nochange' };
+        // The id: runColumnOp remaps at once (the column’s key is the query)
+        // and shows the column.
+        return savedQ() === q ? { ok: true, id: ed.id } : { ok: false, reason: 'nochange' };
       });
       addState = null;
       addBack.hidden = true;

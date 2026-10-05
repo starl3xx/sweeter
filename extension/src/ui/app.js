@@ -29,6 +29,7 @@
     updateCheck: true, // look for a newer release on GitHub once a day
     tips: true, // a tip when Sweeter opens (at most every few hours: tips.js)
     telemetry: true, // Mac app: anonymous usage counts through TelemetryDeck
+    menuBar: true, // Mac app: the bird in the menu bar
     dateFormat: 'relative',
     pinToTop: true,
     counts: true,
@@ -255,6 +256,7 @@
       { k: 'select', key: 'actions', label: 'Post action buttons', opts: [['always', 'Show always'], ['hover', 'Show on mouseover']] },
       { k: 'sep' },
       { k: 'check', key: 'round', label: 'Avatars', text: 'Round avatars' },
+      { k: 'check', key: 'menuBar', label: 'Menu bar', text: 'Show Sweeter in the menu bar', lbl: true, app: true },
       { k: 'check', key: 'updateCheck', label: 'Updates', text: 'Check for updates once a day', btn: ['Check Now', 'check-updates'], note: 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', lbl: true },
       { k: 'check', key: 'tips', label: 'Tips', text: 'Show a tip when Sweeter opens', btn: ['Show One Now', 'tip-show'], lbl: true },
       { k: 'check', key: 'telemetry', label: 'Usage data', text: 'Send anonymous usage counts', note: 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, tips turned off, and the warnings Sweeter shows (without names or links), with the Sweeter version, the theme and appearance you use, and facts about the Mac such as its macOS version, model, and language. Never anything from X.', lbl: true, app: true },
@@ -7102,6 +7104,7 @@
       if (key === 'fit' || key === 'snap' || key === 'alertsMuted') reportState();
       if (key === 'tips' && !val) signal('tipsOff');
       if (key === 'telemetry' && native && native.telemetry) native.telemetry(!!val);
+      if (key === 'menuBar' && native && native.menuBar) native.menuBar(!!val);
     }
 
     pbody.addEventListener('input', (e) => {

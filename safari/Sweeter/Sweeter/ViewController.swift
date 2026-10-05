@@ -221,6 +221,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             log: (m) => { post({ type: 'log', message: String(m) }); },
             signal: (n, p) => { post({ type: 'signal', name: String(n || ''), json: JSON.stringify(p || {}) }); },
             telemetry: (on) => { post({ type: 'telemetry', on: !!on }); },
+            menuBar: (on) => { post({ type: 'menuBar', on: !!on }); },
             alert: (o) => post({ type: 'alert', json: JSON.stringify(o || {}) }),
             openSettings: (tab) => post({ type: 'openSettings', tab: String(tab || '') }),
             prefsChanged: (json) => post({ type: 'prefsChanged', json: String(json || '') }),
@@ -322,6 +323,9 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             replyHandler(nil, nil)
         case "telemetry":
             Telemetry.setEnabled(body["on"] as? Bool ?? false)
+            replyHandler(nil, nil)
+        case "menuBar":
+            (NSApp.delegate as? AppDelegate)?.setMenuBarVisible(body["on"] as? Bool ?? true)
             replyHandler(nil, nil)
         // Tokens' pairs from DexScreener's public API, for a contract address
         // the reader clicked or ticker cards on screen (up to 30 addresses,

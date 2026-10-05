@@ -125,6 +125,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         status.menu = menu
         statusItem = status
         refreshLoginState()
+        // Settings ▸ General ▸ Menu bar (the page's menuBar setting).
+        let settings = NativeStorage().get(["settings"])["settings"] as? [String: Any] ?? [:]
+        setMenuBarVisible(settings["menuBar"] as? Bool != false)
+    }
+
+    func setMenuBarVisible(_ on: Bool) {
+        statusItem?.isVisible = on
     }
 
     private func item(title: String, action: Selector, hint: String?) -> NSMenuItem {
@@ -157,7 +164,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             let services = NSMenu(title: "Services")
             let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
             servicesItem.submenu = services
-            for (i, item) in [NSMenuItem.separator(), settings, NSMenuItem.separator(), servicesItem].enumerated() {
+            // With the menu bar bird hidden, these are still here.
+            let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLogin), keyEquivalent: "")
+            login.target = self
+            let safari = NSMenuItem(title: "Safari Extension Settings…", action: #selector(safariSettings), keyEquivalent: "")
+            safari.target = self
+            for (i, item) in [NSMenuItem.separator(), settings, login, safari, NSMenuItem.separator(), servicesItem].enumerated() {
                 menu.insertItem(item, at: at + i)
             }
             NSApp.servicesMenu = services
@@ -418,6 +430,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     /// Theme checkmarks follow what the page reports.
     @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(toggleLogin) { item.state = SMAppService.mainApp.status == .enabled ? .on : .off }
         if item.tag == 1, let command = item.representedObject as? String {
             let skin = ViewController.shared?.pageState["skin"] as? String
             item.state = command == "skin:" + (skin ?? "") ? .on : .off

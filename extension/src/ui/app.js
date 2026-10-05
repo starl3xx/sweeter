@@ -1115,14 +1115,15 @@
       const s = e && store.get(e.key);
       return s ? columnTitle(e.key, s, e.m || (entryOf(e.base) || {}).m) : '';
     }
-    // The title inside a menu item: a long search query is cut at a word.
-    function menuTitleOf(vid) {
-      const t = titleOf(vid);
+    // A title inside a menu item: a long search query is cut at a word.
+    function clipTitle(t) {
+      t = String(t || '');
       if (t.length <= 40) return t;
       const cut = t.slice(0, 40);
       const sp = cut.lastIndexOf(' ');
       return (sp > 24 ? cut.slice(0, sp) : cut).trimEnd() + '…';
     }
+    const menuTitleOf = (vid) => clipTitle(titleOf(vid));
     const modeOf = (vid) => (settings.colModes || {})[vid] || null;
     // The settings a column renders with: its own media mode, if it has one.
     function colSettings(c) {
@@ -3745,7 +3746,7 @@
         c.merge ? null : { id: 'dup', title: 'Duplicate as View', symbol: 'square.on.square' },
         c.view ? { id: 'rmview', title: 'Remove View', symbol: 'minus.square' } : null,
         mergeable(me) && others.length ? { id: 'mergeWith', title: 'Merge With', symbol: 'arrow.triangle.merge', children: others.map((x) => ({ id: 'mw:' + x.vid, title: menuTitleOf(x.vid) })) } : null,
-        c.merge ? { id: 'msrc', title: 'Merged Columns', symbol: 'arrow.triangle.merge', children: layout.filter((x) => mergeable(x)).map((x) => ({ id: 'ms:' + x.key, title: menuTitleOf(x.vid), checked: c.merge.srcs.includes(x.key) })).concat(c.merge.srcs.filter((k) => !mappingFor(k)).map((k) => ({ id: 'ms:' + k, title: (store.get(k) ? columnTitle(k, store.get(k)) : k) + ' (not in this deck)', checked: true }))) } : null,
+        c.merge ? { id: 'msrc', title: 'Merged Columns', symbol: 'arrow.triangle.merge', children: layout.filter((x) => mergeable(x)).map((x) => ({ id: 'ms:' + x.key, title: menuTitleOf(x.vid), checked: c.merge.srcs.includes(x.key) })).concat(c.merge.srcs.filter((k) => !mappingFor(k)).map((k) => ({ id: 'ms:' + k, title: clipTitle(store.get(k) ? columnTitle(k, store.get(k)) : k) + ' (not in this deck)', checked: true }))) } : null,
         c.merge ? { id: 'unmerge', title: 'Unmerge', symbol: 'minus.square' } : null,
         { separator: true },
         cleared ? { id: 'uncleared', title: 'Show Cleared Posts', symbol: 'arrow.uturn.backward' } : { id: 'clear', title: 'Clear', symbol: 'clear' },

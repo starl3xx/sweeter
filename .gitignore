@@ -6,6 +6,8 @@ private/
 scripts/local.env
 node_modules/
 build/
+# hero.py imports bird.py, which leaves Python's bytecode cache beside them.
+__pycache__/
 .claude/
 .DS_Store
 xcuserdata/

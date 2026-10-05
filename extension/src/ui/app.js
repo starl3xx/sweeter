@@ -64,6 +64,7 @@
     layouts: [], // saved layouts: { name, at, data: { LAYOUT_KEYS… } }
     composePos: null, // the compose window moved from its usual place: { x, y } in px
     composeHeight: 0, // the compose text box’s least height in px (0: the usual 120)
+    composeCards: true, // Mac app: a link in the compose window shows its page’s preview card
   };
   Sweeter.DEFAULTS = DEFAULTS;
 
@@ -275,6 +276,7 @@
       { k: 'check', key: 'obscureSensitive', label: 'Sensitive media', text: 'Obscure possibly sensitive media' },
       { k: 'sep' },
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
+      { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
     ],
@@ -444,6 +446,7 @@
       // The links’ underlines are drawn on a copy of the text behind the
       // textarea, which cannot style part of its own text.
       '<div class="cmp-body"><div class="cmp-av"></div><div class="cmp-field"><div class="cmp-hl" aria-hidden="true"></div><textarea id="cmp-text" placeholder="What’s happening?" spellcheck="true" aria-label="Post text" aria-describedby="cmp-status"></textarea></div></div>' +
+      '<div class="cmp-card" hidden></div>' +
       '<div class="cmp-media"></div>' +
       // Who can reply, on its own line under the text, as X shows it.
       // A select is as wide as its longest option, so the chosen one shows as
@@ -535,6 +538,7 @@
     const cmpHead = shadow.querySelector('.cmp-head');
     const cmpHl = shadow.querySelector('.cmp-hl');
     const cmpGrip = shadow.querySelector('.cmp-grip');
+    const cmpCard = shadow.querySelector('.cmp-card');
     const emoEl = shadow.querySelector('.emo');
     const lbEl = shadow.querySelector('.lb');
     const lbMedia = shadow.querySelector('.lb-media');
@@ -5322,7 +5326,49 @@
         cmpText.removeAttribute('aria-invalid');
         cmpStatus.textContent = '';
       }
+      queueCard();
       fitCompose();
+    }
+
+    // ---------- a link’s preview card (Mac app) ----------
+    // The last link in the text, as X picks the link for its card, once the
+    // typing stops; none when the post has media (X shows no card then).
+    // The Mac app loads the page (LinkCard.swift); a card is kept per link
+    // for this session, and a failed one is tried again next time.
+    const cards = new Map();
+    let cardTimer = 0;
+    let cardFor = '';
+    function queueCard() {
+      const links = Sweeter.text.draftLinks(cmpText.value);
+      const last = links.length ? links[links.length - 1].url : '';
+      const want = native && native.linkCard && settings.composeCards !== false && compose && !compose.files.length ? last : '';
+      if (want === cardFor) return;
+      clearTimeout(cardTimer);
+      cardFor = want;
+      showCard(null);
+      if (!want) return;
+      cardTimer = setTimeout(() => {
+        // The window closed, or the switch went off, in the meantime.
+        if (cardFor !== want || !compose || settings.composeCards === false) return;
+        if (!cards.has(want)) cards.set(want, Promise.resolve(native.linkCard(want)).catch(() => null));
+        cards.get(want).then((card) => {
+          if (!card) cards.delete(want);
+          if (cardFor === want) showCard(card);
+        });
+      }, 700);
+    }
+    function showCard(card) {
+      if (!card || !(card.title || card.image)) {
+        if (!cmpCard.hidden) {
+          cmpCard.hidden = true;
+          cmpCard.innerHTML = '';
+        }
+        return;
+      }
+      const img = /^data:image\/(jpeg|png|webp|gif);base64,/.test(card.image || '') ? '<img src="' + h(card.image) + '" alt="">' : '';
+      cmpCard.innerHTML = img + '<div class="cc-t"><span class="cc-d">' + h(String(card.host || '').replace(/^www\./, '')) + '</span>' + (card.title ? '<span class="cc-n">' + h(card.title) + '</span>' : '') + '</div>';
+      cmpCard.title = 'A preview from ' + (card.host || 'the page') + '. X makes the card itself when you post.';
+      cmpCard.hidden = false;
     }
 
     // ---------- the compose window’s place and size ----------
@@ -5603,6 +5649,7 @@
       }
       emoEl.hidden = true;
       compose = null;
+      queueCard();
       cmpBack.hidden = true;
       app.focus({ preventScroll: true });
     }
@@ -5838,6 +5885,7 @@
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
           if (c) drafts.delete(draftKey(c));
           compose = null;
+          queueCard();
           cmpBack.hidden = true;
           if (c) handoff(c.kind, c.id, c.key, text, files, tool);
           break;
@@ -7265,6 +7313,7 @@
       if (key === 'tips' && !val) signal('tipsOff');
       if (key === 'telemetry' && native && native.telemetry) native.telemetry(!!val);
       if (key === 'menuBar' && native && native.menuBar) native.menuBar(!!val);
+      if (key === 'composeCards') queueCard();
     }
 
     pbody.addEventListener('input', (e) => {

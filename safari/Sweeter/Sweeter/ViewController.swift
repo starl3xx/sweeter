@@ -213,6 +213,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
             latestRelease: () => post({ type: 'latestRelease' }),
             dexLogo: (u) => post({ type: 'dexLogo', url: String(u || '') }),
+            linkCard: (u) => post({ type: 'linkCard', url: String(u || '') }),
             notifyStatus: () => post({ type: 'notifyStatus' }),
             notifyRequest: () => post({ type: 'notifyRequest' }),
             notifySettings: () => post({ type: 'notifySettings' }),
@@ -386,6 +387,17 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                     return
                 }
                 replyHandler("data:" + type + ";base64," + data.base64EncodedString(), nil)
+            }
+        // A link's preview card for the compose window (LinkCard.swift): the
+        // page's own title and image, never from X's hosts or the local
+        // network, with no cookies.
+        case "linkCard":
+            guard let url = LinkCard.allowed(body["url"] as? String ?? "") else {
+                replyHandler(nil, "bad url")
+                return
+            }
+            Task {
+                if let card = await LinkCard.fetch(url) { replyHandler(card, nil) } else { replyHandler(nil, "no card") }
             }
         // Notification permission, asked for when the reader turns alerts on
         // (never at launch, out of context): "on", "off" or "ask".

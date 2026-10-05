@@ -90,6 +90,9 @@
         dexLogo: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
           ? (url) => Promise.resolve(api.runtime.sendMessage({ type: 'dexLogo', url })).then((r) => (r && r.ok ? r.body : ''))
           : null,
+        geckoLogo: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
+          ? (network, address) => Promise.resolve(api.runtime.sendMessage({ type: 'geckoLogo', network, address })).then((r) => (r && r.ok ? r.body : ''))
+          : null,
       });
       // The native Mac app drives these from its menus and global hotkeys.
       Sweeter.native = { compose: ui.compose, toggle: ui.toggle, cmd: ui.cmd, closeTop: ui.closeTop, prefs: ui.prefs };

@@ -106,6 +106,7 @@
     { id: 'pasteMedia', text: 'Paste or drop photos and videos straight into the compose window.' },
     { id: 'emojiSearch', text: 'The emoji button in the compose window searches every emoji: type, then {Return}. The hand beside the search sets your skin tone.' },
     { id: 'gifSearch', text: 'The GIF button in the compose window searches X Pro’s GIFs right there; point at one to see it move.' },
+    { id: 'actionBar', text: 'Settings ▸ General ▸ Action bar picks what shows under each post, views included.' },
     { id: 'moveCompose', text: 'Drag the compose window by its title to put it where you like; it opens there next time. Double-click the title to put it back.' },
     { id: 'views', text: 'Duplicate as View, in a column’s … menu, shows the same timeline twice, each copy with its own filters.', act: ['Open Column Menu', 'colMenu'] },
     { id: 'moveKeys', text: '{]} and {[} move between columns, and {Space} pages down.' },

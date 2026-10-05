@@ -1404,11 +1404,14 @@
     const box = await waitFor(field, 2500);
     if (!box) return { ok: false, reason: 'nosearch', opened };
     const before = box.innerText.trim();
+    // Draft showed the pasted text within 300 ms (verified 2026-10-05), so
+    // each check is short: two misses and the restore all land within
+    // about 1 s, before X Pro’s own save of the wrong text.
     const put = async (text) => {
       for (let i = 0; i < 2; i++) {
         if (!field()) return null;
         await pasteOver(field(), text);
-        const b = await waitFor(() => (field() && field().innerText.trim() === text ? field() : null), 1500);
+        const b = await waitFor(() => (field() && field().innerText.trim() === text ? field() : null), 300);
         if (b) return b;
       }
       return null;

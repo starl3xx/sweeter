@@ -11,6 +11,7 @@
 import AppIntents
 import Cocoa
 import QuickLookUI
+import SwiftUI
 import UniformTypeIdentifiers
 import UserNotifications
 import WebKit
@@ -102,7 +103,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         webView.underPageBackgroundColor = .clear
 
         // Shown at once, before the page exists, so launch never flashes blank.
-        let launch = LaunchCover()
+        let launch = LaunchCover(settings: storage.get(["settings"])["settings"] as? [String: Any] ?? [:])
         launch.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(launch, positioned: .above, relativeTo: webView)
         NSLayoutConstraint.activate([
@@ -864,39 +865,122 @@ final class MenuTarget: NSObject {
 
 /// The launch view: the app icon and a spinner over the column area, shown
 /// before the page loads, then faded into Sweeter’s own loading screen.
+/// Shown at once, before the page exists, so launch never flashes blank. It
+/// draws the page's own loading screen (styles.js .boot: the same sizes and
+/// glow) in the saved theme's colors, so the page takes over unseen.
 final class LaunchCover: NSView {
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        let icon = NSImageView(image: NSApp.applicationIconImage)
-        icon.imageScaling = .scaleProportionallyUpOrDown
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.widthAnchor.constraint(equalToConstant: 96).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 96).isActive = true
-        let label = NSTextField(labelWithString: "Tuning in to X Pro")
-        label.font = .systemFont(ofSize: 14, weight: .semibold)
-        label.textColor = .labelColor
-        let spinner = NSProgressIndicator()
-        spinner.style = .spinning
-        spinner.controlSize = .small
-        spinner.startAnimation(nil)
-        let stack = NSStackView(views: [icon, label, spinner])
-        stack.orientation = .vertical
-        stack.spacing = 14
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+    init(settings: [String: Any]) {
+        super.init(frame: .zero)
+        let look = LaunchLook(settings: settings)
+        appearance = NSAppearance(named: look.dark ? .darkAqua : .aqua)
+        let host = NSHostingView(rootView: LaunchCoverView(look: look))
+        host.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(host)
         NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            host.leadingAnchor.constraint(equalTo: leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: trailingAnchor),
+            host.topAnchor.constraint(equalTo: topAnchor),
+            host.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+}
 
-    override var wantsUpdateLayer: Bool { true }
+/// The saved theme's background, text, quiet text and divider colors
+/// (styles.js: LIGHT, DARK and PALETTES; tests/themes.test.js keeps them
+/// the same).
+struct LaunchLook {
+    static let colors: [String: [UInt32]] = [
+        "classic-light": [0xFFFFFF, 0x000000, 0x767676, 0xE6E6E6],
+        "classic-dark": [0x262626, 0xFFFFFF, 0x999999, 0x404040],
+        "sweeter-light": [0xFFFFFF, 0x1D1726, 0x756B82, 0xE3ECF6],
+        "sweeter-dark": [0x1C1825, 0xF7F2FA, 0x9C91A8, 0x2E2738],
+        "catppuccin-light": [0xEFF1F5, 0x4C4F69, 0x6C6F85, 0xDCE0E8],
+        "catppuccin-dark": [0x1E1E2E, 0xCDD6F4, 0xA6ADC8, 0x313244],
+        "nord-light": [0xECEFF4, 0x2E3440, 0x4C566A, 0xD8DEE9],
+        "nord-dark": [0x2E3440, 0xECEFF4, 0xA3ADBF, 0x3B4252],
+        "dracula-light": [0xFFFBEB, 0x1F1F1F, 0x6C664B, 0xE8E2CC],
+        "dracula-dark": [0x282A36, 0xF8F8F2, 0x9AA5CE, 0x44475A],
+    ]
 
-    override func updateLayer() {
-        layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+    let dark: Bool
+    let bg: Color
+    let text: Color
+    let quiet: Color
+    let track: Color
+
+    init(settings: [String: Any]) {
+        let skin = settings["skin"] as? String ?? "light"
+        dark = skin == "dark" || (skin == "system" && NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
+        let theme = settings["theme"] as? String ?? "classic"
+        let side = dark ? "-dark" : "-light"
+        let c = Self.colors[theme + side] ?? Self.colors["classic" + side]!
+        let color = { (v: UInt32) in Color(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255, blue: Double(v & 0xFF) / 255) }
+        bg = color(dark && settings["pureBlack"] as? Bool == true ? 0x000000 : c[0])
+        text = color(c[1])
+        quiet = color(c[2])
+        track = color(c[3])
+    }
+}
+
+struct LaunchCoverView: View {
+    let look: LaunchLook
+    @State private var up = false
+    @State private var glide = false
+    // Reduce Motion: no float, and a still, faint, full bar (as .boot draws it).
+    private let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+
+    // The icon's sky and the bird's pink, as in the About window.
+    private let sky = Color(red: 0x7E / 255, green: 0xC0 / 255, blue: 0xFA / 255)
+    private let pink = Color(red: 0xEE / 255, green: 0x5A / 255, blue: 0x8E / 255)
+
+    var body: some View {
+        ZStack {
+            look.bg
+            RadialGradient(colors: [sky.opacity(look.dark ? 0.22 : 0.30), sky.opacity(0)], center: .center, startRadius: 0, endRadius: 240)
+                .frame(width: 480, height: 480)
+                .offset(x: -40, y: -60)
+            RadialGradient(colors: [pink.opacity(look.dark ? 0.18 : 0.20), pink.opacity(0)], center: .center, startRadius: 0, endRadius: 220)
+                .frame(width: 440, height: 440)
+                .offset(x: 40, y: -40)
+            VStack(spacing: 0) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 104, height: 104)
+                    .shadow(color: pink.opacity(look.dark ? 0.35 : 0.22), radius: 4, y: 8)
+                    .offset(y: up ? -4 : 2)
+                Text("Sweeter")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .foregroundStyle(look.text)
+                    .frame(height: 29)
+                    .padding(.top, 16)
+                Capsule()
+                    .fill(look.track)
+                    .frame(width: 160, height: 4)
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(LinearGradient(colors: [sky, pink], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: still ? 160 : 61)
+                            .opacity(still ? 0.4 : 1)
+                            .offset(x: glide ? 99 : 0)
+                    }
+                    .clipShape(Capsule())
+                    .padding(.top, 18)
+                Text("Loading your columns")
+                    .font(.system(size: 13))
+                    .foregroundStyle(look.quiet)
+                    .frame(height: 16)
+                    .padding(.top, 12)
+            }
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            guard !still else { return }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { up = true }
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { glide = true }
+        }
     }
 }
 

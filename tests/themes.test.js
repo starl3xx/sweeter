@@ -40,3 +40,20 @@ test('themes: the CSS draws each theme for light, dark and Match system', () => 
     ok(globalThis.Sweeter.css.includes('.app[data-skin="system"][data-palette="' + id + '"]'), id + ' system');
   }
 });
+
+test('themes: the Mac app’s launch cover uses each theme’s own colors', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const swift = fs.readFileSync(path.join(__dirname, '../safari/Sweeter/Sweeter/ViewController.swift'), 'utf8');
+  const table = {};
+  for (const m of swift.matchAll(/"(\w+)-(light|dark)": \[(0x[0-9A-F]{6}(?:, 0x[0-9A-F]{6}){3})\]/g)) table[m[1] + '-' + m[2]] = m[3].split(', ').map((x) => '#' + x.slice(2));
+  const css = globalThis.Sweeter.css;
+  const tokens = (body) => Object.fromEntries(Array.from(body.matchAll(/--([\w-]+):\s*([^;]+);/g), (m) => [m[1], m[2].trim()]));
+  const classic = { light: tokens(/\.app\{([^}]*)\}/.exec(css)[1]), dark: tokens(/\.app\[data-skin="dark"\]\{([^}]*)\}/.exec(css)[1]) };
+  const want = { classic };
+  for (const [id, p] of Object.entries(P)) want[id] = { light: p.light, dark: p.dark };
+  eq(Object.keys(table).sort(), Object.keys(want).flatMap((id) => [id + '-dark', id + '-light']).sort());
+  for (const [id, sides] of Object.entries(want)) {
+    for (const side of ['light', 'dark']) eq(table[id + '-' + side], ['bg', 't1', 't3', 'div'].map((k) => sides[side][k].toUpperCase()), id + ' ' + side);
+  }
+});

@@ -422,8 +422,7 @@
       '<div class="cols hold"><div class="nocols" hidden><div class="nocols-in"><b>No columns to show</b><span>This X Pro deck has no columns Sweeter can show yet.</span>' +
       '<div class="nocols-b"><button type="button" class="done" data-cmd="add-open">Add Column…</button><button type="button" data-cmd="xpro">Show X Pro</button></div></div></div></div>' +
       '<div class="boot" role="status"><div class="boot-in"><img class="boot-mark" src="' + (Sweeter.MARK || '') + '" alt="">' +
-      '<div class="vu" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
-      '<div class="boot-t">Tuning in to X Pro</div><div class="boot-s">Loading your columns…</div></div></div>' +
+      '<div class="boot-t">Sweeter</div><div class="boot-bar" aria-hidden="true"><i></i></div><div class="boot-s">Loading your columns</div></div></div>' +
       '<div class="prefs-back" hidden><div class="prefs" role="dialog" aria-modal="true" aria-label="Sweeter Settings">' +
       '<div class="ptitle">Sweeter Settings<button class="x" type="button" data-cmd="close" aria-label="Close Settings">×</button></div>' +
       '<div class="ptabs" role="tablist">' + TABS.map(([id, label, ic]) => '<button class="ptab" type="button" role="tab" data-tab="' + id + '">' + icon(ic) + label + '</button>').join('') + '</div>' +
@@ -2303,7 +2302,12 @@
       const total = xpro.domColumns().filter((d) => !d.picker).length;
       const loaded = mapping.filter((m) => m.dom && store.get(m.key) && (store.get(m.key).sorted.length || store.get(m.key).kind === 'placeholder')).length;
       const s = bootEl.querySelector('.boot-s');
-      if (total) s.textContent = loaded + ' of ' + total + ' columns';
+      if (total) {
+        s.textContent = loaded + ' of ' + total + (total === 1 ? ' column' : ' columns');
+        const bar = bootEl.querySelector('.boot-bar');
+        bar.classList.add('known');
+        bar.style.setProperty('--p', Math.round(Math.min(1, loaded / total) * 100) + '%');
+      }
       const waited = Date.now() - bootStart;
       if ((total && loaded >= total) || (mapping.length && waited > 10000) || (!nocolsEl.hidden && waited > 1500)) finishBoot();
     }

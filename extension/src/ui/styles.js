@@ -364,7 +364,9 @@ img{display:block}
 .tok .down{color:#D9443A}
 .tok .tk-grid{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-variant-numeric:tabular-nums}
 .tok .tk-grid b{text-align:right;font-weight:600;color:var(--t1)}
-.tok .tk-a{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--t3);word-break:break-all}
+.tok .tk-a{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--t3);word-break:break-all;cursor:copy;border-radius:4px;transition:color .15s}
+.tok .tk-a:hover{color:var(--t1)}
+.tok .tk-a.copied{color:var(--accent)}
 .tok .tk-msg{line-height:1.4}
 .tok .tk-b{display:flex;flex-direction:column;margin:0 -4px}
 .pop{position:fixed;z-index:7;min-width:170px;background:var(--sheet);border-radius:8px;box-shadow:0 0 0 1px var(--ring),0 2px 6px var(--ring),0 10px 30px var(--shadow);padding:4px;display:flex;flex-direction:column}

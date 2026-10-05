@@ -3952,8 +3952,8 @@
 
     // Edit Search…: the add sheet’s search step, with this column’s query
     // and the cheat sheet. Save types it into X Pro’s own field and checks
-    // X Pro saved it; if not, X Pro’s editor is handed over with the text
-    // in it, to finish there.
+    // X Pro saved it; if not, X Pro’s editor is handed over (with the old
+    // query back in it when the text came out wrong) to finish there.
     const searchQuery = (key) => String(key || '').split(':').slice(1, -1).join(':');
     function editSearch(c) {
       const m = mapOf(c);
@@ -3995,7 +3995,8 @@
         if (opened === 'opened' && xpro.drawerOpen(ed.id)) xpro.closeDrawer(ed.id);
         return toast('Search changed');
       }
-      // X Pro’s editor, open (with the text, when it got that far).
+      // X Pro’s editor, open (with the new text, or the old query when the
+      // text came out wrong).
       toast('X Pro didn’t take the change from Sweeter. Finish it in X Pro’s editor.', 'warn');
       xproHandoff(() => (xpro.drawerOpen(ed.id) ? { ok: true } : xpro.openSearchEditor(ed.id)), () => xpro.drawerOpen(ed.id));
     }

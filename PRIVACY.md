@@ -58,4 +58,4 @@ When this policy changes, we update this page and the date at the top. If a chan
 
 ## Contact
 
-Starl3xx Labs LLC: [hello@starl3xxlabs.co](mailto:hello@starl3xxlabs.co)
+Starl3xx Labs LLC: [gm@starl3xx.fun](mailto:gm@starl3xx.fun)

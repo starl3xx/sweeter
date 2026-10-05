@@ -14,14 +14,16 @@
     --side:#2C2D30; --side-fg:rgba(255,255,255,.5); --side-on:#FFFFFF;
     --pill:rgba(0,0,0,.3); --pill-fg:#FFFFFF; --sheet:#FFFFFF; --field:#F5F5F5; --shadow:rgba(0,0,0,.25);
     --accent-solid:#4590E6; --accent-solid-press:#3D80CC; --on-accent:#FFFFFF; --img-ring:rgba(0,0,0,.08); --ring:rgba(0,0,0,.08); --thumb:rgba(0,0,0,.34);
-    --thread:#CFD3D8;`;
+    --thread:#CFD3D8;
+    --glow-sky:rgba(126,192,250,.30); --glow-pink:rgba(238,90,142,.20); --glow-shadow:rgba(238,90,142,.22);`;
   const DARK = `
     --bg:#262626; --sub:#1A1A1A; --tint:#45484C; --div:#404040; --sep:#333333;
     --t1:#FFFFFF; --t2:#CCCCCC; --t3:#999999; --accent:#B2D6FF; --accent-hl:rgba(178,214,255,.5);
     --mention:#393C40; --sel:#45484C; --selsep:#5C6166; --gutter:#000000; --quote:#404040; --mquote:#45484C;
     --act:#666666; --side:#1C1C1E; --sheet:#2E2E30; --field:#1A1A1A; --shadow:rgba(0,0,0,.6);
     --img-ring:rgba(255,255,255,.08); --ring:rgba(255,255,255,.1); --thumb:rgba(255,255,255,.38);
-    --thread:#4A4D52;`;
+    --thread:#4A4D52;
+    --glow-sky:rgba(126,192,250,.22); --glow-pink:rgba(238,90,142,.18); --glow-shadow:rgba(238,90,142,.35);`;
 
   // Accent color, contrast and pure black (from Ivory’s theme options).
   // The page sets --al and --ad (the accent for light and dark themes).
@@ -831,19 +833,25 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 
 
 /* loading screen: the Sweeter mark over a bouncing amber VU meter */
-.boot{position:absolute;inset:0 0 0 76px;z-index:3;display:grid;place-items:center;background:var(--bg);transition:opacity .4s ease,filter .4s ease,transform .4s ease}
+/* The loading screen, drawn like the About window: the icon floats on a
+   glow of its sky and pink, and a line fills as columns load. The Mac
+   app's LaunchCover (ViewController.swift) draws the same before it. */
+.boot{position:absolute;inset:0 0 0 76px;z-index:3;display:grid;place-items:center;background:radial-gradient(circle 240px at calc(50% - 40px) calc(50% - 60px),var(--glow-sky),transparent),radial-gradient(circle 220px at calc(50% + 40px) calc(50% - 40px),var(--glow-pink),transparent),var(--bg);transition:opacity .4s ease,filter .4s ease,transform .4s ease}
 .boot.done{opacity:0;filter:blur(4px);transform:scale(.99);pointer-events:none}
-.boot-in{display:flex;flex-direction:column;align-items:center;gap:18px;color:var(--t3);font-size:13px}
-.boot-mark{width:96px;height:96px;display:block;filter:drop-shadow(0 10px 24px rgba(0,0,0,.25))}
-.vu{display:flex;align-items:flex-end;gap:5px;height:34px}
-.vu i{width:8px;height:100%;border-radius:3px;background:linear-gradient(in oklab 180deg,#F7BE5C,#E08A12);transform-origin:bottom;animation:sweeter-vu 1s ease-in-out infinite}
-.vu i:nth-child(2){animation-delay:-.2s}.vu i:nth-child(3){animation-delay:-.45s}.vu i:nth-child(4){animation-delay:-.1s}.vu i:nth-child(5){animation-delay:-.65s}.vu i:nth-child(6){animation-delay:-.3s}.vu i:nth-child(7){animation-delay:-.8s}
-@keyframes sweeter-vu{0%,100%{transform:scaleY(.18)}35%{transform:scaleY(1)}60%{transform:scaleY(.45)}80%{transform:scaleY(.8)}}
-.boot-t{font-weight:600;color:var(--t1);font-size:14px}
-.boot-s{font-variant-numeric:tabular-nums}
+.boot-in{display:flex;flex-direction:column;align-items:center;color:var(--t3);font-size:13px;line-height:16px}
+.boot-mark{width:104px;height:104px;display:block;filter:drop-shadow(0 8px 8px var(--glow-shadow));animation:sweeter-float 2.8s ease-in-out infinite alternate}
+@keyframes sweeter-float{from{transform:translateY(2px)}to{transform:translateY(-4px)}}
+.boot-t{margin-top:16px;font:600 24px/29px ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,sans-serif;color:var(--t1)}
+.boot-bar{position:relative;width:160px;height:4px;margin-top:18px;border-radius:2px;background:var(--div);overflow:hidden}
+.boot-bar i{position:absolute;top:0;bottom:0;left:0;width:38%;border-radius:2px;background:linear-gradient(90deg,#7EC0FA,#EE5A8E);animation:sweeter-glide 1.5s ease-in-out infinite alternate}
+.boot-bar.known i{width:var(--p,0%);animation:none;transition:width .5s cubic-bezier(.2,.85,.25,1)}
+@keyframes sweeter-glide{from{transform:none}to{transform:translateX(163%)}}
+.boot-s{margin-top:12px;font-variant-numeric:tabular-nums}
+.boot.stuck .boot-mark{animation:none}
+.boot.stuck .boot-bar{visibility:hidden}
+@media (prefers-reduced-motion:reduce){.boot-mark{animation:none}.boot-bar i{animation:none;width:100%;opacity:.4}}
 /* columns arrive one after another once all have loaded */
 .cols.hold{visibility:hidden}
-.boot.stuck .vu i{animation:none}
 .col.arrive{animation:sweeter-col .55s cubic-bezier(.2,.85,.25,1) both;animation-delay:var(--d,0ms)}
 @keyframes sweeter-col{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 

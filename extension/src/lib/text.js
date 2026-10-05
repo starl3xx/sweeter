@@ -146,22 +146,40 @@
   // characters, less the punctuation that ends a sentence (a closing
   // bracket stays when the link opened one). Offsets count UTF-16 units,
   // as a textarea does.
+  //
+  // X also links a bare domain (starl3xx.fun/sweeter), as twitter-text does:
+  // a common generic domain on its own, a two-letter country domain only
+  // with a path (so file.md and e.g. stay text). Those come back with
+  // https:// in front, for the preview card.
+  const GTLDS = new Set('com net org edu gov mil int info biz name pro app dev xyz fun io ai co me gg so sh tv fm ly to cc ws site online store shop tech blog news art page link live life world today space website club cloud social finance money network systems digital media studio design agency email games one top vip lol wtf gay bio eco inc llc ltd'.split(' '));
+  function trimEnd(url) {
+    for (;;) {
+      const last = url.slice(-1);
+      if (/[.,;:!?'"”’»]/.test(last)) url = url.slice(0, -1);
+      else if (last === ')' && url.split('(').length < url.split(')').length) url = url.slice(0, -1);
+      else return url;
+    }
+  }
   function draftLinks(text) {
     const out = [];
-    const re = /https?:\/\/\S+/g;
     const s = String(text || '');
+    const re = /https?:\/\/\S+/g;
     let m;
     while ((m = re.exec(s))) {
-      let url = m[0];
-      for (;;) {
-        const last = url.slice(-1);
-        if (/[.,;:!?'"”’»]/.test(last)) url = url.slice(0, -1);
-        else if (last === ')' && url.split('(').length < url.split(')').length) url = url.slice(0, -1);
-        else break;
-      }
+      const url = trimEnd(m[0]);
       if (/^https?:\/\/[^\s/?#]+\.[^\s/?#.]/.test(url)) out.push({ start: m.index, end: m.index + url.length, url });
     }
-    return out;
+    const bare = /(^|[\s(“"'])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+([a-z]{2,24})(\/\S*)?)/gi;
+    while ((m = bare.exec(s))) {
+      const start = m.index + m[1].length;
+      if (out.some((l) => start < l.end && start + m[2].length > l.start)) continue;
+      const shown = trimEnd(m[2]);
+      const tld = m[3].toLowerCase();
+      const path = shown.includes('/');
+      if (!(GTLDS.has(tld) || (tld.length === 2 && path))) continue;
+      out.push({ start, end: start + shown.length, url: 'https://' + shown });
+    }
+    return out.sort((x, y) => x.start - y.start);
   }
 
   Sweeter.text = { richText, plainText, draftLinks };

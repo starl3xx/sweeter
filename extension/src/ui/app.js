@@ -5668,6 +5668,7 @@
       syncWho();
       cmpReply.closest('.cmp-who').hidden = kind === 'reply';
       emoEl.hidden = true;
+      closeGifs(false);
       renderMedia();
       cmpStatus.textContent = '';
       updateCount();
@@ -5722,6 +5723,7 @@
       posting = true;
       updateCount();
       closeGifs(false);
+      await gifClosing;
       cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : c.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
       if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, reply: c.kind === 'reply' ? null : cmpReply.value });
@@ -5755,6 +5757,7 @@
       passthrough = true;
       closePalette();
       applySettings();
+      await gifClosing;
       const r = await xpro.openComposer(kind, id, target(key).m, id ? hintFor(id, key) : null);
       if (!r.ok) {
         endPassthrough();
@@ -6092,6 +6095,9 @@
     // composer X Pro opens for the post, with that GIF pressed (xpro.js).
     // Stills show until the pointer is on one, so only one GIF moves.
     let gifSession = null;
+    // X Pro’s search still closing (its panel too, when Sweeter opened it):
+    // posting and the next search wait for it.
+    let gifClosing = Promise.resolve();
     let gifItems = [];
     let gifTimer = 0;
     const placeGifs = () => placePanel(gifEl, gifGrid, 'cmp-gif');
@@ -6130,7 +6136,7 @@
       placeGifs();
       gifQ.focus();
       const s = (gifSession = { opened: false, query: '', poll: 0, ready: false });
-      xpro.gifOpen().then((r) => {
+      gifClosing.then(() => xpro.gifOpen()).then((r) => {
         if (gifSession !== s) {
           if (r.ok) xpro.gifClose(r.opened);
           return;
@@ -6150,7 +6156,7 @@
       gifSession = null;
       if (s) {
         clearInterval(s.poll);
-        if (s.ready) xpro.gifClose(s.opened);
+        if (s.ready) gifClosing = Promise.resolve(xpro.gifClose(s.opened)).catch(() => {});
       }
       if (focusText) cmpText.focus();
     }

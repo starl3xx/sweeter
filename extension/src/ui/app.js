@@ -62,6 +62,8 @@
     groups: [], // column groups: { id: 'g:…', name, vids: [view ids] }
     group: '', // the group on screen ('' is every column)
     layouts: [], // saved layouts: { name, at, data: { LAYOUT_KEYS… } }
+    composePos: null, // the compose window moved from its usual place: { x, y } in px
+    composeHeight: 0, // the compose text box’s least height in px (0: the usual 120)
   };
   Sweeter.DEFAULTS = DEFAULTS;
 
@@ -437,32 +439,36 @@
       '</div></div>' +
       '<div class="pop" hidden role="menu"></div>' +
       '<div class="cmp-back" hidden><div class="cmp" role="dialog" aria-modal="true" aria-label="Compose">' +
-      '<div class="cmp-head"><span class="cmp-title">New post</span><button class="x" type="button" data-cmd="cmp-cancel" aria-label="Close and keep the draft">×</button></div>' +
+      '<div class="cmp-head" title="Drag to move. Double-click to put it back."><span class="cmp-title">New post</span><button class="x" type="button" data-cmd="cmp-cancel" aria-label="Close and keep the draft" title="Close and keep the draft">×</button></div>' +
       '<div class="cmp-ctx"></div>' +
-      '<div class="cmp-body"><div class="cmp-av"></div><textarea id="cmp-text" placeholder="What’s happening?" spellcheck="true" aria-label="Post text" aria-describedby="cmp-status"></textarea></div>' +
+      // The links’ underlines are drawn on a copy of the text behind the
+      // textarea, which cannot style part of its own text.
+      '<div class="cmp-body"><div class="cmp-av"></div><div class="cmp-field"><div class="cmp-hl" aria-hidden="true"></div><textarea id="cmp-text" placeholder="What’s happening?" spellcheck="true" aria-label="Post text" aria-describedby="cmp-status"></textarea></div></div>' +
       '<div class="cmp-media"></div>' +
       // Who can reply, on its own line under the text, as X shows it.
       // A select is as wide as its longest option, so the chosen one shows as
       // text and a transparent select lies over it.
       '<label class="cmp-who">' + icon('globe') + '<span class="who-t">Everyone can reply</span>' + icon('chevron', 'chev') + '<select id="cmp-reply" aria-label="Who can reply">' + REPLY_OPTIONS.map((o) => '<option value="' + o + '">' + o + ' can reply</option>').join('') + '</select></label>' +
+      // What Sweeter does itself comes first; after the divider, the tools
+      // that hand the post to X Pro’s own composer, in gray.
       '<div class="cmp-tools">' +
-      '<button class="tb" type="button" data-cmd="cmp-photo" title="Add photos or video. Paste or drop works too." aria-label="Add photos or video. Paste or drop works too.">' + icon('photo') + '</button>' +
-      '<button class="tb" type="button" data-cmd="cmp-gif" title="Add a GIF, in X Pro" aria-label="Add a GIF, in X Pro">' + icon('gif') + '</button>' +
-      '<button class="tb" type="button" data-cmd="cmp-poll" title="Add a poll, in X Pro" aria-label="Add a poll, in X Pro">' + icon('poll') + '</button>' +
+      '<button class="tb" type="button" data-cmd="cmp-photo" title="Add photos or a video. Paste or drop works too." aria-label="Add photos or a video. Paste or drop works too.">' + icon('photo') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-emoji" title="Emoji. ⌃⌘Space opens all of them." aria-label="Emoji. ⌃⌘Space opens all of them.">' + icon('emoji') + '</button>' +
-      '<button class="tb" type="button" data-cmd="cmp-schedule" title="Schedule, in X Pro" aria-label="Schedule, in X Pro">' + icon('schedule') + '</button>' +
-      '<button class="tb" type="button" data-cmd="cmp-location" title="Tag location, in X Pro" aria-label="Tag location, in X Pro">' + icon('pin') + '</button>' +
-      '<button class="tb" type="button" data-cmd="cmp-grok" title="Generate an image with Grok, in X Pro" aria-label="Generate an image with Grok, in X Pro">' + icon('spark') + '</button>' +
-      '<span class="sepv"></span>' +
       '<button class="tb" type="button" data-cmd="cmp-bold" title="Bold (⌘B)" aria-label="Bold (⌘B)">' + icon('bold') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-italic" title="Italic (⌘I)" aria-label="Italic (⌘I)">' + icon('italic') + '</button>' +
+      '<span class="sepv"></span>' +
+      '<span class="xp-l" title="These open X Pro’s own composer with your text">X Pro' + icon('open') + '</span>' +
+      [['gif', 'gif', 'Add a GIF'], ['poll', 'poll', 'Add a poll'], ['schedule', 'schedule', 'Schedule'], ['location', 'pin', 'Tag a location'], ['grok', 'spark', 'Make an image with Grok']]
+        .map(([cmd, ic, label]) => '<button class="tb xp" type="button" data-cmd="cmp-' + cmd + '" title="' + label + ': opens X Pro’s composer" aria-label="' + label + ': opens X Pro’s composer">' + icon(ic) + '</button>')
+        .join('') +
       '</div>' +
       '<div class="cmp-drop">Drop photos or a video</div>' +
       '<div class="emo" hidden>' + EMOJI.map((e) => '<button type="button" data-emoji="' + e + '">' + e + '</button>').join('') + '<div class="hint">⌃⌘Space opens every emoji.</div></div>' +
       '<input type="file" id="cmp-file" accept="' + ACCEPT.join(',') + '" multiple hidden>' +
-      '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for photos, polls and scheduling">Open in X Pro</button>' +
+      '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for GIFs, polls, scheduling, and more">Open in X Pro</button>' +
       '<span class="cmp-status" id="cmp-status" role="status"></span><span class="grow"></span><span class="cmp-count"></span>' +
       '<button class="cmp-post" type="button" data-cmd="cmp-post" title="Post (⌘Return)">Post</button></div>' +
+      '<div class="cmp-grip" title="Drag for a taller text box. Double-click to reset." aria-hidden="true"></div>' +
       '</div></div>' +
       '<div class="lb" hidden role="dialog" aria-label="Media viewer">' +
       '<div class="lb-top"><span class="lb-count"></span><span class="grow"></span><a class="lb-orig" href="#" target="_blank" rel="noopener noreferrer">Open original</a>' +
@@ -526,6 +532,9 @@
     const cmpMedia = shadow.querySelector('.cmp-media');
     const cmpReply = shadow.querySelector('#cmp-reply');
     const cmpFile = shadow.querySelector('#cmp-file');
+    const cmpHead = shadow.querySelector('.cmp-head');
+    const cmpHl = shadow.querySelector('.cmp-hl');
+    const cmpGrip = shadow.querySelector('.cmp-grip');
     const emoEl = shadow.querySelector('.emo');
     const lbEl = shadow.querySelector('.lb');
     const lbMedia = shadow.querySelector('.lb-media');
@@ -5313,6 +5322,133 @@
         cmpText.removeAttribute('aria-invalid');
         cmpStatus.textContent = '';
       }
+      fitCompose();
+    }
+
+    // ---------- the compose window’s place and size ----------
+
+    // The links’ underlines: the same text, transparent, on a layer behind
+    // the textarea, each link in a <u>. It scrolls with the textarea.
+    function paintLinks() {
+      const t = cmpText.value;
+      let html = '';
+      let at = 0;
+      for (const l of Sweeter.text.draftLinks(t)) {
+        html += h(t.slice(at, l.start)) + '<u>' + h(t.slice(l.start, l.end)) + '</u>';
+        at = l.end;
+      }
+      // The zero-width space gives a last, empty line its height.
+      cmpHl.innerHTML = html + h(t.slice(at)) + '\u200b';
+      cmpHl.style.width = cmpText.clientWidth + 'px';
+      cmpHl.style.transform = cmpText.scrollTop ? 'translateY(' + -cmpText.scrollTop + 'px)' : '';
+    }
+
+    // Where the person put the window (settings.composePos: px from its
+    // usual place), kept inside Sweeter. cmpAt is where it is now.
+    let cmpAt = { x: 0, y: 0 };
+    function placeCompose(pos) {
+      if (cmpBack.hidden) return;
+      pos = pos || settings.composePos || { x: 0, y: 0 };
+      cmpBox.style.transform = '';
+      const b = cmpBack.getBoundingClientRect();
+      const r = cmpBox.getBoundingClientRect();
+      const fit = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+      const x = Math.round(fit(pos.x || 0, b.left + 8 - r.left, b.right - 8 - r.right));
+      const y = Math.round(fit(pos.y || 0, b.top + 8 - r.top, b.bottom - 8 - r.bottom));
+      cmpAt = { x, y };
+      if (x || y) cmpBox.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    }
+
+    // The text box grows with the text until the window meets the bottom of
+    // Sweeter; then it scrolls. The window’s bottom edge sets a taller least
+    // height (settings.composeHeight).
+    const CMP_MIN = 120;
+    function fitCompose() {
+      if (cmpBack.hidden) return;
+      const st = cmpText.scrollTop;
+      cmpText.style.height = 'auto';
+      const chrome = cmpBox.offsetHeight - cmpText.offsetHeight;
+      const room = cmpBack.clientHeight - 16 - chrome;
+      const want = Math.max(settings.composeHeight || CMP_MIN, cmpText.scrollHeight);
+      cmpText.style.height = Math.max(60, Math.min(want, room)) + 'px';
+      cmpText.scrollTop = st;
+      paintLinks();
+      placeCompose();
+    }
+
+    // Move the window by its title bar; a double-click puts it back.
+    cmpHead.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.target.closest('button')) return;
+      e.preventDefault();
+      cmpHead.setPointerCapture(e.pointerId);
+      const from = cmpAt;
+      const x0 = e.clientX;
+      const y0 = e.clientY;
+      cmpBox.classList.add('moving');
+      const move = (ev) => placeCompose({ x: from.x + ev.clientX - x0, y: from.y + ev.clientY - y0 });
+      const up = () => {
+        cmpHead.removeEventListener('pointermove', move);
+        cmpHead.removeEventListener('pointerup', up);
+        cmpHead.removeEventListener('pointercancel', up);
+        cmpBox.classList.remove('moving');
+        settings.composePos = cmpAt.x || cmpAt.y ? cmpAt : null;
+        persist();
+      };
+      cmpHead.addEventListener('pointermove', move);
+      cmpHead.addEventListener('pointerup', up);
+      cmpHead.addEventListener('pointercancel', up);
+    });
+    cmpHead.addEventListener('dblclick', (e) => {
+      if (e.target.closest('button')) return;
+      settings.composePos = null;
+      persist();
+      placeCompose();
+    });
+
+    // Drag the bottom edge for a taller text box; a double-click resets it.
+    cmpGrip.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      cmpGrip.setPointerCapture(e.pointerId);
+      const y0 = e.clientY;
+      const h0 = cmpText.offsetHeight;
+      cmpBox.classList.add('sizing');
+      const move = (ev) => {
+        settings.composeHeight = Math.max(CMP_MIN, Math.round(h0 + ev.clientY - y0));
+        fitCompose();
+      };
+      const up = () => {
+        cmpGrip.removeEventListener('pointermove', move);
+        cmpGrip.removeEventListener('pointerup', up);
+        cmpGrip.removeEventListener('pointercancel', up);
+        cmpBox.classList.remove('sizing');
+        if (settings.composeHeight <= CMP_MIN) settings.composeHeight = 0;
+        persist();
+      };
+      cmpGrip.addEventListener('pointermove', move);
+      cmpGrip.addEventListener('pointerup', up);
+      cmpGrip.addEventListener('pointercancel', up);
+    });
+    cmpGrip.addEventListener('dblclick', () => {
+      settings.composeHeight = 0;
+      persist();
+      fitCompose();
+    });
+    cmpText.addEventListener('scroll', () => {
+      cmpHl.style.transform = cmpText.scrollTop ? 'translateY(' + -cmpText.scrollTop + 'px)' : '';
+    });
+    window.addEventListener('resize', () => fitCompose());
+    // A status line, a quoted post, or media can change the window’s height.
+    if ('ResizeObserver' in window) {
+      let queued = false;
+      new ResizeObserver(() => {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+          queued = false;
+          fitCompose();
+        });
+      }).observe(cmpBox);
     }
 
     // ---------- media in the compose window ----------
@@ -5439,6 +5575,7 @@
       cmpStatus.textContent = '';
       updateCount();
       cmpBack.hidden = false;
+      fitCompose();
       cmpText.focus();
       cmpText.setSelectionRange(cmpText.value.length, cmpText.value.length);
     }

@@ -224,7 +224,7 @@ struct AboutView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .padding(.top, 2)
-            Text("A fast, keyboard-friendly, Tweetbot-inspired face for X Pro on the Mac.")
+            Text("A clean, customizable, keyboard-friendly face for X Pro on the Mac.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

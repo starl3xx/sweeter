@@ -631,7 +631,7 @@
   async function fillAndPost(text, opts) {
     const o = opts || {};
     await waitFor(editor, 3000);
-    const media = await attach(o.files);
+    const media = o.gif ? await attachGif(o.gif) : await attach(o.files);
     if (!media.ok) {
       clearEditor();
       return media;
@@ -685,9 +685,90 @@
     disclosure: '[data-testid="contentDisclosureButton"]',
   };
 
-  async function prefill(text, files, tool) {
+  // ---------- GIFs, through X Pro’s own GIF search ----------
+  // Verified 2026-10-05: the composer’s gifSearchButton opens a dialog at
+  // /i/foundmedia/search. Its <input data-testid=gifSearchSearchInput> takes
+  // a typed query (GraphQL GifSearch); it opens on trending
+  // (GifEnumerateCategory). Each result is a gifSearchGifImage div, its
+  // aria-label the GIF’s text and its background the GIF on GIPHY; pressing
+  // its button attaches the GIF to the composer, with no request, as
+  // [data-testid=attachments] [role=group]. The recorder passes the results.
+  const gifCache = new Map(); // query ('' is trending) -> items, newest last
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (e.source !== window || !d || d.__sweeter !== 1 || (d.op !== 'GifSearch' && d.op !== 'GifEnumerateCategory') || !d.body || !Array.isArray(d.body.items)) return;
+    const q = d.op === 'GifSearch' ? String((d.vars && d.vars.query) || '') : '';
+    gifCache.delete(q);
+    gifCache.set(q, d.body.items);
+    if (gifCache.size > 30) gifCache.delete(gifCache.keys().next().value);
+  });
+  const gifInput = () => document.querySelector('[data-testid="gifSearchSearchInput"]');
+  function gifType(q) {
+    const i = gifInput();
+    if (!i) return false;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, String(q || ''));
+    i.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+  // X Pro’s GIF search, opened from its compose panel (the panel is opened
+  // for it when closed; `opened` says so, for gifClose).
+  async function gifOpen() {
+    if (gifInput()) return { ok: true, opened: false };
+    let opened = false;
+    if (!composerOpen()) {
+      const r = await openComposer('new');
+      if (!r.ok) return r;
+      opened = true;
+      await waitFor(editor, 3000);
+    }
+    const root = composerRoot();
+    const b = root && root.querySelector(TOOLS.gif);
+    if (b) b.click();
+    if (b && (await waitFor(gifInput, 4000))) return { ok: true, opened };
+    if (opened) await closePanel();
+    return { ok: false, reason: 'nogif' };
+  }
+  // Closes X Pro’s GIF search, and the compose panel when Sweeter opened it
+  // for the search and it still holds nothing.
+  async function gifClose(panelToo) {
+    const i = gifInput();
+    const d = i && i.closest('[role="dialog"]');
+    const c = d && d.querySelector('[data-testid="app-bar-close"]');
+    if (c) {
+      c.click();
+      await waitFor(() => !gifInput(), 1500);
+    }
+    const root = composerRoot();
+    if (panelToo && editor() && !norm(editor().innerText) && !(root && root.querySelector('[data-testid="attachments"]'))) await closePanel();
+  }
+  // A GIF the person picked in Sweeter, attached to the composer now open:
+  // X Pro’s GIF search again, with the same query, and that GIF pressed.
+  async function attachGif(gif) {
+    if (!gif || !gif.id) return { ok: true };
+    const root = composerRoot();
+    const b = root && root.querySelector(TOOLS.gif);
+    if (!b) return { ok: false, reason: 'nogif' };
+    b.click();
+    if (!(await waitFor(gifInput, 4000))) return { ok: false, reason: 'nogif' };
+    if (gif.query) gifType(gif.query);
+    const key = '/' + String(gif.id).replace(/^giphy_/, '') + '/';
+    const cell = await waitFor(() => Array.from(document.querySelectorAll('[data-testid="gifSearchGifImage"]')).find((x) => x.innerHTML.includes(key)), 8000);
+    if (!cell) {
+      await gifClose(false);
+      return { ok: false, reason: 'gifgone' };
+    }
+    (cell.closest('button, [role="button"]') || cell).click();
+    const att = await waitFor(() => {
+      const r = composerRoot();
+      return r && r.querySelector('[data-testid="attachments"] [role="group"]');
+    }, 5000);
+    return att ? { ok: true } : { ok: false, reason: 'gifgone' };
+  }
+
+  async function prefill(text, files, tool, gif) {
     await waitFor(editor, 3000);
     if (files && files.length) await attach(files);
+    if (gif) await attachGif(gif);
     if (text && text.trim()) await paste(text);
     if (tool && TOOLS[tool]) {
       const root = composerRoot();
@@ -1534,5 +1615,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifOpen: lifted(gifOpen), gifSearch: gifType, gifResults: (q) => gifCache.get(String(q || '')) || null, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -462,12 +462,13 @@
       // that hand the post to X Pro’s own composer, in gray.
       '<div class="cmp-tools">' +
       '<button class="tb" type="button" data-cmd="cmp-photo" title="Add photos or a video. Paste or drop works too." aria-label="Add photos or a video. Paste or drop works too.">' + icon('photo') + '</button>' +
+      '<button class="tb" type="button" data-cmd="cmp-gif" title="Add a GIF" aria-label="Add a GIF">' + icon('gif') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-emoji" title="Emoji" aria-label="Emoji">' + icon('emoji') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-bold" title="Bold (⌘B)" aria-label="Bold (⌘B)">' + icon('bold') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-italic" title="Italic (⌘I)" aria-label="Italic (⌘I)">' + icon('italic') + '</button>' +
       '<span class="sepv"></span>' +
       '<span class="xp-l" title="These open X Pro’s own composer with your text">X Pro' + icon('open') + '</span>' +
-      [['gif', 'gif', 'Add a GIF'], ['poll', 'poll', 'Add a poll'], ['schedule', 'schedule', 'Schedule'], ['location', 'pin', 'Tag a location'], ['grok', 'spark', 'Make an image with Grok']]
+      [['poll', 'poll', 'Add a poll'], ['schedule', 'schedule', 'Schedule'], ['location', 'pin', 'Tag a location'], ['grok', 'spark', 'Make an image with Grok']]
         .map(([cmd, ic, label]) => '<button class="tb xp" type="button" data-cmd="cmp-' + cmd + '" title="' + label + ': opens X Pro’s composer" aria-label="' + label + ': opens X Pro’s composer">' + icon(ic) + '</button>')
         .join('') +
       '</div>' +
@@ -486,6 +487,11 @@
       '<div class="emo-tabs">' + EMO_TABS.map(([g, ic, label]) => '<button type="button" data-g="' + h(g) + '" title="' + h(label || g) + '" aria-label="' + h(label || g) + '">' + icon(ic) + '</button>').join('') + '</div>' +
       '<div class="emo-grid"></div>' +
       '<div class="emo-foot"><span class="ef-e"></span><span class="ef-n"></span>' + (native ? '<button class="ef-sys" type="button" title="macOS’s own emoji picker (⌃⌘Space)">All Emoji & Symbols</button>' : '<span class="ef-k">⌃⌘Space: macOS’s picker</span>') + '</div>' +
+      '</div>' +
+      '<div class="gifp" hidden role="dialog" aria-label="GIFs">' +
+      '<div class="emo-top"><input id="gif-q" type="text" placeholder="Search GIFs" autocomplete="off" spellcheck="false" aria-label="Search GIFs"></div>' +
+      '<div class="gif-grid"></div>' +
+      '<div class="emo-foot"><span class="gif-note">GIFs from GIPHY, through X Pro’s GIF search</span></div>' +
       '</div></div>' +
       '<div class="lb" hidden role="dialog" aria-label="Media viewer">' +
       '<div class="lb-top"><span class="lb-count"></span><span class="grow"></span><a class="lb-orig" href="#" target="_blank" rel="noopener noreferrer">Open original</a>' +
@@ -561,6 +567,9 @@
     const emoTones = shadow.querySelector('.emo-tones');
     const emoName = shadow.querySelector('.ef-n');
     const emoGlyph = shadow.querySelector('.ef-e');
+    const gifEl = shadow.querySelector('.gifp');
+    const gifQ = shadow.querySelector('#gif-q');
+    const gifGrid = shadow.querySelector('.gif-grid');
     const lbEl = shadow.querySelector('.lb');
     const lbMedia = shadow.querySelector('.lb-media');
     const bootEl = shadow.querySelector('.boot');
@@ -5345,7 +5354,7 @@
       cmpCount.textContent = n > 280 ? n.toLocaleString() + ' · long post' : n + ' / 280';
       cmpCount.className = 'cmp-count' + (n > 25000 ? ' over' : n > 280 ? ' long' : '');
       cmpPost.disabled = posting;
-      if (cmpText.getAttribute('aria-invalid') === 'true' && (cmpText.value.trim() || (compose && compose.files.length)) && n <= 25000) {
+      if (cmpText.getAttribute('aria-invalid') === 'true' && (cmpText.value.trim() || (compose && (compose.files.length || compose.gif))) && n <= 25000) {
         cmpText.removeAttribute('aria-invalid');
         cmpStatus.textContent = '';
       }
@@ -5364,7 +5373,7 @@
     function queueCard() {
       const links = Sweeter.text.draftLinks(cmpText.value);
       const last = links.length ? links[links.length - 1].url : '';
-      const want = native && native.linkCard && settings.composeCards !== false && compose && !compose.files.length ? last : '';
+      const want = native && native.linkCard && settings.composeCards !== false && compose && !compose.files.length && !compose.gif ? last : '';
       if (want === cardFor) return;
       clearTimeout(cardTimer);
       cardFor = want;
@@ -5427,6 +5436,7 @@
       cmpAt = { x, y };
       if (x || y) cmpBox.style.transform = 'translate(' + x + 'px,' + y + 'px)';
       placeEmoji();
+      placeGifs();
     }
 
     // The text box grows with the text until the window meets the bottom of
@@ -5538,6 +5548,7 @@
 
     function addFiles(list) {
       if (!compose) return;
+      if (compose.gif) return toast('A post can have photos or a video, or one GIF.', 'warn');
       const incoming = Array.from(list || []).filter((f) => f && f.type);
       const bad = incoming.filter((f) => !ACCEPT.includes(f.type));
       const good = incoming.filter((f) => ACCEPT.includes(f.type));
@@ -5559,12 +5570,14 @@
     }
 
     function renderMedia() {
-      cmpMedia.innerHTML = (compose ? compose.files : [])
-        .map((f, i) => {
-          const preview = /^video\//.test(f.type) ? '<video src="' + h(f.__url) + '" muted playsinline></video><span class="kind">VIDEO</span>' : '<img src="' + h(f.__url) + '" alt="">' + (f.type === 'image/gif' ? '<span class="kind">GIF</span>' : '');
-          return '<div class="cm">' + preview + '<button type="button" data-cmd="cmp-unfile" data-i="' + i + '" title="Remove" aria-label="Remove">' + icon('x') + '</button></div>';
-        })
-        .join('');
+      const g = compose && compose.gif;
+      cmpMedia.innerHTML =
+        (compose ? compose.files : [])
+          .map((f, i) => {
+            const preview = /^video\//.test(f.type) ? '<video src="' + h(f.__url) + '" muted playsinline></video><span class="kind">VIDEO</span>' : '<img src="' + h(f.__url) + '" alt="">' + (f.type === 'image/gif' ? '<span class="kind">GIF</span>' : '');
+            return '<div class="cm">' + preview + '<button type="button" data-cmd="cmp-unfile" data-i="' + i + '" title="Remove" aria-label="Remove">' + icon('x') + '</button></div>';
+          })
+          .join('') + (g ? '<div class="cm" title="' + h(g.alt) + '"><img src="' + h(g.url) + '" alt="' + h(g.alt) + '"><span class="kind">GIF</span><button type="button" data-cmd="cmp-ungif" title="Remove" aria-label="Remove the GIF">' + icon('x') + '</button></div>' : '');
     }
 
     function dropFiles(files) {
@@ -5640,7 +5653,7 @@
       const p = id ? findPost(id) : null;
       if (id && (!p || p.unavailable)) return;
       // A compose window already open keeps its text as a draft.
-      if (compose && !cmpBack.hidden && (cmpText.value.trim() || compose.files.length)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, reply: cmpReply.value });
+      if (compose && !cmpBack.hidden && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value });
       compose = { kind, id: id || null, key: key || null, files: [] };
       cmpTitle.textContent = kind === 'reply' ? 'Reply' : kind === 'quote' ? 'Quote post' : 'New post';
       cmpPost.textContent = kind === 'reply' ? 'Reply' : 'Post';
@@ -5650,10 +5663,12 @@
       const draft = drafts.get(draftKey(compose)) || { text: '', files: [], reply: 'Everyone' };
       cmpText.value = draft.text;
       compose.files = draft.files.slice();
+      compose.gif = draft.gif || null;
       cmpReply.value = draft.reply;
       syncWho();
       cmpReply.closest('.cmp-who').hidden = kind === 'reply';
       emoEl.hidden = true;
+      closeGifs(false);
       renderMedia();
       cmpStatus.textContent = '';
       updateCount();
@@ -5665,13 +5680,14 @@
 
     function closeCompose(keepDraft) {
       if (compose) {
-        if (keepDraft && (cmpText.value.trim() || compose.files.length)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, reply: cmpReply.value });
+        if (keepDraft && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value });
         else {
           drafts.delete(draftKey(compose));
           dropFiles(compose.files);
         }
       }
       emoEl.hidden = true;
+      closeGifs(false);
       compose = null;
       queueCard();
       cmpBack.hidden = true;
@@ -5688,6 +5704,8 @@
       xerror: 'X didn’t accept the post. Nothing was posted; your text is still here.',
       upload: 'X Pro didn’t finish uploading the media. Nothing was posted.',
       nofileinput: 'X Pro’s composer has no place for media here. Nothing was posted.',
+      nogif: 'X Pro’s GIF search didn’t open. Nothing was posted.',
+      gifgone: 'X Pro’s GIF search no longer shows that GIF. Nothing was posted. Pick a GIF again.',
       noreply: 'X Pro’s reply setting didn’t open. Nothing was posted.',
     };
 
@@ -5695,7 +5713,7 @@
       if (!compose || posting) return;
       const text = cmpText.value;
       const c = compose;
-      const problem = !text.trim() && !c.files.length ? 'Write something or add a photo first.' : weighted(text) > 25000 ? 'This post is over 25,000 characters.' : null;
+      const problem = !text.trim() && !c.files.length && !c.gif ? 'Write something or add a photo or GIF first.' : weighted(text) > 25000 ? 'This post is over 25,000 characters.' : null;
       if (problem) {
         cmpText.setAttribute('aria-invalid', 'true');
         cmpStatus.textContent = problem;
@@ -5704,9 +5722,11 @@
       }
       posting = true;
       updateCount();
-      cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : 'Posting through X Pro…';
+      closeGifs(false);
+      await gifWork;
+      cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : c.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
-      if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, reply: c.kind === 'reply' ? null : cmpReply.value });
+      if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, reply: c.kind === 'reply' ? null : cmpReply.value });
       posting = false;
       if (r.ok) {
         closeCompose(false);
@@ -5732,18 +5752,19 @@
 
     // “Open in X Pro”: Sweeter steps aside and shows X Pro’s own composer with
     // the text already in it, then comes back when that composer closes.
-    async function handoff(kind, id, key, text, files, tool) {
+    async function handoff(kind, id, key, text, files, tool, gif) {
       closePop();
       passthrough = true;
       closePalette();
       applySettings();
+      await gifWork;
       const r = await xpro.openComposer(kind, id, target(key).m, id ? hintFor(id, key) : null);
       if (!r.ok) {
         endPassthrough();
         toast(COMPOSE_FAIL[r.reason] || 'X Pro’s composer didn’t open.', 'warn');
         return;
       }
-      await xpro.prefill(text, files, tool);
+      await xpro.prefill(text, files, tool, gif);
       const timer = setInterval(() => {
         if (!passthrough) return clearInterval(timer);
         if (!xpro.composerOpen()) {
@@ -5950,13 +5971,14 @@
       }
       for (const b of emoTabs.children) b.classList.toggle('on', b.dataset.g === g);
     }
-    // Above the emoji button when it fits, else below; in a short window the
-    // grid gets shorter (to 140 px) on the side with more room.
-    function placeEmoji() {
+    // A picker above its button when it fits, else below; in a short window
+    // its grid gets shorter (to 140 px) on the side with more room.
+    const placeEmoji = () => placePanel(emoEl, emoGrid, 'cmp-emoji');
+    function placePanel(emoEl, emoGrid, cmd) {
       if (emoEl.hidden) return;
       emoGrid.style.height = '';
       const b = cmpBack.getBoundingClientRect();
-      const btn = cmpBox.querySelector('[data-cmd="cmp-emoji"]').getBoundingClientRect();
+      const btn = cmpBox.querySelector('[data-cmd="' + cmd + '"]').getBoundingClientRect();
       const w = emoEl.offsetWidth;
       let hh = emoEl.offsetHeight;
       const above = btn.top - b.top - 14;
@@ -5972,6 +5994,7 @@
       emoEl.style.top = Math.round(Math.max(8, up ? btn.top - b.top - hh - 6 : btn.bottom - b.top + 6)) + 'px';
     }
     function openEmoji() {
+      closeGifs(false);
       emoQ.value = '';
       emoTones.hidden = true;
       emoToneBtn.textContent = EMO_TONES[settings.emojiTone | 0];
@@ -6063,6 +6086,132 @@
     // A click elsewhere in the compose window closes the picker.
     cmpBox.addEventListener('pointerdown', (e) => {
       if (!emoEl.hidden && !e.target.closest('[data-cmd="cmp-emoji"]')) closeEmoji(false);
+    });
+
+    // ---------- GIFs, through X Pro’s own GIF search ----------
+    // Sweeter’s picker shows what X Pro’s GIF search finds: X Pro’s picker
+    // opens out of sight and gets the query; the recorder brings the results
+    // (GIPHY’s, through X). A pick is posted by the same search in the
+    // composer X Pro opens for the post, with that GIF pressed (xpro.js).
+    // Stills show until the pointer is on one, so only one GIF moves.
+    let gifSession = null;
+    // X Pro’s GIF search opening or closing (its panel too, when Sweeter
+    // opened it), one step after another: posting, Open in X Pro, and the
+    // next search wait for every step in flight.
+    let gifWork = Promise.resolve();
+    const gifStep = (fn) => (gifWork = gifWork.then(fn).catch(() => {}));
+    let gifItems = [];
+    let gifTimer = 0;
+    const placeGifs = () => placePanel(gifEl, gifGrid, 'cmp-gif');
+    function renderGifs(items, msg) {
+      gifItems = items || [];
+      gifGrid.innerHTML = gifItems.length
+        ? '<div class="gif-cols">' + gifItems.map((g, i) => '<button type="button" data-i="' + i + '" title="' + h(g.alt) + '" aria-label="' + h(g.alt || 'GIF') + '"><img src="' + h(g.still) + '" alt="" loading="lazy" style="aspect-ratio:' + (g.w || 200) + '/' + (g.h || 200) + '"></button>').join('') + '</div>'
+        : '<div class="emo-empty">' + h(msg || 'No GIFs found.') + '</div>';
+      gifGrid.scrollTop = 0;
+    }
+    // The answer for this query, once X Pro has it (8 s at most).
+    function awaitGifs(s, q) {
+      clearInterval(s.poll);
+      const t0 = Date.now();
+      const look = () => {
+        if (gifSession !== s || s.query !== q) return clearInterval(s.poll);
+        const items = xpro.gifResults(q);
+        if (items) {
+          clearInterval(s.poll);
+          renderGifs(items, q ? 'No GIFs for “' + q + '”.' : 'No trending GIFs right now.');
+        } else if (Date.now() - t0 > 8000) {
+          clearInterval(s.poll);
+          renderGifs(null, 'X Pro’s GIF search didn’t answer. Try again, or use Open in X Pro.');
+        }
+      };
+      s.poll = setInterval(look, 150);
+      look();
+    }
+    function openGifs() {
+      if (!compose) return;
+      if (compose.files.length) return toast('A post can have photos or a video, or one GIF.', 'warn');
+      closeEmoji(false);
+      gifQ.value = '';
+      gifEl.hidden = false;
+      renderGifs(null, 'Loading GIFs…');
+      placeGifs();
+      gifQ.focus();
+      const s = (gifSession = { opened: false, query: '', poll: 0, ready: false });
+      gifStep(async () => {
+        const r = await xpro.gifOpen();
+        // Closed while it opened: close it again, in this same step.
+        if (gifSession !== s) {
+          if (r.ok) await xpro.gifClose(r.opened);
+          return;
+        }
+        if (!r.ok) return renderGifs(null, 'X Pro’s GIF search didn’t open. Try Open in X Pro.');
+        s.opened = r.opened;
+        s.ready = true;
+        if (s.query) xpro.gifSearch(s.query);
+        awaitGifs(s, s.query);
+      });
+    }
+    function closeGifs(focusText) {
+      if (gifEl.hidden && !gifSession) return;
+      gifEl.hidden = true;
+      clearTimeout(gifTimer);
+      const s = gifSession;
+      gifSession = null;
+      if (s) {
+        clearInterval(s.poll);
+        // Read when the step runs: an open still in flight closes itself.
+        gifStep(() => (s.ready ? xpro.gifClose(s.opened) : null));
+      }
+      if (focusText) cmpText.focus();
+    }
+    function pickGif(i) {
+      const g = gifItems[i];
+      if (!g || !compose || !gifSession) return;
+      compose.gif = Object.assign({ query: gifSession.query }, g);
+      closeGifs(true);
+      renderMedia();
+      updateCount();
+    }
+    function gifKey(e) {
+      if (e.key === 'Escape') return closeGifs(true), true;
+      if (e.key === 'Enter') {
+        if (gifItems.length) pickGif(0);
+        return true;
+      }
+      return false;
+    }
+    gifQ.addEventListener('input', () => {
+      clearTimeout(gifTimer);
+      gifTimer = setTimeout(() => {
+        const s = gifSession;
+        if (!s) return;
+        s.query = gifQ.value.trim();
+        renderGifs(null, 'Searching…');
+        if (s.ready) xpro.gifSearch(s.query);
+        if (s.ready) awaitGifs(s, s.query);
+      }, 350);
+    });
+    gifGrid.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-i]');
+      if (b) pickGif(Number(b.dataset.i));
+    });
+    // The pointer’s GIF plays; the others stay still.
+    gifGrid.addEventListener('mouseover', (e) => {
+      const b = e.target.closest('button[data-i]');
+      const g = b && gifItems[Number(b.dataset.i)];
+      const img = b && b.querySelector('img');
+      if (img && g && img.getAttribute('src') !== g.url) img.setAttribute('src', g.url);
+    });
+    gifGrid.addEventListener('mouseout', (e) => {
+      const b = e.target.closest('button[data-i]');
+      if (!b || b.contains(e.relatedTarget)) return;
+      const g = gifItems[Number(b.dataset.i)];
+      const img = b.querySelector('img');
+      if (img && g) img.setAttribute('src', g.still);
+    });
+    cmpBox.addEventListener('pointerdown', (e) => {
+      if (!gifEl.hidden && !e.target.closest('[data-cmd="cmp-gif"]')) closeGifs(false);
     });
 
     function endPassthrough() {
@@ -6171,7 +6320,6 @@
           submitCompose();
           break;
         case 'cmp-xpro':
-        case 'cmp-gif':
         case 'cmp-poll':
         case 'cmp-schedule':
         case 'cmp-location':
@@ -6180,11 +6328,13 @@
           const text = cmpText.value;
           const files = c ? c.files.slice() : [];
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
+          const gif = c ? c.gif : null;
+          closeGifs(false);
           if (c) drafts.delete(draftKey(c));
           compose = null;
           queueCard();
           cmpBack.hidden = true;
-          if (c) handoff(c.kind, c.id, c.key, text, files, tool);
+          if (c) handoff(c.kind, c.id, c.key, text, files, tool, gif);
           break;
         }
         case 'cmp-photo':
@@ -6199,6 +6349,17 @@
           break;
         case 'cmp-italic':
           applyStyle('italic');
+          break;
+        case 'cmp-ungif':
+          if (compose) {
+            compose.gif = null;
+            renderMedia();
+            updateCount();
+          }
+          break;
+        case 'cmp-gif':
+          if (gifEl.hidden) openGifs();
+          else closeGifs(true);
           break;
         case 'cmp-unfile':
           if (compose) {
@@ -6558,13 +6719,14 @@
         renderPrefs();
         return;
       }
-      if (t.closest('.cmp-back') && !t.closest('.cmp') && !t.closest('.emo')) {
-        // The first click outside closes the emoji picker, the next the window.
-        if (!emoEl.hidden) closeEmoji(true);
+      if (t.closest('.cmp-back') && !t.closest('.cmp') && !t.closest('.emo') && !t.closest('.gifp')) {
+        // The first click outside closes a picker, the next the window.
+        if (!gifEl.hidden) closeGifs(true);
+        else if (!emoEl.hidden) closeEmoji(true);
         else closeCompose(true);
         return;
       }
-      if (t.closest('.prefs') || t.closest('.pop') || t.closest('.cmp') || t.closest('.emo') || t.closest('.find')) return;
+      if (t.closest('.prefs') || t.closest('.pop') || t.closest('.cmp') || t.closest('.emo') || t.closest('.gifp') || t.closest('.find')) return;
       // The click that ends a column drag is not a click.
       if (Date.now() - colDragEnd < 400 && t.closest('.col > .ch')) return;
       // A collapsed column opens again on a click anywhere on it.
@@ -7855,7 +8017,8 @@
       }
       if (!cmpBack.hidden) {
         if (e.key === 'Escape') {
-          if (!emoEl.hidden) closeEmoji(true);
+          if (!gifEl.hidden) closeGifs(true);
+          else if (!emoEl.hidden) closeEmoji(true);
           else closeCompose(true);
           return true;
         }
@@ -8129,6 +8292,8 @@
             handled = true;
           } else if (t.id === 'emo-q' && emojiKey(e)) {
             handled = true;
+          } else if (t.id === 'gif-q' && gifKey(e)) {
+            handled = true;
           } else if (e.key === 'Escape') handled = handleKey(e);
         } else handled = handleKey(e);
         if (handled) e.preventDefault();
@@ -8214,6 +8379,7 @@
         if (!ipBack.hidden) return closePicker(false), true;
         if (!ovBack.hidden) return closeOverview(), true;
         if (!addBack.hidden) return closeAddSheet(), true;
+        if (!gifEl.hidden) return closeGifs(true), true;
         if (!emoEl.hidden) return closeEmoji(true), true;
         if (!cmpBack.hidden) return closeCompose(true), true;
         if (!prefsEl.hidden) return closePrefs(), true;

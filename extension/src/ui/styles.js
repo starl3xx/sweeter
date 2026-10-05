@@ -562,8 +562,10 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .dpane{position:absolute;inset:var(--chh) 0 0 0;z-index:2;background:var(--bg);display:flex;flex-direction:column;animation:sweeter-push .22s ease-out}
 @keyframes sweeter-push{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
 .dhead{height:28px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 8px;border-bottom:1px solid var(--div);background:var(--sub);color:var(--t1);font-weight:600;font-size:13px}
-.dback{display:flex;align-items:center;gap:2px;border:0;background:none;color:var(--accent);font-weight:600;font-size:13px;cursor:pointer;padding:4px 6px;border-radius:6px}
-.dtitle{margin:0 auto;padding-right:52px}
+.dback{display:flex;align-items:center;gap:2px;flex:0 1 auto;min-width:0;white-space:nowrap;border:0;background:none;color:var(--accent);font-weight:600;font-size:13px;cursor:pointer;padding:4px 6px;border-radius:6px}
+/* A long column title (a search query) ends in “…” on one line. */
+.dbl{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dtitle{flex:0 0 auto;margin:0 auto;padding-right:52px;white-space:nowrap}
 .dscroll{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;position:relative;scrollbar-width:none}
 .dfoot{padding:14px;text-align:center;color:var(--t3);font-size:.86em}
 .dfoot a{color:var(--accent)}
@@ -808,7 +810,7 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .side .deck{width:36px;height:30px;margin:2px auto 6px;display:grid;place-items:center;background:rgba(255,255,255,.06);border:0;border-radius:8px;font-size:17px;line-height:1;cursor:pointer;color:var(--side-on)}
 .side .deck:hover{background:rgba(255,255,255,.14)}
 .side .deck[hidden]{display:none}
-.dhead .dcol{margin-left:auto;background:none;border:0;color:var(--accent);font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;padding:2px 6px;border-radius:5px}
+.dhead .dcol{flex:0 0 auto;white-space:nowrap;margin-left:auto;background:none;border:0;color:var(--accent);font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;padding:2px 6px;border-radius:5px}
 .dhead .dcol:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .ch .stl{display:grid;place-items:center;flex:0 0 auto;color:#C8650F}
 .ch .stl svg{width:12px;height:12px}

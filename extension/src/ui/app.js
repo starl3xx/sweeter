@@ -2863,7 +2863,7 @@
       const el = document.createElement('div');
       el.className = 'dpane';
       el.innerHTML =
-        '<div class="dhead"><button class="dback" type="button" data-cmd="back" title="Back (←)">‹ ' + h(c.title.textContent || 'Back') + '</button><span class="dtitle">Post</span>' +
+        '<div class="dhead"><button class="dback" type="button" data-cmd="back" title="' + h('Back to ' + (c.title.textContent || 'the column') + ' (←)') + '">‹ <span class="dbl">' + h(c.title.textContent || 'Back') + '</span></button><span class="dtitle">Post</span>' +
         '<button class="dcol" type="button" data-cmd="asColumn" title="Open this conversation as a column of its own, in X Pro on all your devices">Open as Column</button></div>' +
         '<div class="dscroll"><div class="dlist"></div><div class="dfoot"></div></div>';
       c.el.appendChild(el);

@@ -127,6 +127,109 @@
       (a.preview ? '<div class="cpv">' + h(a.preview) + '</div>' : '') + '</div></a>';
   }
 
+  // ---------- the article reader ----------
+  // The page app.js shows in its reader sheet: cover, title, byline, then
+  // the body X Pro loaded with the post's conversation (normalize.js
+  // articleBody). `o.state` is 'loading' or 'failed' until the body is
+  // there; `o.find(id)` looks up a post Sweeter has, for embedded posts.
+  // Each photo and video carries data-rd-m, its place in the article's
+  // media list (the lightbox's order).
+  function readingMinutes(body) {
+    let words = 0;
+    for (const b of body || []) if (b.html) words += b.html.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.round(words / 230));
+  }
+
+  function readerMedia(m, k, ctx) {
+    const ratio = m.w && m.h ? ' style="--r:' + (m.w / m.h).toFixed(4) + '"' : '';
+    const alt = h(m.alt || '');
+    if (m.type === 'photo') return '<div class="rd-m"' + ratio + '><img src="' + h(mediaUrl(m.url, 'large')) + '" alt="' + alt + '" data-rd-m="' + k + '" loading="lazy" decoding="async"></div>';
+    const video = safeUrl(m.videoUrl || '');
+    if (video === '#') return '';
+    const poster = m.url ? ' poster="' + h(mediaUrl(m.url, 'large')) + '"' : '';
+    if (m.type === 'gif' && ctx.settings.autoplayGifs) return '<div class="rd-m"' + ratio + '><video src="' + h(video) + '"' + poster + ' autoplay loop muted playsinline aria-label="' + (alt || 'GIF') + '"></video><span class="gif">GIF</span></div>';
+    return '<div class="rd-m"' + ratio + '><video src="' + h(video) + '"' + poster + ' controls playsinline preload="none"' + (m.type === 'gif' ? ' loop muted' : '') + ' aria-label="' + (alt || (m.type === 'gif' ? 'GIF' : 'Video')) + '"></video></div>';
+  }
+
+  function articlePage(p, ctx, o) {
+    const a = p.article;
+    const opts = o || {};
+    const body = a.body || null;
+    const head =
+      (a.image && ctx.settings.cards !== 'none' ? '<div class="rd-cover"' + (a.w && a.h ? ' style="--r:' + (a.w / a.h).toFixed(4) + '"' : '') + '><img src="' + h(mediaUrl(a.image, 'large')) + '" alt="" decoding="async"></div>' : '') +
+      '<h1 class="rd-title">' + h(a.title) + '</h1>' +
+      '<div class="rd-by"><a class="avl" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" aria-label="' + h(p.author.name) + ' on X"><img class="av" src="' + h(avatar(p.author.avatar, false)) + '" alt="" decoding="async"></a>' +
+      '<div><div class="rd-who"><a class="nm" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer">' + h(p.author.name) + '</a>' + badges(p.author, ctx) + '<a class="hd" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer">@' + h(p.author.handle) + '</a></div>' +
+      '<div class="rd-meta">' + time(p.createdMs, p.url, ctx) + (body ? '<span>' + readingMinutes(body) + ' min read</span>' : '') + '</div></div></div>';
+    if (!body) {
+      const note = opts.state === 'failed'
+        ? '<p class="rd-note">X Pro didn’t load this article’s text. <a href="' + h(safeUrl(p.url)) + '" target="_blank" rel="noopener noreferrer">Open it on x.com</a></p>'
+        : '<p class="rd-note rd-wait">Loading the article…</p>';
+      return head + '<div class="rd-body">' + (a.preview ? '<p>' + h(a.preview) + '</p>' : '') + note + '</div>';
+    }
+    const parts = [];
+    let list = null;
+    let k = 0;
+    for (const b of body) {
+      if (list && b.t !== list) {
+        parts.push('</' + list + '>');
+        list = null;
+      }
+      switch (b.t) {
+        case 'ul':
+        case 'ol':
+          if (!list) {
+            parts.push('<' + b.t + '>');
+            list = b.t;
+          }
+          parts.push('<li>' + b.html + '</li>');
+          break;
+        // The title is the page's h1: the article's headings sit below it.
+        case 'h1':
+          parts.push('<h2>' + b.html + '</h2>');
+          break;
+        case 'h2':
+          parts.push('<h3>' + b.html + '</h3>');
+          break;
+        case 'quote':
+          parts.push('<blockquote>' + b.html + '</blockquote>');
+          break;
+        case 'media':
+          parts.push('<figure class="rd-fig' + (b.items.length > 1 ? ' multi' : '') + '">' + b.items.map((m) => readerMedia(m, k++, ctx)).join('') + (b.caption ? '<figcaption>' + h(b.caption) + '</figcaption>' : '') + '</figure>');
+          break;
+        case 'post': {
+          const q = opts.find ? opts.find(b.id) : null;
+          parts.push(q && !q.unavailable
+            ? '<div class="rd-post">' + quote(q, ctx) + '</div>'
+            : '<a class="rd-link" href="https://x.com/i/status/' + h(b.id) + '" target="_blank" rel="noopener noreferrer">' + icon('quote') + '<span>A post</span><em>Open on x.com</em></a>');
+          break;
+        }
+        case 'link': {
+          const u = safeUrl(b.url);
+          parts.push('<a class="rd-link" href="' + h(u) + '" target="_blank" rel="noopener noreferrer" title="' + h(u) + '">' + icon('link') + '<span>' + h(u.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')) + '</span></a>');
+          break;
+        }
+        case 'hr':
+          parts.push('<hr>');
+          break;
+        case 'code':
+          parts.push('<pre><code>' + h(b.text) + '</code></pre>');
+          break;
+        default:
+          parts.push('<p>' + b.html + '</p>');
+      }
+    }
+    if (list) parts.push('</' + list + '>');
+    return head + '<div class="rd-body">' + parts.join('') + '</div>';
+  }
+
+  // Every photo and video of an article, in page order (the lightbox's list).
+  function articleMediaList(a) {
+    const out = [];
+    for (const b of (a && a.body) || []) if (b.t === 'media') out.push(...b.items);
+    return out;
+  }
+
   function quote(q, ctx) {
     if (!q) return '';
     if (q.unavailable) return '<div class="quote gone">This post is unavailable.</div>';
@@ -261,5 +364,5 @@
     return post(b.post, Object.assign({}, ctx, { context: b.context }));
   }
 
-  Sweeter.render = { block, post, notification, timeLabel, avatar, badges, avatarSmall, acts };
+  Sweeter.render = { block, post, notification, timeLabel, avatar, badges, avatarSmall, acts, articlePage, articleMediaList };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -170,6 +170,55 @@ test('X Articles become a card and their bare link leaves the text', () => {
   eq(p.article, { id: '2104', title: 'The Agentic Workforce', preview: 'Why teams of agents…', image: 'https://pbs.twimg.com/media/cover.jpg', w: 1200, h: 480, url: 'https://x.com/i/article/2104' });
 });
 
+test('a conversation carries the article body: blocks, styles, links and media (X shapes, 2026-10-05)', () => {
+  const t = F.tweet({ text: 'https://t.co/art' });
+  // As X sends it: entityMap a list, ranges naming entries by key (not
+  // position), offsets in code points, inline styles capitalized.
+  t.article = { article_results: { result: {
+    rest_id: '2104', title: 'Inside IMD', preview_text: 'A rising AI project…',
+    content_state: {
+      entityMap: [
+        { key: '12', value: { type: 'LINK', mutability: 'Mutable', data: { url: 'https://explorer.imd.fun/' } } },
+        { key: '3', value: { type: 'MEDIA', mutability: 'Immutable', data: { mediaItems: [{ mediaId: '77', mediaCategory: 'DraftTweetImage' }], caption: 'The swarm' } } },
+        { key: '4', value: { type: 'TWEET', mutability: 'Immutable', data: { tweetId: '2102134245086941640' } } },
+        { key: '5', value: { type: 'DIVIDER', mutability: 'Immutable', data: {} } },
+        { key: '6', value: { type: 'MEDIA', mutability: 'Immutable', data: { mediaItems: [{ mediaId: '88', mediaCategory: 'AmplifyVideo' }] } } },
+        { key: '7', value: { type: 'LINK', mutability: 'Mutable', data: { url: 'javascript:alert(1)' } } },
+      ],
+      blocks: [
+        { type: 'unstyled', text: '🚀 There is a <rising> project', inlineStyleRanges: [{ offset: 0, length: 7, style: 'Bold' }, { offset: 4, length: 3, style: 'Italic' }], entityRanges: [{ key: 12, offset: 13, length: 8 }], data: {} },
+        { type: 'unstyled', text: '', inlineStyleRanges: [], entityRanges: [], data: {} },
+        { type: 'header-two', text: 'What it does', inlineStyleRanges: [], entityRanges: [], data: {} },
+        { type: 'atomic', text: ' ', inlineStyleRanges: [], entityRanges: [{ key: 3, offset: 0, length: 1 }], data: {} },
+        { type: 'unordered-list-item', text: 'People trade $IMD.', inlineStyleRanges: [{ offset: 0, length: 18, style: 'Strikethrough' }], entityRanges: [{ key: 7, offset: 0, length: 6 }], data: { cashtags: [] } },
+        { type: 'atomic', text: ' ', inlineStyleRanges: [], entityRanges: [{ key: 4, offset: 0, length: 1 }], data: {} },
+        { type: 'atomic', text: ' ', inlineStyleRanges: [], entityRanges: [{ key: 5, offset: 0, length: 1 }], data: {} },
+        { type: 'atomic', text: ' ', inlineStyleRanges: [], entityRanges: [{ key: 6, offset: 0, length: 1 }], data: {} },
+        { type: 'some-new-type', text: 'Still read', inlineStyleRanges: [], entityRanges: [], data: {} },
+      ],
+    },
+    media_entities: [
+      { media_id: '77', media_info: { __typename: 'ApiImage', original_img_url: 'https://pbs.twimg.com/media/a.jpg', original_img_width: 2400, original_img_height: 1350 } },
+      { media_id: '88', media_info: { __typename: 'ApiVideo', preview_image: { original_img_url: 'https://pbs.twimg.com/v.jpg', original_img_width: 1280, original_img_height: 720 }, variants: [{ content_type: 'application/x-mpegURL', url: 'https://video.twimg.com/v.m3u8' }, { content_type: 'video/mp4', bit_rate: 832000, url: 'https://video.twimg.com/lo.mp4' }, { content_type: 'video/mp4', bit_rate: 2176000, url: 'https://video.twimg.com/hi.mp4' }] } },
+    ],
+  } } };
+  const b = N.post(t, 0).article.body;
+  eq(b.map((x) => x.t), ['p', 'h2', 'media', 'ul', 'post', 'hr', 'media', 'p']);
+  // 🚀 is one code point (two UTF-16 units): the ranges still land.
+  eq(b[0].html, '<strong>🚀 Th</strong><em><strong>ere</strong></em> is a <a class="u" href="https://explorer.imd.fun/" target="_blank" rel="noopener noreferrer" title="https://explorer.imd.fun/">&lt;rising&gt;</a> project');
+  eq(b[1].html, 'What it does');
+  eq(b[2], { t: 'media', items: [{ type: 'photo', url: 'https://pbs.twimg.com/media/a.jpg', w: 2400, h: 1350, alt: '' }], caption: 'The swarm' });
+  eq(b[3].html, '<s>People trade $IMD.</s>'); // a javascript: link is dropped
+  eq(b[4], { t: 'post', id: '2102134245086941640' });
+  eq(b[6].items[0].videoUrl, 'https://video.twimg.com/hi.mp4');
+  eq(b[6].items[0].url, 'https://pbs.twimg.com/v.jpg');
+  eq(b[7].html, 'Still read');
+  // Timelines carry no content_state: no body, the card as before.
+  const t2 = F.tweet({ text: 'x' });
+  t2.article = { article_results: { result: { rest_id: '9', title: 'T', preview_text: 'P' } } };
+  ok(!('body' in N.post(t2, 0).article));
+});
+
 test('smart tags and cashtag attachments become ticker cards; the text shows $TICKER', () => {
   const F = require('./fixtures');
   const N = globalThis.Sweeter.normalize;

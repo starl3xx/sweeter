@@ -147,7 +147,7 @@
     const a = r.article && r.article.article_results && r.article.article_results.result;
     if (!a || !a.title) return null;
     const cover = a.cover_media && a.cover_media.media_info;
-    return {
+    const out = {
       id: a.rest_id || a.id,
       title: a.title,
       preview: a.preview_text || '',
@@ -156,6 +156,128 @@
       h: cover ? cover.original_img_height : null,
       url: 'https://x.com/i/article/' + (a.rest_id || a.id),
     };
+    const body = articleBody(a);
+    if (body) out.body = body;
+    return out;
+  }
+
+  // ---------- article bodies ----------
+  // Only a conversation carries an article's text: X Pro's TweetDetail asks
+  // for content_state (withArticleRichContentState); timelines carry the
+  // title, preview and cover alone (verified 2026-10-05). content_state is
+  // Draft.js raw content as X stores it: entityMap is a list of {key, value},
+  // a range names an entry by that key (not its place in the list), and
+  // offsets and lengths count code points. X's own reader (verified in its
+  // bundle) knows these block types and atomic entities; anything else is
+  // read as a paragraph, or left out.
+  const ART_BLOCKS = { unstyled: 'p', 'header-one': 'h1', 'header-two': 'h2', 'unordered-list-item': 'ul', 'ordered-list-item': 'ol', blockquote: 'quote' };
+
+  function articleMedia(info) {
+    if (!info) return null;
+    const alt = info.alt_text || '';
+    if (info.__typename === 'ApiImage') return { type: 'photo', url: info.original_img_url || '', w: info.original_img_width || null, h: info.original_img_height || null, alt };
+    if (info.__typename === 'ApiVideo' || info.__typename === 'ApiGif') {
+      const p = info.preview_image || {};
+      const mp4 = (info.variants || []).filter((v) => v && v.content_type === 'video/mp4').sort((x, y) => (y.bit_rate || 0) - (x.bit_rate || 0));
+      const url = mp4.length ? mp4[0].url : null;
+      if (!url) return null;
+      return { type: info.__typename === 'ApiGif' ? 'gif' : 'video', url: p.original_img_url || '', w: p.original_img_width || null, h: p.original_img_height || null, alt: alt || p.alt_text || '', videoUrl: url };
+    }
+    return null;
+  }
+
+  // One block's text as HTML: bold, italic, strikethrough and links.
+  function articleInline(b, ents) {
+    const cps = Array.from(b.text || '');
+    const n = cps.length;
+    const style = new Uint8Array(n);
+    const link = new Array(n).fill(null);
+    const BITS = { bold: 1, italic: 2, strikethrough: 4 };
+    for (const r of b.inlineStyleRanges || []) {
+      const bit = BITS[String(r.style || '').toLowerCase()];
+      if (bit) for (let i = Math.max(0, r.offset); i < Math.min(n, r.offset + r.length); i++) style[i] |= bit;
+    }
+    for (const r of b.entityRanges || []) {
+      const e = ents.get(String(r.key));
+      const url = e && e.type === 'LINK' && e.data && /^https?:\/\//i.test(e.data.url || '') ? e.data.url : null;
+      if (url) for (let i = Math.max(0, r.offset); i < Math.min(n, r.offset + r.length); i++) link[i] = url;
+    }
+    const text = (s) => escapeHtml(s).replace(/\n/g, '<br>');
+    const styled = (s, m) => (m & 4 ? '<s>' : '') + (m & 2 ? '<em>' : '') + (m & 1 ? '<strong>' : '') + text(s) + (m & 1 ? '</strong>' : '') + (m & 2 ? '</em>' : '') + (m & 4 ? '</s>' : '');
+    let html = '';
+    let i = 0;
+    while (i < n) {
+      const url = link[i];
+      let j = i;
+      while (j < n && link[j] === url) j++;
+      let inner = '';
+      let k = i;
+      while (k < j) {
+        let m = k;
+        while (m < j && style[m] === style[k]) m++;
+        inner += styled(cps.slice(k, m).join(''), style[k]);
+        k = m;
+      }
+      html += url ? '<a class="u" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(url) + '">' + inner + '</a>' : inner;
+      i = j;
+    }
+    return html;
+  }
+
+  function articleBody(a) {
+    let cs = a.content_state;
+    if (typeof cs === 'string') {
+      try {
+        cs = JSON.parse(cs);
+      } catch (e) {
+        return null;
+      }
+    }
+    if (!cs || !Array.isArray(cs.blocks)) return null;
+    const ents = new Map();
+    const list = Array.isArray(cs.entityMap) ? cs.entityMap : Object.keys(cs.entityMap || {}).map((key) => ({ key, value: cs.entityMap[key] }));
+    for (const e of list) if (e && e.value) ents.set(String(e.key), e.value);
+    const media = new Map();
+    for (const m of a.media_entities || []) if (m && m.media_id) media.set(String(m.media_id), m.media_info);
+    const out = [];
+    for (const b of cs.blocks) {
+      if (!b) continue;
+      if (b.type === 'atomic') {
+        const r = (b.entityRanges || [])[0];
+        const e = r ? ents.get(String(r.key)) : null;
+        const d = (e && e.data) || {};
+        switch (e && e.type) {
+          case 'MEDIA': {
+            const items = (d.mediaItems || []).map((i) => articleMedia(media.get(String(i.mediaId)))).filter(Boolean);
+            if (items.length) out.push({ t: 'media', items, caption: d.caption || '' });
+            break;
+          }
+          case 'TWEET':
+            if (/^\d+$/.test(String(d.tweetId || ''))) out.push({ t: 'post', id: String(d.tweetId) });
+            break;
+          case 'LINK':
+            if (/^https?:\/\//i.test(d.url || '')) out.push({ t: 'link', url: d.url });
+            break;
+          case 'DIVIDER':
+            out.push({ t: 'hr' });
+            break;
+          case 'MARKDOWN':
+            if (d.markdown) out.push({ t: 'code', text: String(d.markdown).replace(/^```[^\n]*\n([\s\S]*?)\n?```\s*$/, '$1') });
+            break;
+          case 'LATEX':
+            if (/\S/.test(b.text || '')) out.push({ t: 'code', text: b.text });
+            break;
+          default:
+            break;
+        }
+        continue;
+      }
+      const html = articleInline(b, ents);
+      // An empty paragraph is spacing in X's editor, not content.
+      if (!html && (b.type || 'unstyled') === 'unstyled') continue;
+      out.push({ t: ART_BLOCKS[b.type] || 'p', html });
+    }
+    return out.length ? out : null;
   }
 
   // depth 0 = a timeline post; depth 1 = its quote (quotes of quotes are not expanded).

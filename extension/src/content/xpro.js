@@ -887,6 +887,36 @@
     }
   }
 
+  // ---------- articles ----------
+  // Only a conversation carries an X Article's text (TweetDetail asks for
+  // content_state; timelines carry the title, preview and cover), so the
+  // reader opens the post's conversation in its column, lets X Pro load
+  // it, and closes that one level again: whatever the column showed below
+  // it (a conversation, a profile) stays. `o.ready` says when the store has
+  // the body; the recorder hands it over on the way.
+  // Only a level seen open is closed, in the column that shows it: the
+  // opened post (with X's bookmark button, which only an opened post has)
+  // names it. The body can arrive before X Pro draws the stack, so that is
+  // waited for too; a stack never seen is left alone rather than guessed.
+  async function loadArticle(o) {
+    const scope = scopeOf(o.mapping);
+    const here = () => focalArticle(o.id, scope && scope.isConnected ? scope : scopeOf(o.mapping) || null);
+    const r = await openDetail(o);
+    if (!r.ok) return r;
+    let shown = await waitFor(here, 6000);
+    try {
+      return (await waitFor(o.ready, 10000)) ? { ok: true } : { ok: false, reason: 'nobody' };
+    } finally {
+      shown = here() || (shown && shown.isConnected ? shown : null);
+      const w = wrapOf(shown);
+      const b = w && stackButton(w);
+      if (b) {
+        b.click();
+        await waitFor(() => stackButton(wrapOf(shown) || w) !== b || !shown.isConnected, 1500);
+      }
+    }
+  }
+
   // ---------- profiles ----------
   // Clicking a person in X Pro opens their profile as a stack in that
   // column (verified 2026-09-28): UserByScreenName, then their posts. The
@@ -1642,5 +1672,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

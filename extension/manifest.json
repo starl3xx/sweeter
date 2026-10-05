@@ -35,6 +35,7 @@
         "src/content/xpro.js",
         "src/ui/symbols.js",
         "src/ui/mark.js",
+        "src/ui/loader.js",
         "src/ui/icons.js",
         "src/ui/styles.js",
         "src/ui/render.js",

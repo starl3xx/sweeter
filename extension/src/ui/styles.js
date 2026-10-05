@@ -835,23 +835,25 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 
 
 /* loading screen: the Sweeter mark over a bouncing amber VU meter */
-/* The loading screen, drawn like the About window: the icon floats on a
-   glow of its sky and pink, and a line fills as columns load. The Mac
-   app's LaunchCover (ViewController.swift) draws the same before it. */
+/* The loading screen, drawn like the About window: starl3xx's bird flaps
+   on a glow of the icon's sky and pink (eight poses, 130 ms each, from
+   loader.js), and a line fills as columns load. The Mac app's LaunchCover
+   (ViewController.swift) draws the same before it. */
 .boot{position:absolute;inset:0 0 0 76px;z-index:3;display:grid;place-items:center;background:radial-gradient(circle 240px at calc(50% - 40px) calc(50% - 60px),var(--glow-sky),transparent),radial-gradient(circle 220px at calc(50% + 40px) calc(50% - 40px),var(--glow-pink),transparent),var(--bg);transition:opacity .4s ease,filter .4s ease,transform .4s ease}
 .boot.done{opacity:0;filter:blur(4px);transform:scale(.99);pointer-events:none}
 .boot-in{display:flex;flex-direction:column;align-items:center;color:var(--t3);font-size:13px;line-height:16px}
-.boot-mark{width:104px;height:104px;display:block;filter:drop-shadow(0 8px 8px var(--glow-shadow));animation:sweeter-float 2.8s ease-in-out infinite alternate}
-@keyframes sweeter-float{from{transform:translateY(2px)}to{transform:translateY(-4px)}}
-.boot-t{margin-top:16px;font:600 24px/29px ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,sans-serif;color:var(--t1)}
+.boot-bird{width:120px;height:120px;background:0 0/960px 120px no-repeat;animation:sweeter-flap 1040ms steps(8) infinite}
+@keyframes sweeter-flap{to{background-position:-960px 0}}
+.boot-mark{width:104px;height:104px;display:block;margin-bottom:16px;filter:drop-shadow(0 8px 8px var(--glow-shadow))}
+.boot-t{font:600 24px/29px ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,sans-serif;color:var(--t1)}
 .boot-bar{position:relative;width:160px;height:4px;margin-top:18px;border-radius:2px;background:var(--div);overflow:hidden}
 .boot-bar i{position:absolute;top:0;bottom:0;left:0;width:38%;border-radius:2px;background:linear-gradient(90deg,#7EC0FA,#EE5A8E);animation:sweeter-glide 1.5s ease-in-out infinite alternate}
 .boot-bar.known i{width:var(--p,0%);animation:none;transition:width .5s cubic-bezier(.2,.85,.25,1)}
 @keyframes sweeter-glide{from{transform:none}to{transform:translateX(163%)}}
 .boot-s{margin-top:12px;font-variant-numeric:tabular-nums}
-.boot.stuck .boot-mark{animation:none}
+.boot.stuck .boot-bird{animation:none}
 .boot.stuck .boot-bar{visibility:hidden}
-@media (prefers-reduced-motion:reduce){.boot-mark{animation:none}.boot-bar i{animation:none;width:100%;opacity:.4}}
+@media (prefers-reduced-motion:reduce){.boot-bird{animation:none}.boot-bar i{animation:none;width:100%;opacity:.4}}
 /* columns arrive one after another once all have loaded */
 .cols.hold{visibility:hidden}
 .col.arrive{animation:sweeter-col .55s cubic-bezier(.2,.85,.25,1) both;animation-delay:var(--d,0ms)}

@@ -421,7 +421,7 @@
       (opts.late ? '<div class="banner"><span>Sweeter started after X Pro loaded, so these columns only show new posts.</span><button type="button" data-cmd="reload">Reload</button><button class="x" type="button" data-cmd="banner-close" aria-label="Dismiss">×</button></div>' : '') +
       '<div class="cols hold"><div class="nocols" hidden><div class="nocols-in"><b>No columns to show</b><span>This X Pro deck has no columns Sweeter can show yet.</span>' +
       '<div class="nocols-b"><button type="button" class="done" data-cmd="add-open">Add Column…</button><button type="button" data-cmd="xpro">Show X Pro</button></div></div></div></div>' +
-      '<div class="boot" role="status"><div class="boot-in"><img class="boot-mark" src="' + (Sweeter.MARK || '') + '" alt="">' +
+      '<div class="boot" role="status"><div class="boot-in">' + (Sweeter.LOADER ? '<div class="boot-bird" aria-hidden="true" style="background-image:url(' + Sweeter.LOADER + ')"></div>' : '<img class="boot-mark" src="' + (Sweeter.MARK || '') + '" alt="">') +
       '<div class="boot-t">Sweeter</div><div class="boot-bar" aria-hidden="true"><i></i></div><div class="boot-s">Loading your columns</div></div></div>' +
       '<div class="prefs-back" hidden><div class="prefs" role="dialog" aria-modal="true" aria-label="Sweeter Settings">' +
       '<div class="ptitle">Sweeter Settings<button class="x" type="button" data-cmd="close" aria-label="Close Settings">×</button></div>' +

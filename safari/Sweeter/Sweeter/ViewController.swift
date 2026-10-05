@@ -926,10 +926,23 @@ struct LaunchLook {
 
 struct LaunchCoverView: View {
     let look: LaunchLook
-    @State private var up = false
     @State private var glide = false
-    // Reduce Motion: no float, and a still, faint, full bar (as .boot draws it).
+    // Reduce Motion: the bird's first pose, and a still, faint, full bar (as
+    // .boot draws them).
     private let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    private let start = Date()
+
+    /// starl3xx's bird: the eight poses of extension/src/ui/loader.webp (the
+    /// page's own copy is loader.js), 240 px each, in a row.
+    private static let poses: [NSImage] = {
+        guard let url = Bundle.main.builtInPlugInsURL?.appendingPathComponent("Sweeter Extension.appex/Contents/Resources/src/ui/loader.webp"),
+              let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let strip = CGImageSourceCreateImageAtIndex(src, 0, nil), strip.width == strip.height * 8 else { return [] }
+        let side = strip.height
+        return (0..<8).compactMap { i in
+            strip.cropping(to: CGRect(x: i * side, y: 0, width: side, height: side)).map { NSImage(cgImage: $0, size: NSSize(width: 120, height: 120)) }
+        }
+    }()
 
     // The icon's sky and the bird's pink, as in the About window.
     private let sky = Color(red: 0x7E / 255, green: 0xC0 / 255, blue: 0xFA / 255)
@@ -945,17 +958,26 @@ struct LaunchCoverView: View {
                 .frame(width: 440, height: 440)
                 .offset(x: 40, y: -40)
             VStack(spacing: 0) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 104, height: 104)
-                    .shadow(color: pink.opacity(look.dark ? 0.35 : 0.22), radius: 4, y: 8)
-                    .offset(y: up ? -4 : 2)
+                if Self.poses.count == 8 {
+                    // 130 ms a pose, looped, as .boot-bird's steps(8) over 1040 ms.
+                    TimelineView(.periodic(from: start, by: 0.13)) { ctx in
+                        Image(nsImage: Self.poses[still ? 0 : Int(ctx.date.timeIntervalSince(start) / 0.13) % 8])
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: 120, height: 120)
+                    }
+                } else {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 104, height: 104)
+                        .shadow(color: pink.opacity(look.dark ? 0.35 : 0.22), radius: 4, y: 8)
+                        .padding(.bottom, 16)
+                }
                 Text("Sweeter")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .foregroundStyle(look.text)
                     .frame(height: 29)
-                    .padding(.top, 16)
                 Capsule()
                     .fill(look.track)
                     .frame(width: 160, height: 4)
@@ -978,7 +1000,6 @@ struct LaunchCoverView: View {
         .ignoresSafeArea()
         .onAppear {
             guard !still else { return }
-            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { up = true }
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { glide = true }
         }
     }

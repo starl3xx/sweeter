@@ -5723,7 +5723,7 @@
       posting = true;
       updateCount();
       closeGifs(false);
-      await gifClosing;
+      await gifWork;
       cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : c.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
       if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, reply: c.kind === 'reply' ? null : cmpReply.value });
@@ -5757,7 +5757,7 @@
       passthrough = true;
       closePalette();
       applySettings();
-      await gifClosing;
+      await gifWork;
       const r = await xpro.openComposer(kind, id, target(key).m, id ? hintFor(id, key) : null);
       if (!r.ok) {
         endPassthrough();
@@ -6095,9 +6095,11 @@
     // composer X Pro opens for the post, with that GIF pressed (xpro.js).
     // Stills show until the pointer is on one, so only one GIF moves.
     let gifSession = null;
-    // X Pro’s search still closing (its panel too, when Sweeter opened it):
-    // posting and the next search wait for it.
-    let gifClosing = Promise.resolve();
+    // X Pro’s GIF search opening or closing (its panel too, when Sweeter
+    // opened it), one step after another: posting, Open in X Pro, and the
+    // next search wait for every step in flight.
+    let gifWork = Promise.resolve();
+    const gifStep = (fn) => (gifWork = gifWork.then(fn).catch(() => {}));
     let gifItems = [];
     let gifTimer = 0;
     const placeGifs = () => placePanel(gifEl, gifGrid, 'cmp-gif');
@@ -6136,9 +6138,11 @@
       placeGifs();
       gifQ.focus();
       const s = (gifSession = { opened: false, query: '', poll: 0, ready: false });
-      gifClosing.then(() => xpro.gifOpen()).then((r) => {
+      gifStep(async () => {
+        const r = await xpro.gifOpen();
+        // Closed while it opened: close it again, in this same step.
         if (gifSession !== s) {
-          if (r.ok) xpro.gifClose(r.opened);
+          if (r.ok) await xpro.gifClose(r.opened);
           return;
         }
         if (!r.ok) return renderGifs(null, 'X Pro’s GIF search didn’t open. Try Open in X Pro.');
@@ -6156,7 +6160,8 @@
       gifSession = null;
       if (s) {
         clearInterval(s.poll);
-        if (s.ready) gifClosing = Promise.resolve(xpro.gifClose(s.opened)).catch(() => {});
+        // Read when the step runs: an open still in flight closes itself.
+        gifStep(() => (s.ready ? xpro.gifClose(s.opened) : null));
       }
       if (focusText) cmpText.focus();
     }

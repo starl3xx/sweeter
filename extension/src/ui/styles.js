@@ -842,8 +842,11 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .boot{position:absolute;inset:0 0 0 76px;z-index:3;display:grid;place-items:center;background:radial-gradient(circle 240px at calc(50% - 40px) calc(50% - 60px),var(--glow-sky),transparent),radial-gradient(circle 220px at calc(50% + 40px) calc(50% - 40px),var(--glow-pink),transparent),var(--bg);transition:opacity .4s ease,filter .4s ease,transform .4s ease}
 .boot.done{opacity:0;filter:blur(4px);transform:scale(.99);pointer-events:none}
 .boot-in{display:flex;flex-direction:column;align-items:center;color:var(--t3);font-size:13px;line-height:16px}
-.boot-bird{width:120px;height:120px;background:0 0/960px 120px no-repeat;animation:sweeter-flap 1040ms steps(8) infinite}
-@keyframes sweeter-flap{to{background-position:-960px 0}}
+/* The strip slides by transform, which the compositor runs even while the
+   page is busy loading columns (a moving background-position waits on it). */
+.boot-bird{width:120px;height:120px;overflow:hidden}
+.boot-bird i{display:block;width:960px;height:120px;background:0 0/960px 120px no-repeat;will-change:transform;animation:sweeter-flap 1040ms steps(8) infinite}
+@keyframes sweeter-flap{to{transform:translateX(-960px)}}
 .boot-mark{width:104px;height:104px;display:block;margin-bottom:16px;filter:drop-shadow(0 8px 8px var(--glow-shadow))}
 .boot-t{font:600 24px/29px ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,sans-serif;color:var(--t1)}
 .boot-bar{position:relative;width:160px;height:4px;margin-top:18px;border-radius:2px;background:var(--div);overflow:hidden}
@@ -851,9 +854,9 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .boot-bar.known i{width:var(--p,0%);animation:none;transition:width .5s cubic-bezier(.2,.85,.25,1)}
 @keyframes sweeter-glide{from{transform:none}to{transform:translateX(163%)}}
 .boot-s{margin-top:12px;font-variant-numeric:tabular-nums}
-.boot.stuck .boot-bird{animation:none}
+.boot.stuck .boot-bird i{animation:none}
 .boot.stuck .boot-bar{visibility:hidden}
-@media (prefers-reduced-motion:reduce){.boot-bird{animation:none}.boot-bar i{animation:none;width:100%;opacity:.4}}
+@media (prefers-reduced-motion:reduce){.boot-bird i{animation:none}.boot-bar i{animation:none;width:100%;opacity:.4}}
 /* columns arrive one after another once all have loaded */
 .cols.hold{visibility:hidden}
 .col.arrive{animation:sweeter-col .55s cubic-bezier(.2,.85,.25,1) both;animation-delay:var(--d,0ms)}

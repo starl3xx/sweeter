@@ -930,18 +930,14 @@ struct LaunchCoverView: View {
     // Reduce Motion: the bird's first pose, and a still, faint, full bar (as
     // .boot draws them).
     private let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-    private let start = Date()
 
-    /// starl3xx's bird: the eight poses of extension/src/ui/loader.webp (the
-    /// page's own copy is loader.js), 240 px each, in a row.
-    private static let poses: [NSImage] = {
+    /// starl3xx's bird: extension/src/ui/loader.webp (the page's own copy is
+    /// loader.js), eight 240 px poses in a row.
+    private static let strip: CGImage? = {
         guard let url = Bundle.main.builtInPlugInsURL?.appendingPathComponent("Sweeter Extension.appex/Contents/Resources/src/ui/loader.webp"),
               let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let strip = CGImageSourceCreateImageAtIndex(src, 0, nil), strip.width == strip.height * 8 else { return [] }
-        let side = strip.height
-        return (0..<8).compactMap { i in
-            strip.cropping(to: CGRect(x: i * side, y: 0, width: side, height: side)).map { NSImage(cgImage: $0, size: NSSize(width: 120, height: 120)) }
-        }
+              let strip = CGImageSourceCreateImageAtIndex(src, 0, nil), strip.width == strip.height * 8 else { return nil }
+        return strip
     }()
 
     // The icon's sky and the bird's pink, as in the About window.
@@ -958,14 +954,9 @@ struct LaunchCoverView: View {
                 .frame(width: 440, height: 440)
                 .offset(x: 40, y: -40)
             VStack(spacing: 0) {
-                if Self.poses.count == 8 {
-                    // 130 ms a pose, looped, as .boot-bird's steps(8) over 1040 ms.
-                    TimelineView(.periodic(from: start, by: 0.13)) { ctx in
-                        Image(nsImage: Self.poses[still ? 0 : Int(ctx.date.timeIntervalSince(start) / 0.13) % 8])
-                            .resizable()
-                            .interpolation(.high)
-                            .frame(width: 120, height: 120)
-                    }
+                if let strip = Self.strip {
+                    FlapView(strip: strip, still: still)
+                        .frame(width: 120, height: 120)
                 } else {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
@@ -1003,6 +994,38 @@ struct LaunchCoverView: View {
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { glide = true }
         }
     }
+}
+
+/// The bird's eight poses, 130 ms each and looped, as the page's
+/// .boot-bird steps(8) over 1040 ms. Core Animation steps the strip's
+/// contentsRect in the render server, so a busy main thread at launch
+/// can't hold a pose too long.
+struct FlapView: NSViewRepresentable {
+    let strip: CGImage
+    let still: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        let layer = CALayer()
+        layer.contents = strip
+        layer.contentsGravity = .resize
+        layer.contentsRect = CGRect(x: 0, y: 0, width: 1.0 / 8, height: 1)
+        view.layer = layer
+        view.wantsLayer = true
+        guard !still else { return view }
+        let flap = CAKeyframeAnimation(keyPath: "contentsRect")
+        flap.values = (0..<8).map { NSValue(rect: NSRect(x: CGFloat($0) / 8, y: 0, width: 1.0 / 8, height: 1)) }
+        // Discrete: one more key time than values, from 0 to 1.
+        flap.keyTimes = (0...8).map { NSNumber(value: Double($0) / 8) }
+        flap.calculationMode = .discrete
+        flap.duration = 1.04
+        flap.repeatCount = .infinity
+        flap.isRemovedOnCompletion = false
+        layer.add(flap, forKey: "flap")
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {}
 }
 
 /// The top of Sweeter’s sidebar, under the window buttons: drag to move the

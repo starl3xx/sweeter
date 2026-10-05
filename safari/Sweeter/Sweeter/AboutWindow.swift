@@ -90,9 +90,23 @@ final class HeroIcon: NSView {
         shadowLayer.shadowOpacity = shadowOpacity
         layer?.addSublayer(shadowLayer)
         iconLayer.frame = bounds
-        iconLayer.contents = NSApp.applicationIconImage
         iconLayer.contentsGravity = .resizeAspect
         layer?.addSublayer(iconLayer)
+        applyScale(NSScreen.main?.backingScaleFactor ?? 2)
+    }
+
+    /// The layers drawn at the window's scale (they start at 1x), and the
+    /// icon picked for it, so the static icon is sharp on Retina.
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        applyScale(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2)
+    }
+
+    private func applyScale(_ scale: CGFloat) {
+        shadowLayer.contentsScale = scale
+        iconLayer.contentsScale = scale
+        playerLayer?.contentsScale = scale
+        iconLayer.contents = NSApp.applicationIconImage.layerContents(forContentsScale: scale)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -149,6 +163,7 @@ final class HeroIcon: NSView {
         pl.videoGravity = .resizeAspect
         pl.backgroundColor = .clear
         pl.isOpaque = false
+        pl.contentsScale = iconLayer.contentsScale
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer?.addSublayer(pl)

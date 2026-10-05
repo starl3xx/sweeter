@@ -323,7 +323,7 @@ img{display:block}
 /* actions */
 .acts{display:none;gap:2px;margin-top:6px;margin-left:-8px}
 .acts button,.acts a{background:none;border:0;padding:4px 10px 4px 8px;color:var(--act);cursor:pointer;border-radius:5px;display:flex;align-items:center;gap:4px;font-size:.82em}
-.cell.sel .acts button,.cell.sel .acts a{color:var(--accent)}
+.cell.sel .acts button,.cell.sel .acts a,.cell.sel .acts .vw{color:var(--accent)}
 .acts svg{width:17px;height:17px}
 .acts .on-like{color:var(--fav) !important}
 .acts .on-rt{color:var(--rt) !important}

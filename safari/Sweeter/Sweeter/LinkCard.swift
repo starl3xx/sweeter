@@ -20,9 +20,13 @@ enum LinkCard {
     nonisolated static func allowed(_ s: String) -> URL? {
         guard s.count <= 2000, let url = URL(string: s), let scheme = url.scheme?.lowercased(),
               scheme == "https" || scheme == "http", url.user == nil, url.password == nil,
-              let host = url.host?.lowercased(), host.contains(".") else { return nil }
-        // An address rather than a name (IPv4 or IPv6) could be on the local network.
-        if host.range(of: "^[0-9.]+$", options: .regularExpression) != nil || host.contains(":") { return nil }
+              var host = url.host?.lowercased() else { return nil }
+        // "x.com." is x.com: a trailing dot only makes the name absolute.
+        while host.hasSuffix(".") { host.removeLast() }
+        guard host.contains("."), !host.hasPrefix(".") else { return nil }
+        // An address rather than a name (IPv4 in any notation, or IPv6) could
+        // be on the local network.
+        if host.contains(":") || host.split(separator: ".").allSatisfy({ $0.range(of: "^(0x[0-9a-f]*|[0-9]+)$", options: .regularExpression) != nil }) { return nil }
         for local in ["local", "localhost", "internal", "lan", "home.arpa"] where host.hasSuffix("." + local) { return nil }
         for x in ["x.com", "twitter.com", "t.co"] where host == x || host.hasSuffix("." + x) { return nil }
         return url

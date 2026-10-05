@@ -5348,6 +5348,8 @@
       showCard(null);
       if (!want) return;
       cardTimer = setTimeout(() => {
+        // The window closed, or the switch went off, in the meantime.
+        if (cardFor !== want || !compose || settings.composeCards === false) return;
         if (!cards.has(want)) cards.set(want, Promise.resolve(native.linkCard(want)).catch(() => null));
         cards.get(want).then((card) => {
           if (!card) cards.delete(want);
@@ -5883,6 +5885,7 @@
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
           if (c) drafts.delete(draftKey(c));
           compose = null;
+          queueCard();
           cmpBack.hidden = true;
           if (c) handoff(c.kind, c.id, c.key, text, files, tool);
           break;
@@ -7310,6 +7313,7 @@
       if (key === 'tips' && !val) signal('tipsOff');
       if (key === 'telemetry' && native && native.telemetry) native.telemetry(!!val);
       if (key === 'menuBar' && native && native.menuBar) native.menuBar(!!val);
+      if (key === 'composeCards') queueCard();
     }
 
     pbody.addEventListener('input', (e) => {

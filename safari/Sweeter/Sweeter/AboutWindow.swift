@@ -46,7 +46,7 @@ struct AboutView: View {
     let build: String
     @Environment(\.colorScheme) private var scheme
 
-    // The icon's sky and the bird's pink (design/sweeter-icon.svg).
+    // The icon's sky and the bird's pink (design/sweeter-icon-art.png).
     private let sky = Color(red: 0x7E / 255, green: 0xC0 / 255, blue: 0xFA / 255)
     private let pink = Color(red: 0xEE / 255, green: 0x5A / 255, blue: 0x8E / 255)
     // The same pink as text: darker on light (4.8:1), lighter on dark (7.8:1).

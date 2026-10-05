@@ -66,4 +66,4 @@ The laws of the State of Wyoming govern these terms, without regard to its rules
 
 ## Contact
 
-Starl3xx Labs LLC: [hello@starl3xxlabs.co](mailto:hello@starl3xxlabs.co)
+Starl3xx Labs LLC: [gm@starl3xx.fun](mailto:gm@starl3xx.fun)

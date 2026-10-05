@@ -5864,15 +5864,17 @@
       }
       return max;
     }
-    // The newest Emoji version this Mac draws, measured once per system and
-    // kept (settings.emojiMax): the canvas reads wait on WebKit’s graphics
-    // process, which X Pro keeps busy, so they never run on a click.
-    const emojiSystem = () => (native && native.osVersion) || navigator.userAgent;
+    // The newest Emoji version this Mac draws, measured and kept
+    // (settings.emojiMax) per system and emoji data version, and again after
+    // a week, so a newer Sweeter or a misread is never kept for good. The
+    // canvas reads wait on WebKit’s graphics process, which X Pro keeps
+    // busy, so they never run on a click.
     function emojiMax(d) {
+      const key = ((native && native.osVersion) || navigator.userAgent) + ' | ' + (d.v || '');
       const c = settings.emojiMax;
-      if (c && c.sys === emojiSystem() && typeof c.max === 'number') return c.max;
+      if (c && c.key === key && typeof c.max === 'number' && Date.now() - (c.at || 0) < 7 * 864e5) return c.max;
       const max = emojiVersions(d);
-      settings.emojiMax = { sys: emojiSystem(), max };
+      settings.emojiMax = { key, max, at: Date.now() };
       persist();
       return max;
     }
@@ -5936,16 +5938,37 @@
       const sections = q ? [['Results', emojiSearch(q)]] : [['recent', recentEmoji()]].concat(emo.groups.filter(([, idx]) => idx.length));
       emo.sections = sections.filter(([, idx]) => idx.length);
       emoGrid.innerHTML = emo.sections.length
-        ? emo.sections.map(([g, idx]) => '<section class="emo-s" data-g="' + h(g) + '" style="contain-intrinsic-size:auto ' + (Math.ceil(idx.length / 9) * 36 + 26) + 'px"><div class="emo-h">' + h(g === 'recent' ? 'Frequently used' : g) + '</div><div class="emo-row">' + idx.map(emoCell).join('') + '</div></section>').join('')
+        ? emo.sections.map(([g, idx], k) => '<section class="emo-s" data-g="' + h(g) + '" data-k="' + k + '"' + (k < 2 || q ? '' : ' style="min-height:' + emoHeight(idx) + 'px"') + '><div class="emo-h">' + h(g === 'recent' ? 'Frequently used' : g) + '</div><div class="emo-row">' + (k < 2 || q ? idx.map(emoCell).join('') : '') + '</div></section>').join('')
         : '<div class="emo-empty">No emoji match “' + h(q) + '”.</div>';
       emoGrid.scrollTop = 0;
+      // The rest fill in as they near the view (a tab or the arrows fill
+      // theirs at once); their height is held meanwhile, so tabs land right.
+      emoIO.disconnect();
+      for (const sec of emoGrid.querySelectorAll('.emo-s[style]')) emoIO.observe(sec);
       emoTabs.classList.toggle('off', !!q);
       emo.at = null;
       moveEmoji(emo.sections.length ? [0, 0] : null);
       spyEmoji();
     }
+    // A category is a 26 px header and 36 px rows of 9 (styles.js), so its
+    // height is known before its buttons exist. Building all 1,954 at once
+    // took 1.25 s in the Mac app; a screenful takes a fraction of that.
+    const emoHeight = (idx) => 26 + Math.ceil(idx.length / 9) * 36;
+    function fillEmoji(k) {
+      const sec = emoGrid.querySelector('.emo-s[data-k="' + k + '"]');
+      if (!sec || !sec.hasAttribute('style')) return;
+      emoIO.unobserve(sec);
+      sec.querySelector('.emo-row').innerHTML = emo.sections[k][1].map(emoCell).join('');
+      sec.removeAttribute('style');
+    }
+    const emoIO = 'IntersectionObserver' in window
+      ? new IntersectionObserver((entries) => {
+          for (const en of entries) if (en.isIntersecting) fillEmoji(Number(en.target.dataset.k));
+        }, { root: emoGrid, rootMargin: '360px 0px' })
+      : { observe: (sec) => fillEmoji(Number(sec.dataset.k)), unobserve() {}, disconnect() {} };
     // The highlight: [section, position]. It shows in the footer too.
     function moveEmoji(at) {
+      if (at) fillEmoji(at[0]);
       const old = emoGrid.querySelector('button.on');
       if (old) old.classList.remove('on');
       emo.at = at;
@@ -6043,7 +6066,16 @@
     function tracePicker(name, field, panel, steps) {
       if (!native || !native.log) return;
       const t0 = performance.now();
-      const where = () => (document.activeElement === host ? 'sweeter:' + ((shadow.activeElement && (shadow.activeElement.id || shadow.activeElement.className || shadow.activeElement.tagName)) || '-') : document.activeElement ? 'page:' + ((document.activeElement.dataset && document.activeElement.dataset.testid) || document.activeElement.tagName) : 'none');
+      const sel = () => {
+        const g = document.getSelection();
+        const n = g && g.anchorNode;
+        return n ? (n.nodeType === 1 ? n : n.parentElement) : null;
+      };
+      const selAt = () => {
+        const e = sel();
+        return !e ? 'none' : e === host || host.contains(e) ? 'sweeter' : e.closest && e.closest('[data-testid]') ? 'page:' + e.closest('[data-testid]').dataset.testid : 'page:' + e.tagName;
+      };
+      const where = () => 'selection ' + selAt() + ', ' + (document.activeElement === host ? 'sweeter:' + ((shadow.activeElement && (shadow.activeElement.id || shadow.activeElement.className || shadow.activeElement.tagName)) || '-') : document.activeElement ? 'page:' + ((document.activeElement.dataset && document.activeElement.dataset.testid) || document.activeElement.tagName) : 'none');
       requestAnimationFrame(() =>
         setTimeout(() => {
           const paint = performance.now() - t0;
@@ -6056,6 +6088,13 @@
           }, 300);
         }, 0)
       );
+    }
+    function caretTo(field) {
+      field.focus({ preventScroll: true });
+      const n = field.value.length;
+      try {
+        field.setSelectionRange(n, n);
+      } catch (e) {}
     }
     // While a picker is open its search field keeps the focus: if anything
     // outside Sweeter takes it (X Pro, behind the cover), it comes back, a
@@ -6119,7 +6158,10 @@
       }
       const sec = emoGrid.querySelector('.emo-s[data-g="' + CSS.escape(b.dataset.g) + '"]');
       // The grid is the sections’ offset parent.
-      if (sec) emoGrid.scrollTop = sec.offsetTop;
+      if (sec) {
+        fillEmoji(Number(sec.dataset.k));
+        emoGrid.scrollTop = sec.offsetTop;
+      }
       const s = emo.sections.findIndex(([g]) => g === b.dataset.g);
       if (s >= 0) moveEmoji([s, 0]);
       emoQ.focus();
@@ -6192,9 +6234,11 @@
         if (gifSession !== s || s.query !== q) return;
         if (r.ok) renderGifs(r.items, q ? 'No GIFs for “' + q + '”.' : 'No trending GIFs right now.');
         else renderGifs(null, r.reason === 'noanswer' ? 'X Pro’s GIF search didn’t answer. Try again, or use Open in X Pro.' : 'X Pro’s GIF search didn’t open. Try Open in X Pro.');
-        // X Pro stays hidden and cannot take the focus; if anything did, the
-        // search field gets it back.
-        if (!gifEl.hidden && document.activeElement !== host) gifQ.focus({ preventScroll: true });
+        // X Pro stays hidden and cannot take the focus, but its composer’s
+        // editor, opening, moves the page’s selection, and the field’s cursor
+        // with it (Mac app, 2026-10-05): the field gets both back, unless
+        // the person has moved on within Sweeter.
+        if (!gifEl.hidden && (document.activeElement !== host || shadow.activeElement === gifQ || !shadow.activeElement)) caretTo(gifQ);
       });
     }
     function openGifs() {

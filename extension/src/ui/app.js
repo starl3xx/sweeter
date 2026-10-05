@@ -73,6 +73,9 @@
     composePos: null, // the compose window moved from its usual place: { x, y } in px
     composeHeight: 0, // the compose text box’s least height in px (0: the usual 120)
     composeCards: true, // Mac app: a link in the compose window shows its page’s preview card
+    articleReader: true, // an X Article opens in Sweeter’s reader (⌘-click: x.com)
+    readerSize: 18, // the reader’s text size, in px (READER_SIZES)
+    readerFont: 'sans', // the reader’s typeface (READER_FONTS)
     emojiRecent: [], // the emoji picker’s Frequently used, newest first (no skin tone)
     emojiTone: 0, // the emoji picker’s skin tone: 0 (none) to 5 (dark)
   };
@@ -297,6 +300,7 @@
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
+      { k: 'check', key: 'articleReader', label: 'X Articles', text: 'Open in Sweeter’s reader', note: 'X Pro loads an article’s text with its conversation, which Sweeter opens in the post’s column and closes again. ⌘-click opens x.com.' },
     ],
     extras: [
       { k: 'head', label: 'Crypto' },
@@ -304,6 +308,11 @@
       { k: 'check', key: 'tickerPrices', label: 'Ticker cards', text: 'Show prices', note: 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most, and GeckoTerminal for a logo DexScreener lacks.', lbl: true },
     ],
   };
+
+  // The article reader’s typefaces (data-font on .rd, styles.js) and text
+  // sizes, in px.
+  const READER_FONTS = [['sans', 'Sans serif'], ['serif', 'Serif'], ['rounded', 'Rounded'], ['mono', 'Monospace']];
+  const READER_SIZES = [14, 16, 18, 20, 22, 25, 28];
   // The Keyboard page’s list (the Settings sheet and the Mac app’s window).
   const KEY_LIST = [
     ['j k', 'Next, previous post'], ['l', 'Like or unlike'],
@@ -461,6 +470,15 @@
       '<button class="x pf-close" type="button" data-cmd="prof-close" aria-label="Close profile (Esc)" title="Close (Esc)">' + icon('x') + '</button>' +
       '<div class="pf-scroll" tabindex="-1"><div class="pf-head"></div><div class="pf-tabs" role="tablist" aria-label="Profile sections"></div><div class="pf-list"></div><div class="pf-foot"></div></div>' +
       '</div></div>' +
+      '<div class="rd-back" hidden><div class="rd" role="dialog" aria-modal="true" aria-label="Article">' +
+      '<div class="rd-top"><button class="x rd-close" type="button" data-cmd="rd-close" aria-label="Close article (Esc)" title="Close (Esc)">' + icon('x') + '</button>' +
+      '<div class="rd-tools" role="toolbar" aria-label="Reader">' +
+      '<button class="rd-sz s" type="button" data-cmd="rd-smaller" title="Smaller text (−)" aria-label="Smaller text">A</button>' +
+      '<button class="rd-sz l" type="button" data-cmd="rd-bigger" title="Larger text (+)" aria-label="Larger text">A</button><i class="rd-sep"></i>' +
+      READER_FONTS.map(([id, label]) => '<button class="rd-f" type="button" data-cmd="rd-font" data-font="' + id + '" title="' + label + '" aria-label="' + label + '" aria-pressed="false">Aa</button>').join('') +
+      '</div><button class="rd-xo" type="button" data-cmd="rd-open" title="Open on x.com" aria-label="Open on x.com">' + icon('open') + '</button></div>' +
+      '<div class="rd-scroll" tabindex="-1"><article class="rd-page"></article></div><div class="rd-foot"></div>' +
+      '</div></div>' +
       '<div class="pop" hidden role="menu"></div>' +
       '<div class="cmp-back" hidden><div class="cmp" role="dialog" aria-modal="true" aria-label="Compose">' +
       '<div class="cmp-head" title="Drag to move. Double-click to put it back."><span class="cmp-title">New post</span><button class="x" type="button" data-cmd="cmp-cancel" aria-label="Close and keep the draft" title="Close and keep the draft">×</button></div>' +
@@ -558,6 +576,11 @@
     const profHead = shadow.querySelector('.pf-head');
     const profTabs = shadow.querySelector('.pf-tabs');
     const profList = shadow.querySelector('.pf-list');
+    const rdBack = shadow.querySelector('.rd-back');
+    const rdBox = shadow.querySelector('.rd');
+    const rdScroll = shadow.querySelector('.rd-scroll');
+    const rdPage = shadow.querySelector('.rd-page');
+    const rdFoot = shadow.querySelector('.rd-foot');
     const profFoot = shadow.querySelector('.pf-foot');
     const cmpBack = shadow.querySelector('.cmp-back');
     const cmpTitle = shadow.querySelector('.cmp-title');
@@ -2527,6 +2550,7 @@
       }
       if (key && key.startsWith('detail:')) {
         for (const c of cols.values()) if (c.detail && 'detail:' + c.detail.id === key) renderDetail(c, false);
+        readerDetail(key.slice(7));
         return;
       }
       if (key === 'decks') {
@@ -3381,6 +3405,141 @@
       }, 900);
       app.focus({ preventScroll: true });
       resumeWelcome();
+    }
+
+    // ---------- the article reader ----------
+    // An X Article opens in a sheet like a profile’s: cover, title, byline,
+    // the body, and the post’s own action bar. The body comes only with the
+    // post’s conversation: unless Sweeter has it already, X Pro opens the
+    // conversation in the post’s column and closes it again
+    // (xpro.loadArticle). Text size and typeface are settings of their own.
+    let rd = null;
+    let rdToken = 0;
+
+    // The post as its conversation carries it, with the article’s body.
+    function articleOf(id) {
+      const d = store.detail(id);
+      for (const b of d ? d.blocks : []) if (b.kind === 'post' && b.post.id === id && b.post.article && b.post.article.body) return b.post;
+      return null;
+    }
+
+    function openReader(post, key) {
+      if (!post || !post.article) return;
+      closePop();
+      const token = ++rdToken;
+      const full = articleOf(post.id);
+      rd = { id: post.id, post: full || post, key: key || null, state: full ? 'ready' : 'loading', token };
+      rdBack.hidden = false;
+      applyReaderStyle();
+      renderReader(true);
+      rdScroll.focus({ preventScroll: true });
+      if (full) return;
+      // X Pro loaded this conversation without the body: asking again won’t
+      // bring it, and its stack is the conversation Sweeter shows.
+      if (store.detail(post.id)) return readerFailed(token, 'nobody');
+      holds.add('article');
+      xpro
+        .loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id) })
+        .then((r) => {
+          if (!r.ok) readerFailed(token, r.reason);
+        })
+        .finally(() => setTimeout(() => holds.delete('article'), 900));
+    }
+
+    function readerFailed(token, reason) {
+      if (!rd || rd.token !== token || rd.state === 'ready') return;
+      rd.state = 'failed';
+      if (native) native.log('article failed: ' + (reason || 'unknown'));
+      renderReader(false);
+    }
+
+    // The store has a conversation: the reader’s body, if it was waiting.
+    function readerDetail(id) {
+      if (!rd || rd.id !== id || rd.state === 'ready') return;
+      const full = articleOf(id);
+      if (!full) return;
+      rd.post = full;
+      rd.state = 'ready';
+      renderReader(false);
+    }
+
+    function renderReader(first) {
+      if (!rd) return;
+      const ctx = { settings, now: Date.now(), viewer, expanded };
+      rdPage.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: findPost });
+      if (first) rdScroll.scrollTop = 0;
+      renderReaderBar();
+    }
+
+    // The post’s action bar, always shown. It is a cell, so the buttons, the
+    // keys and every change of state reach it as they reach the post in a
+    // column; data-vid names the column it acts through.
+    function renderReaderBar() {
+      if (!rd) return;
+      const p = findPost(rd.id) || rd.post;
+      rdFoot.innerHTML = '<div class="cell rd-cell" data-id="' + h(p.id) + '" data-url="' + h(safeUrl(p.url)) + '" data-vid="' + h(rd.key || '') + '">' + R.acts(p, { settings }) + '</div>';
+    }
+
+    function applyReaderStyle() {
+      const font = READER_FONTS.some((f) => f[0] === settings.readerFont) ? settings.readerFont : 'sans';
+      const size = Number(settings.readerSize) || 18;
+      rdBox.dataset.font = font;
+      rdBox.style.setProperty('--rd-size', size + 'px');
+      for (const b of rdBox.querySelectorAll('.rd-f')) b.setAttribute('aria-pressed', String(b.dataset.font === font));
+      rdBox.querySelector('.rd-sz.s').disabled = size <= READER_SIZES[0];
+      rdBox.querySelector('.rd-sz.l').disabled = size >= READER_SIZES[READER_SIZES.length - 1];
+    }
+
+    // One step larger or smaller (0: the default), keeping the reading place.
+    function readerSize(step) {
+      const cur = Number(settings.readerSize) || 18;
+      const next = step === 0 ? 18 : step > 0 ? READER_SIZES.find((x) => x > cur) || cur : READER_SIZES.slice().reverse().find((x) => x < cur) || cur;
+      if (next === cur) return;
+      const at = rdScroll.scrollTop / Math.max(1, rdScroll.scrollHeight);
+      settings.readerSize = next;
+      persist();
+      applyReaderStyle();
+      rdScroll.scrollTop = at * rdScroll.scrollHeight;
+    }
+
+    function readerFont(font) {
+      if (!READER_FONTS.some((f) => f[0] === font) || settings.readerFont === font) return;
+      const at = rdScroll.scrollTop / Math.max(1, rdScroll.scrollHeight);
+      settings.readerFont = font;
+      persist();
+      applyReaderStyle();
+      rdScroll.scrollTop = at * rdScroll.scrollHeight;
+    }
+
+    function closeReader() {
+      if (!rd) return;
+      rd = null;
+      rdToken++;
+      rdBack.hidden = true;
+      // Emptied, so a playing video stops.
+      rdPage.innerHTML = '';
+      rdFoot.innerHTML = '';
+      (profBack.hidden ? app : profScroll).focus({ preventScroll: true });
+    }
+
+    // A reader key: Esc and ⌘W close; − and + change the text size, 0 resets
+    // it; r, t, l and b press the bar’s buttons. Arrows and Space scroll.
+    function readerKey(e) {
+      if (e.key === 'Escape' || (e.metaKey && e.key.toLowerCase() === 'w')) {
+        closeReader();
+        return true;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return false;
+      if (e.key === '-' || e.key === '_') return readerSize(-1), true;
+      if (e.key === '=' || e.key === '+') return readerSize(1), true;
+      if (e.key === '0') return readerSize(0), true;
+      const act = { r: 'reply', t: 'repost', l: 'like', b: 'bookmark' }[e.key];
+      const btn = act && rdFoot.querySelector('[data-act="' + act + '"]');
+      if (btn) {
+        btn.click();
+        return true;
+      }
+      return false;
     }
 
     function fmtCount(n) {
@@ -4522,7 +4681,7 @@
     // opened by hand counts as this launch’s greeting.
     let greeted = false;
     let greetTimer = 0;
-    const sheetOpen = () => !wcBack.hidden || !prefsEl.hidden || !cmpBack.hidden || !profBack.hidden || !addBack.hidden || !askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden || !upBack.hidden || !!(palette && palette.isOpen()) || !!lb || passthrough;
+    const sheetOpen = () => !wcBack.hidden || !prefsEl.hidden || !cmpBack.hidden || !profBack.hidden || !rdBack.hidden || !addBack.hidden || !askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden || !upBack.hidden || !!(palette && palette.isOpen()) || !!lb || passthrough;
     function greet() {
       clearTimeout(greetTimer);
       if (greeted || booting || !settings.visible) return;
@@ -5193,6 +5352,7 @@
           } else if (b.kind === 'thread') b.posts.forEach(fn);
         }
       }
+      if (rd) fn(rd.post);
     }
 
     function findPost(id) {
@@ -5230,6 +5390,7 @@
         }
         if (hit) redrawPop(rec);
       }
+      if (rd && rd.id === id) renderReaderBar();
     }
 
     function copyText(text, done) {
@@ -6571,6 +6732,21 @@
         case 'prof-close':
           closeProfile();
           break;
+        case 'rd-close':
+          closeReader();
+          break;
+        case 'rd-smaller':
+          readerSize(-1);
+          break;
+        case 'rd-bigger':
+          readerSize(1);
+          break;
+        case 'rd-font':
+          readerFont(el.dataset.font);
+          break;
+        case 'rd-open':
+          if (rd) openUrl(rd.post.url);
+          break;
         case 'prof-follow':
           profFollow(true);
           break;
@@ -6831,6 +7007,16 @@
         else pickInPicker(t.closest('.ipi, .ipsw'));
         return;
       }
+      if (t.closest('.rd-back') && !t.closest('.rd')) {
+        closeReader();
+        return;
+      }
+      // A photo in an article: the lightbox, through the article’s media.
+      const rdm = t.closest('.rd-page [data-rd-m]');
+      if (rdm && rd) return openLightbox({ ...rd.post, media: R.articleMediaList(rd.post.article) }, Number(rdm.dataset.rdM) || 0);
+      // A post the article embeds: on x.com (the reader has no column for it).
+      const rdq = t.closest('.rd-post .quote[data-url]');
+      if (rdq && !t.closest('a[href]')) return openUrl(rdq.dataset.url);
       if (t.closest('.prof-back') && !t.closest('.prof')) {
         closeProfile();
         return;
@@ -6884,6 +7070,9 @@
           const pc = who.closest('.cell[data-id]');
           const pcol = who.closest('.col');
           if (pc) selectCell(pc, false);
+          // The author of an article: the profile sheet shows under the
+          // reader, so the reader goes first.
+          if (who.closest('.rd')) closeReader();
           openProfile(handle, { postId: pc ? pc.dataset.id : null, key: pcol ? pcol.dataset.key : null });
           return;
         }
@@ -6895,6 +7084,19 @@
         return openToken(ca);
       }
       if (ca && ca.classList.contains('tkc')) return openUrl('https://dexscreener.com/search?q=' + encodeURIComponent(ca.dataset.ca));
+      // An X Article opens in the reader (⌘-click: x.com).
+      const artCard = t.closest('a.card.article');
+      if (artCard && settings.articleReader && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        const ac = artCard.closest('.cell[data-id]');
+        const ap = ac && findPost(ac.dataset.id);
+        if (ap && ap.article) {
+          e.preventDefault();
+          const acol = ac.closest('.col');
+          if (!ac.closest('.rd')) selectCell(ac, false);
+          openReader(ap, acol ? acol.dataset.vid : null);
+          return;
+        }
+      }
       if (t.closest('a[href]')) return; // links open in a new tab by themselves
       const prof = t.closest('[data-profile]');
       if (prof) return openUrl('https://x.com/' + encodeURIComponent(prof.dataset.profile));
@@ -6903,8 +7105,9 @@
         const cell = act.closest('.cell[data-id]');
         if (!cell) return;
         const colEl = cell.closest('.col');
-        const key = colEl ? colEl.dataset.vid : null;
-        selectCell(cell, false);
+        const inReader = cell.classList.contains('rd-cell');
+        const key = colEl ? colEl.dataset.vid : inReader ? cell.dataset.vid || null : null;
+        if (!inReader) selectCell(cell, false);
         switch (act.dataset.act) {
           case 'like':
             doLike(cell.dataset.id, key);
@@ -8115,6 +8318,7 @@
         }
         return false;
       }
+      if (!rdBack.hidden && pop.hidden && !lb && cmpBack.hidden) return readerKey(e);
       if (!profBack.hidden && pop.hidden && !lb) {
         if (e.key === 'Escape' || (e.metaKey && e.key.toLowerCase() === 'w')) {
           if (prof && prof.confirm) {

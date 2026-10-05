@@ -831,11 +831,13 @@
       return '<div class="tok" role="dialog" data-ca="' + h(a) + '" aria-label="Token ' + h(short) + '">' + body + '<div class="tk-a" title="' + h(a) + '">' + h(a) + '</div>' + foot + '<div class="tk-src">Data from DexScreener, fetched when you clicked.</div></div>';
     }
     let tokenFor = null;
+    let tokenAnchor = null; // the address or ticker that opened the card
     async function openToken(el) {
       const a = el.dataset.ca;
       const chain = el.dataset.chain || '';
       closePop();
       tokenFor = a;
+      tokenAnchor = el;
       pop.innerHTML = tokenCard(a, 'loading');
       placePop(el);
       let html;
@@ -6204,7 +6206,15 @@
         run(cmd.dataset.cmd, cmd);
         return;
       }
+      // A second click on the address or ticker that opened the token card
+      // closes it (and opens nothing).
+      // A modified click still goes on to open DexScreener.
+      const again = !pop.hidden && !!pop.querySelector('.tok') && !!tokenAnchor && tokenAnchor.contains(t) && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
       if (!pop.hidden && !t.closest('.pop')) closePop();
+      if (again) {
+        e.preventDefault();
+        return;
+      }
       if (t.closest('.lb')) {
         if (t.classList && t.classList.contains('lb-img')) {
           if (lb && lb.dragged) lb.dragged = false;

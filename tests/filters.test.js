@@ -63,10 +63,10 @@ test('mentions count only the text the reader sees', () => {
 });
 
 test('find matches every word, in text, author and links', () => {
-  const p = post({ text: 'Ivory has timeline filters', user: F.user('tapbots', 'Tapbots') });
-  eq(X.find('ivory FILTERS')(p), true);
-  eq(X.find('ivory missing')(p), false);
-  eq(X.find('@tapbots')(p), true);
+  const p = post({ text: 'Sweeter has timeline filters', user: F.user('starl3xx', 'starl3xx') });
+  eq(X.find('sweeter FILTERS')(p), true);
+  eq(X.find('sweeter missing')(p), false);
+  eq(X.find('@starl3xx')(p), true);
   eq(X.find('filt')(p), true); // partial words match while typing
   eq(X.find('   '), null);
 });

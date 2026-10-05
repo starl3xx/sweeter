@@ -5384,14 +5384,27 @@
       const from = cmpAt;
       const x0 = e.clientX;
       const y0 = e.clientY;
-      cmpBox.classList.add('moving');
-      const move = (ev) => placeCompose({ x: from.x + ev.clientX - x0, y: from.y + ev.clientY - y0 });
+      let moved = false;
+      const move = (ev) => {
+        const dx = ev.clientX - x0;
+        const dy = ev.clientY - y0;
+        // A click is not a move.
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+        moved = true;
+        cmpBox.classList.add('moving');
+        placeCompose({ x: from.x + dx, y: from.y + dy });
+      };
       const up = () => {
         cmpHead.removeEventListener('pointermove', move);
         cmpHead.removeEventListener('pointerup', up);
         cmpHead.removeEventListener('pointercancel', up);
         cmpBox.classList.remove('moving');
-        settings.composePos = cmpAt.x || cmpAt.y ? cmpAt : null;
+        // Save only the axes the drag moved: a window raised to fit long
+        // text keeps the place the person chose in the other one.
+        const p = settings.composePos || { x: 0, y: 0 };
+        const next = { x: cmpAt.x !== from.x ? cmpAt.x : p.x || 0, y: cmpAt.y !== from.y ? cmpAt.y : p.y || 0 };
+        if (!moved || (next.x === (p.x || 0) && next.y === (p.y || 0))) return;
+        settings.composePos = next.x || next.y ? next : null;
         persist();
       };
       cmpHead.addEventListener('pointermove', move);

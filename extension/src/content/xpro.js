@@ -894,13 +894,26 @@
   // it, and closes that one level again: whatever the column showed below
   // it (a conversation, a profile) stays. `o.ready` says when the store has
   // the body; the recorder hands it over on the way.
+  // Only a level seen open is closed, in the column that shows it: the
+  // opened post (with X's bookmark button, which only an opened post has)
+  // names it. The body can arrive before X Pro draws the stack, so that is
+  // waited for too; a stack never seen is left alone rather than guessed.
   async function loadArticle(o) {
+    const scope = scopeOf(o.mapping);
+    const here = () => focalArticle(o.id, scope && scope.isConnected ? scope : scopeOf(o.mapping) || null);
     const r = await openDetail(o);
     if (!r.ok) return r;
+    let shown = await waitFor(here, 6000);
     try {
       return (await waitFor(o.ready, 10000)) ? { ok: true } : { ok: false, reason: 'nobody' };
     } finally {
-      if (!(await popStack(o.mapping, 1))) closeDetail(o.mapping);
+      shown = here() || (shown && shown.isConnected ? shown : null);
+      const w = wrapOf(shown);
+      const b = w && stackButton(w);
+      if (b) {
+        b.click();
+        await waitFor(() => stackButton(wrapOf(shown) || w) !== b || !shown.isConnected, 1500);
+      }
     }
   }
 

@@ -3415,6 +3415,9 @@
     // (xpro.loadArticle). Text size and typeface are settings of their own.
     let rd = null;
     let rdToken = 0;
+    // One article load at a time: each opens and pops a level of an X Pro
+    // stack, so two at once could close each other’s conversation.
+    let rdLoads = Promise.resolve();
 
     // The post as its conversation carries it, with the article’s body.
     function articleOf(id) {
@@ -3437,13 +3440,21 @@
       // X Pro loaded this conversation without the body: asking again won’t
       // bring it, and its stack is the conversation Sweeter shows.
       if (store.detail(post.id)) return readerFailed(token, 'nobody');
-      holds.add('article');
-      xpro
-        .loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id) })
-        .then((r) => {
+      rdLoads = rdLoads.then(async () => {
+        // Closed, or another article, while it waited: nothing to load.
+        if (!rd || rd.token !== token || rd.state === 'ready') return;
+        if (articleOf(post.id)) return readerDetail(post.id);
+        const hold = 'article:' + token;
+        holds.add(hold);
+        try {
+          const r = await xpro.loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id) });
           if (!r.ok) readerFailed(token, r.reason);
-        })
-        .finally(() => setTimeout(() => holds.delete('article'), 900));
+        } catch (e) {
+          readerFailed(token, 'error');
+        } finally {
+          setTimeout(() => holds.delete(hold), 900);
+        }
+      });
     }
 
     function readerFailed(token, reason) {
@@ -5331,7 +5342,16 @@
 
     // ---------- actions (through X Pro’s own buttons) ----------
 
-    function eachPost(fn) {
+    // Every post record Sweeter holds, each once: an open conversation’s
+    // post and the reader’s are often a record a column holds too, and
+    // updatePost’s count flips must not run twice on one record.
+    function eachPost(visit) {
+      const seen = new Set();
+      const fn = (p) => {
+        if (!p || seen.has(p)) return;
+        seen.add(p);
+        visit(p);
+      };
       for (const s of store.all()) {
         for (const b of s.sorted) {
           if (b.kind === 'post') {

@@ -928,6 +928,8 @@ struct LaunchCoverView: View {
     let look: LaunchLook
     @State private var up = false
     @State private var glide = false
+    // Reduce Motion: no float, and a still, faint, full bar (as .boot draws it).
+    private let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 
     // The icon's sky and the bird's pink, as in the About window.
     private let sky = Color(red: 0x7E / 255, green: 0xC0 / 255, blue: 0xFA / 255)
@@ -960,7 +962,8 @@ struct LaunchCoverView: View {
                     .overlay(alignment: .leading) {
                         Capsule()
                             .fill(LinearGradient(colors: [sky, pink], startPoint: .leading, endPoint: .trailing))
-                            .frame(width: 61)
+                            .frame(width: still ? 160 : 61)
+                            .opacity(still ? 0.4 : 1)
                             .offset(x: glide ? 99 : 0)
                     }
                     .clipShape(Capsule())
@@ -974,7 +977,7 @@ struct LaunchCoverView: View {
         }
         .ignoresSafeArea()
         .onAppear {
-            guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+            guard !still else { return }
             withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { up = true }
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) { glide = true }
         }

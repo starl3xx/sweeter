@@ -2,7 +2,7 @@
 
 <h1 align="center">Sweeter</h1>
 
-<p align="center">A fast, keyboard-friendly, Tweetbot-inspired face for X Pro on the Mac.</p>
+<p align="center">A clean, customizable, keyboard-friendly face for X Pro on the Mac.</p>
 
 Sweeter draws X Pro (pro.x.com) as calm, dense columns you can read with the keyboard: unread markers that remember where you stopped, filters and mutes, merged columns, column groups, pop-out windows, a media viewer and a command palette. It comes as a Mac app, and the same thing works as a Safari extension.
 

@@ -10,6 +10,7 @@
 		4A5B8F30306AC8D60046AF31 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F2F306AC8D60046AF31 /* AppDelegate.swift */; };
 		4A5B8F34306AC8D60046AF31 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F32306AC8D60046AF31 /* Main.html */; };
 		4A5B8F36306AC8D60046AF31 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F35306AC8D60046AF31 /* Icon.png */; };
+		4A5B8F6C306AC8D80046AF31 /* sweeter-hero.mov in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F6B306AC8D80046AF31 /* sweeter-hero.mov */; };
 		4A5B8F38306AC8D60046AF31 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F37306AC8D60046AF31 /* Style.css */; };
 		4A5B8F3A306AC8D60046AF31 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = 4A5B8F39306AC8D60046AF31 /* Script.js */; };
 		4A5B8F3C306AC8D60046AF31 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F3B306AC8D60046AF31 /* ViewController.swift */; };
@@ -54,6 +55,7 @@
 		4A5B8F2F306AC8D60046AF31 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		4A5B8F33306AC8D60046AF31 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
 		4A5B8F35306AC8D60046AF31 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		4A5B8F6B306AC8D80046AF31 /* sweeter-hero.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = "sweeter-hero.mov"; sourceTree = "<group>"; };
 		4A5B8F37306AC8D60046AF31 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
 		4A5B8F39306AC8D60046AF31 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
 		4A5B8F3B306AC8D60046AF31 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
@@ -127,6 +129,7 @@
 			children = (
 				4A5B8F32306AC8D60046AF31 /* Main.html */,
 				4A5B8F35306AC8D60046AF31 /* Icon.png */,
+				4A5B8F6B306AC8D80046AF31 /* sweeter-hero.mov */,
 				4A5B8F37306AC8D60046AF31 /* Style.css */,
 				4A5B8F39306AC8D60046AF31 /* Script.js */,
 			);
@@ -240,6 +243,7 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				4A5B8F36306AC8D60046AF31 /* Icon.png in Resources */,
+				4A5B8F6C306AC8D80046AF31 /* sweeter-hero.mov in Resources */,
 				4A5B8F3F306AC8D60046AF31 /* Main.storyboard in Resources */,
 				4A5B8F3A306AC8D60046AF31 /* Script.js in Resources */,
 				4A5B8F34306AC8D60046AF31 /* Main.html in Resources */,

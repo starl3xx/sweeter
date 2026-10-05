@@ -142,6 +142,28 @@
     return unescapeEntities(cps.slice(s, e).join(''));
   }
 
-  Sweeter.text = { richText, plainText };
+  // Links typed in the compose window: the http(s) addresses X counts as 23
+  // characters, less the punctuation that ends a sentence (a closing
+  // bracket stays when the link opened one). Offsets count UTF-16 units,
+  // as a textarea does.
+  function draftLinks(text) {
+    const out = [];
+    const re = /https?:\/\/\S+/g;
+    const s = String(text || '');
+    let m;
+    while ((m = re.exec(s))) {
+      let url = m[0];
+      for (;;) {
+        const last = url.slice(-1);
+        if (/[.,;:!?'"”’»]/.test(last)) url = url.slice(0, -1);
+        else if (last === ')' && url.split('(').length < url.split(')').length) url = url.slice(0, -1);
+        else break;
+      }
+      if (/^https?:\/\/[^\s/?#]+\.[^\s/?#.]/.test(url)) out.push({ start: m.index, end: m.index + url.length, url });
+    }
+    return out;
+  }
+
+  Sweeter.text = { richText, plainText, draftLinks };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.text;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

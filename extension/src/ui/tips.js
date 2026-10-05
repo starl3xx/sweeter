@@ -104,6 +104,7 @@
     { id: 'mediaGrid', text: 'A column can show its media as a grid: its … menu ▸ Show as Media Grid.', act: ['Open Column Menu', 'colMenu'] },
     { id: 'draft', text: '{Esc} closes the compose window and keeps the draft.' },
     { id: 'pasteMedia', text: 'Paste or drop photos and videos straight into the compose window.' },
+    { id: 'moveCompose', text: 'Drag the compose window by its title to put it where you like; it opens there next time. Double-click the title to put it back.' },
     { id: 'views', text: 'Duplicate as View, in a column’s … menu, shows the same timeline twice, each copy with its own filters.', act: ['Open Column Menu', 'colMenu'] },
     { id: 'moveKeys', text: '{]} and {[} move between columns, and {Space} pages down.' },
     { id: 'theme', text: 'Try the Sweeter, Catppuccin, Nord, or Dracula theme, each in light and dark: Settings ▸ General ▸ Theme.', act: ['Open Settings', 'prefs:general'] },

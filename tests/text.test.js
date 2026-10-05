@@ -1,4 +1,4 @@
-const { richText, plainText } = globalThis.Sweeter.text;
+const { richText, plainText, draftLinks } = globalThis.Sweeter.text;
 const U = globalThis.Sweeter.util;
 
 test('plain text is escaped and newlines become <br>', () => {
@@ -110,4 +110,18 @@ test('contract addresses link to DexScreener, shortened; links and hashes stay a
   ok(richText('sol ' + sol + ' pump').includes('data-ca="' + sol + '"'), 'solana');
   ok(!richText('pneumonoultramicroscopicsilicovolcanoconiosis').includes('class="ca"'), 'long word');
   ok(!richText('x' + evm).includes('class="ca"'), 'glued to a word');
+});
+
+test('draft links: the addresses X counts, without closing punctuation', () => {
+  const at = (t) => draftLinks(t).map((l) => t.slice(l.start, l.end));
+  eq(at('see https://starl3xx.fun/sweeter.'), ['https://starl3xx.fun/sweeter']);
+  eq(at('(https://example.com/a) and http://b.example.org/x?y=1, ok'), ['https://example.com/a', 'http://b.example.org/x?y=1']);
+  eq(at('https://en.wikipedia.org/wiki/Fish_(food)'), ['https://en.wikipedia.org/wiki/Fish_(food)']);
+  eq(at('“https://example.com”'), ['https://example.com']);
+  eq(at('https:// and https://localhost and https://x.'), []);
+});
+
+test('draft links count UTF-16 offsets, as a textarea does', () => {
+  const t = '🦋 https://example.com';
+  eq(draftLinks(t), [{ start: 3, end: t.length, url: 'https://example.com' }]);
 });

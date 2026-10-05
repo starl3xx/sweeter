@@ -5334,14 +5334,20 @@
     const drafts = new Map();
     const draftKey = (c) => c.kind + ':' + (c.id || '');
 
-    // X’s weighted length: URLs count 23; most characters outside Latin and
-    // common punctuation (emoji, CJK) count 2.
+    // X’s weighted length: links (draftLinks: with https:// or a bare
+    // domain) count 23; most characters outside Latin and common punctuation
+    // (emoji, CJK) count 2.
     function weighted(text) {
+      const t = String(text);
       let n = 0;
-      const rest = String(text).replace(/https?:\/\/\S+/g, () => {
+      let rest = '';
+      let at = 0;
+      for (const l of Sweeter.text.draftLinks(t)) {
+        rest += t.slice(at, l.start);
         n += 23;
-        return '';
-      });
+        at = l.end;
+      }
+      rest += t.slice(at);
       for (const ch of Array.from(rest)) {
         const cp = ch.codePointAt(0);
         n += cp <= 0x10ff || (cp >= 0x2000 && cp <= 0x200d) || (cp >= 0x2010 && cp <= 0x201f) || (cp >= 0x2032 && cp <= 0x2037) ? 1 : 2;
@@ -6110,23 +6116,22 @@
         : '<div class="emo-empty">' + h(msg || 'No GIFs found.') + '</div>';
       gifGrid.scrollTop = 0;
     }
-    // The answer for this query, once X Pro has it (8 s at most).
-    function awaitGifs(s, q) {
-      clearInterval(s.poll);
-      const t0 = Date.now();
-      const look = () => {
-        if (gifSession !== s || s.query !== q) return clearInterval(s.poll);
-        const items = xpro.gifResults(q);
-        if (items) {
-          clearInterval(s.poll);
-          renderGifs(items, q ? 'No GIFs for “' + q + '”.' : 'No trending GIFs right now.');
-        } else if (Date.now() - t0 > 8000) {
-          clearInterval(s.poll);
-          renderGifs(null, 'X Pro’s GIF search didn’t answer. Try again, or use Open in X Pro.');
-        }
-      };
-      s.poll = setInterval(look, 150);
-      look();
+    // One query: X Pro’s picker opens, gets it, and closes again (xpro.js),
+    // queued with the session’s other steps. A newer query, or a closed
+    // picker, skips a step still waiting its turn.
+    function gifRun(s, q) {
+      gifStep(async () => {
+        if (gifSession !== s || s.query !== q) return;
+        const r = await xpro.gifSearchOnce(q);
+        // Read by the close step queued after this one.
+        if (r.opened) s.opened = true;
+        if (gifSession !== s || s.query !== q) return;
+        if (r.ok) renderGifs(r.items, q ? 'No GIFs for “' + q + '”.' : 'No trending GIFs right now.');
+        else renderGifs(null, r.reason === 'noanswer' ? 'X Pro’s GIF search didn’t answer. Try again, or use Open in X Pro.' : 'X Pro’s GIF search didn’t open. Try Open in X Pro.');
+        // X Pro stays hidden and cannot take the focus; if anything did, the
+        // search field gets it back.
+        if (!gifEl.hidden && document.activeElement !== host) gifQ.focus({ preventScroll: true });
+      });
     }
     function openGifs() {
       if (!compose) return;
@@ -6137,20 +6142,8 @@
       renderGifs(null, 'Loading GIFs…');
       placeGifs();
       gifQ.focus();
-      const s = (gifSession = { opened: false, query: '', poll: 0, ready: false });
-      gifStep(async () => {
-        const r = await xpro.gifOpen();
-        // Closed while it opened: close it again, in this same step.
-        if (gifSession !== s) {
-          if (r.ok) await xpro.gifClose(r.opened);
-          return;
-        }
-        if (!r.ok) return renderGifs(null, 'X Pro’s GIF search didn’t open. Try Open in X Pro.');
-        s.opened = r.opened;
-        s.ready = true;
-        if (s.query) xpro.gifSearch(s.query);
-        awaitGifs(s, s.query);
-      });
+      const s = (gifSession = { opened: false, query: '' });
+      gifRun(s, '');
     }
     function closeGifs(focusText) {
       if (gifEl.hidden && !gifSession) return;
@@ -6158,11 +6151,8 @@
       clearTimeout(gifTimer);
       const s = gifSession;
       gifSession = null;
-      if (s) {
-        clearInterval(s.poll);
-        // Read when the step runs: an open still in flight closes itself.
-        gifStep(() => (s.ready ? xpro.gifClose(s.opened) : null));
-      }
+      // Read when the step runs, after any search still in flight.
+      if (s) gifStep(() => xpro.gifClose(s.opened));
       if (focusText) cmpText.focus();
     }
     function pickGif(i) {
@@ -6188,8 +6178,7 @@
         if (!s) return;
         s.query = gifQ.value.trim();
         renderGifs(null, 'Searching…');
-        if (s.ready) xpro.gifSearch(s.query);
-        if (s.ready) awaitGifs(s, s.query);
+        gifRun(s, s.query);
       }, 350);
     });
     gifGrid.addEventListener('click', (e) => {

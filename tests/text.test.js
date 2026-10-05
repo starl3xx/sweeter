@@ -125,3 +125,14 @@ test('draft links count UTF-16 offsets, as a textarea does', () => {
   const t = '🦋 https://example.com';
   eq(draftLinks(t), [{ start: 3, end: t.length, url: 'https://example.com' }]);
 });
+
+test('draft links: bare domains as X links them', () => {
+  const at = (t) => draftLinks(t).map((l) => [t.slice(l.start, l.end), l.url]);
+  eq(at('Sweeter starl3xx.fun/sweeter'), [['starl3xx.fun/sweeter', 'https://starl3xx.fun/sweeter']]);
+  eq(at('see example.com. and github.io'), [['example.com', 'https://example.com'], ['github.io', 'https://github.io']]);
+  // A two-letter country domain needs a path; a word with a dot is not a link.
+  eq(at('nyt.ms/abc but not nyt.ms, file.md, e.g. v1.2.3 or foo.bar'), [['nyt.ms/abc', 'https://nyt.ms/abc']]);
+  // Not inside an address with https://, and not after @.
+  eq(at('https://a.example.com/x and me@example.com'), [['https://a.example.com/x', 'https://a.example.com/x']]);
+  eq(at('(sweeter.app)'), [['sweeter.app', 'https://sweeter.app']]);
+});

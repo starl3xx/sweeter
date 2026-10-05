@@ -710,43 +710,70 @@
     i.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }
-  // X Pro’s GIF search, opened from its compose panel (the panel is opened
-  // for it when closed; `opened` says so, for gifClose).
-  async function gifOpen() {
-    if (gifInput()) return { ok: true, opened: false };
-    let opened = false;
-    if (!composerOpen()) {
-      const r = await openComposer('new');
-      if (!r.ok) return r;
-      opened = true;
-      await waitFor(editor, 3000);
-    }
-    const root = composerRoot();
-    const b = root && root.querySelector(TOOLS.gif);
-    if (b) b.click();
-    if (b && (await waitFor(gifInput, 4000))) return { ok: true, opened };
-    if (opened) await closePanel();
-    return { ok: false, reason: 'nogif' };
+  // The compose panel’s own GIF button (not an inline reply’s), found
+  // without its editor, which X Pro loads a moment later.
+  function gifButton() {
+    const all = Array.from(document.querySelectorAll(TOOLS.gif)).filter((b) => !b.closest('[data-testid^="inline_reply"], [data-testid="cellInnerDiv"]'));
+    const drawer = all.filter((b) => b.closest('[data-testid="drawerAnimatedDiv"], [role="dialog"]'));
+    return (drawer.length ? drawer : all).pop() || null;
   }
-  // Closes X Pro’s GIF search, and the compose panel when Sweeter opened it
-  // for the search and it still holds nothing.
-  async function gifClose(panelToo) {
+  async function gifDialogClose() {
     const i = gifInput();
     const d = i && i.closest('[role="dialog"]');
     const c = d && d.querySelector('[data-testid="app-bar-close"]');
-    if (c) {
-      c.click();
-      await waitFor(() => !gifInput(), 1500);
+    if (!c) return;
+    c.click();
+    await waitFor(() => !gifInput(), 1500);
+  }
+  // One search in X Pro’s GIF picker for Sweeter’s: the picker opens (from
+  // the compose panel, opened for it when closed), gets the query, and
+  // closes again once X has answered, so no X Pro dialog, and no focus trap,
+  // stays open under Sweeter. Never lifted: X Pro stays hidden, so it cannot
+  // take the focus from Sweeter’s search field. `opened` says Sweeter opened
+  // the panel (gifClose closes it).
+  async function gifSearchOnce(q) {
+    q = String(q || '').trim();
+    if (gifCache.has(q)) return { ok: true, opened: false, items: gifCache.get(q) };
+    let opened = false;
+    // A step that fails closes what it opened, so nothing stays up.
+    const fail = async (reason) => {
+      await gifClose(opened);
+      return { ok: false, reason, opened: false };
+    };
+    if (!gifButton()) {
+      const b = document.querySelector('[role="button"][aria-label="Compose post"], [data-testid="SideNav_NewTweet_Button"]');
+      if (!b) return { ok: false, reason: 'nobutton' };
+      b.click();
+      opened = true;
+      if (!(await waitFor(gifButton, 5000))) return fail('nogif');
     }
+    if (!gifInput()) {
+      gifButton().click();
+      if (!(await waitFor(gifInput, 4000))) return fail('nogif');
+      await wait(120);
+    }
+    if (q) gifType(q);
+    const items = await waitFor(() => gifCache.get(q), 8000);
+    await gifDialogClose();
+    return items ? { ok: true, opened, items } : { ok: false, reason: 'noanswer', opened };
+  }
+  // Closes X Pro’s GIF picker if it is open, and the compose panel when
+  // Sweeter opened it and it still holds nothing (its Done button, found
+  // whether or not the GIF button is there yet).
+  async function gifClose(panelToo) {
+    await gifDialogClose();
+    if (!panelToo) return;
+    const e = editor();
     const root = composerRoot();
-    if (panelToo && editor() && !norm(editor().innerText) && !(root && root.querySelector('[data-testid="attachments"]'))) await closePanel();
+    if ((e && norm(e.innerText)) || (root && root.querySelector('[data-testid="attachments"]'))) return;
+    const done = document.querySelector('[aria-label="Done"]');
+    if (done) done.click();
   }
   // A GIF the person picked in Sweeter, attached to the composer now open:
   // X Pro’s GIF search again, with the same query, and that GIF pressed.
   async function attachGif(gif) {
     if (!gif || !gif.id) return { ok: true };
-    const root = composerRoot();
-    const b = root && root.querySelector(TOOLS.gif);
+    const b = await waitFor(gifButton, 4000);
     if (!b) return { ok: false, reason: 'nogif' };
     b.click();
     if (!(await waitFor(gifInput, 4000))) return { ok: false, reason: 'nogif' };
@@ -754,7 +781,7 @@
     const key = '/' + String(gif.id).replace(/^giphy_/, '') + '/';
     const cell = await waitFor(() => Array.from(document.querySelectorAll('[data-testid="gifSearchGifImage"]')).find((x) => x.innerHTML.includes(key)), 8000);
     if (!cell) {
-      await gifClose(false);
+      await gifDialogClose();
       return { ok: false, reason: 'gifgone' };
     }
     (cell.closest('button, [role="button"]') || cell).click();
@@ -1615,5 +1642,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifOpen: lifted(gifOpen), gifSearch: gifType, gifResults: (q) => gifCache.get(String(q || '')) || null, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

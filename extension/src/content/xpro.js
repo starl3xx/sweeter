@@ -735,16 +735,21 @@
     q = String(q || '').trim();
     if (gifCache.has(q)) return { ok: true, opened: false, items: gifCache.get(q) };
     let opened = false;
+    // A step that fails closes what it opened, so nothing stays up.
+    const fail = async (reason) => {
+      await gifClose(opened);
+      return { ok: false, reason, opened: false };
+    };
     if (!gifButton()) {
       const b = document.querySelector('[role="button"][aria-label="Compose post"], [data-testid="SideNav_NewTweet_Button"]');
       if (!b) return { ok: false, reason: 'nobutton' };
       b.click();
       opened = true;
-      if (!(await waitFor(gifButton, 5000))) return { ok: false, reason: 'nogif', opened };
+      if (!(await waitFor(gifButton, 5000))) return fail('nogif');
     }
     if (!gifInput()) {
       gifButton().click();
-      if (!(await waitFor(gifInput, 4000))) return { ok: false, reason: 'nogif', opened };
+      if (!(await waitFor(gifInput, 4000))) return fail('nogif');
       await wait(120);
     }
     if (q) gifType(q);
@@ -753,10 +758,11 @@
     return items ? { ok: true, opened, items } : { ok: false, reason: 'noanswer', opened };
   }
   // Closes X Pro’s GIF picker if it is open, and the compose panel when
-  // Sweeter opened it and it still holds nothing.
+  // Sweeter opened it and it still holds nothing (its Done button, found
+  // whether or not the GIF button is there yet).
   async function gifClose(panelToo) {
     await gifDialogClose();
-    if (!panelToo || !gifButton()) return;
+    if (!panelToo) return;
     const e = editor();
     const root = composerRoot();
     if ((e && norm(e.innerText)) || (root && root.querySelector('[data-testid="attachments"]'))) return;

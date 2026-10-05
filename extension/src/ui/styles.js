@@ -551,6 +551,12 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-who .who-t{padding:2px 0}
 .cmp-who:has(select:focus-visible){outline:2px solid var(--accent-hl);outline-offset:2px;border-radius:4px}
 .cmp-media{display:flex;flex-wrap:wrap;gap:8px;padding:0 14px 10px 64px}
+.cmp-card{margin:0 14px 10px 64px;border:1px solid var(--div);border-radius:12px;overflow:hidden;background:var(--bg)}
+.cmp-card[hidden]{display:none}
+.cmp-card img{display:block;width:100%;aspect-ratio:1.91/1;max-height:170px;object-fit:cover;background:var(--sub);border-bottom:1px solid var(--div)}
+.cmp-card .cc-t{display:flex;flex-direction:column;gap:1px;padding:7px 10px 8px;font-size:12.5px;line-height:1.3;min-width:0}
+.cmp-card .cc-d{color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmp-card .cc-n{color:var(--t1);font-weight:500;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .cmp-media:empty{display:none}
 .cm{position:relative;height:96px;border-radius:10px;overflow:hidden;background:var(--sub);border:1px solid var(--div)}
 .cm img,.cm video{height:100%;width:auto;max-width:220px;object-fit:cover;display:block}

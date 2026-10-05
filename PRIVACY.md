@@ -8,7 +8,7 @@ Sweeter is a Mac app and a Safari extension that gives X Pro a different interfa
 
 - What you read and post on X stays between your Mac and X. Sweeter never sends it to us.
 - The Mac app sends anonymous usage counts through TelemetryDeck. You can turn them off. The Safari extension, and Sweeter built from source, send none.
-- A few features ask other services for public information: GitHub for updates, DexScreener for token prices, and X’s media servers for images you save.
+- A few features ask other services for public information: GitHub for updates, DexScreener for token prices, X’s media servers for images you save, and, in the Mac app, a page you link in a post, for its preview.
 - No ads, no tracking across apps or websites, and we never sell or share data.
 
 ## What stays on your Mac
@@ -39,12 +39,13 @@ TelemetryDeck receives each request over the internet, as any server does. How i
 - **X.** Sweeter shows X Pro, so X receives what it always receives when you use X Pro, under [X’s privacy policy](https://x.com/en/privacy). When you save, share, or preview an image, Sweeter downloads it from X’s public media servers, as Safari’s Save Image does.
 - **GitHub.** To check for a newer version, Sweeter asks GitHub’s public API for the latest release: once a day, and when you choose Check for Updates. GitHub receives that request under [GitHub’s privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement). We see only the overall traffic counts GitHub shows every repository owner. To turn the daily check off: Settings ▸ General ▸ Updates.
 - **DexScreener.** For crypto price cards, Sweeter sends a token’s contract address to [DexScreener](https://dexscreener.com)’s public API, and loads token logos from DexScreener: when you click a contract address in a post, and for ticker cards on screen, every few minutes at most. DexScreener receives those requests as it would a visit to its website. To turn either off: Settings ▸ Extras.
+- **Pages you link in a post (Mac app).** When you type or paste a link in the compose window, Sweeter loads that page once to show its title and image, as X’s card will look. It reads only the start of the page and its preview image, sends no cookies, and keeps nothing after Sweeter quits. The site receives that request as it would a visit from your browser, so it learns your IP address and that the page was opened. Links to X itself, and to addresses on your own network, are never loaded. To turn it off: Settings ▸ Media ▸ Link previews.
 - **Report a Problem.** Help ▸ Report a Problem opens a GitHub issue form in your browser, filled in with the Sweeter version, whether you use the Mac app or the Safari extension, your macOS or Safari version, X’s language, and the last warning Sweeter showed in the past hour. Nothing is sent until you submit the form, and you can change or delete any of it first. Issues on GitHub are public.
 - **Links** you click open in your browser.
 
 ## Your choices
 
-- Turn off usage counts, update checks, and price lookups in Settings at any time.
+- Turn off usage counts, update checks, price lookups, and link previews in the compose window in Settings at any time.
 - To delete everything Sweeter saved, delete the app and the folder `~/Library/Containers/fun.starl3xx.Sweeter`, or remove the Safari extension.
 - Usage counts are anonymous, so we can’t find the counts of any one person. You can still write to us with any question or request about your data, including requests under laws such as the GDPR or the CCPA.
 

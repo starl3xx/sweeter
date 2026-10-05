@@ -34,7 +34,7 @@ final class AboutWindowController: NSWindowController {
         window.standardWindowButton(.zoomButton)?.isHidden = true
         super.init(window: window)
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.hero.showIcon() }
+            MainActor.assumeIsolated { self?.hero.pause() }
         }
     }
 
@@ -53,9 +53,10 @@ final class AboutWindowController: NSWindowController {
 /// The About window's icon: the hero animation (Resources/sweeter-hero.mov,
 /// made by `scripts/bird.sh hero`): the loading screen's bird flaps on
 /// nothing, then from 2.6 s the icon's squircle opens behind it, and its last
-/// frame is the icon itself, pixel for pixel, which then stays. HEVC with
-/// alpha, played transparent in an AVPlayerLayer. A click plays it again.
-/// Under Reduce Motion, without the file, or if it fails: the icon alone.
+/// frame is the icon itself, which then stays (the video's own last frame).
+/// HEVC with alpha, played transparent in an AVPlayerLayer. A click plays it
+/// again. Under Reduce Motion, without the file, or if it fails: the icon
+/// alone.
 ///
 /// The pink drop shadow is the squircle's own (a shadow path with no fill),
 /// so it never sits under a bird with no tile: off while the bird flaps,
@@ -116,14 +117,29 @@ final class HeroIcon: NSView {
         return path
     }
 
-    /// From the first frame, each time the window shows and on a click.
+    /// From the first frame, each time the window shows and on a click. The
+    /// player is kept: a replay rewinds it, so its frame stays on screen
+    /// until the first frame replaces it (no blank in between).
     func play() {
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
               let url = Bundle.main.url(forResource: "sweeter-hero", withExtension: "mov") else {
             showIcon()
             return
         }
-        stop()
+        if let player {
+            player.pause()
+            player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] done in
+                guard done else { return }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        // The shadow goes with the squircle, as frame 0 shows.
+                        self?.setShadow(false, animated: false)
+                        self?.player?.play()
+                    }
+                }
+            }
+            return
+        }
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
         player.isMuted = true
@@ -142,11 +158,15 @@ final class HeroIcon: NSView {
         boundary = player.addBoundaryTimeObserver(forTimes: [NSValue(time: CMTime(seconds: 2.65, preferredTimescale: 600))], queue: .main) { [weak self] in
             MainActor.assumeIsolated { self?.setShadow(true, animated: true) }
         }
-        for name in [AVPlayerItem.didPlayToEndTimeNotification, AVPlayerItem.failedToPlayToEndTimeNotification] {
-            observers.append(NotificationCenter.default.addObserver(forName: name, object: item, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.showIcon() }
-            })
-        }
+        // At the end the last frame stays: it is the icon, as the video
+        // encodes it. Swapping in the static icon there showed (HEVC's
+        // colors read about 6 levels brighter, and its edges softer).
+        observers.append(NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.setShadow(true, animated: false) }
+        })
+        observers.append(NotificationCenter.default.addObserver(forName: AVPlayerItem.failedToPlayToEndTimeNotification, object: item, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showIcon() }
+        })
         status = item.observe(\.status) { [weak self] item, _ in
             guard item.status == .failed else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.showIcon() } }
@@ -156,8 +176,13 @@ final class HeroIcon: NSView {
         player.play()
     }
 
-    /// The icon alone, with its shadow: the video's end, its fallback, and
-    /// what the window keeps once closed.
+    /// Paused where it is, when the window closes.
+    func pause() {
+        player?.pause()
+    }
+
+    /// The icon alone, with its shadow: the fallback (Reduce Motion, no
+    /// file, or a failed playback).
     func showIcon() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)

@@ -45,13 +45,36 @@
     'RemoveDeck',
     'ReorderDecks',
     'UpdateClientSettings',
+    // X Pro's GIF search (verified 2026-10-05): trending when its picker
+    // opens, then the results for what is typed. Sweeter's own GIF picker
+    // shows them; only each GIF's id, text, and GIPHY image is passed on.
+    'GifSearch',
+    'GifEnumerateCategory',
   ]);
 
   // The deck sync carries more than Sweeter needs (onboarding state, each
   // column creator’s full record): pass on only the deck model, with the
   // creator’s handle alone.
   const POSTING = new Set(['CreateTweet', 'CreateNoteTweet']);
+  const GIFS = new Set(['GifSearch', 'GifEnumerateCategory']);
   function trim(op, json, status) {
+    if (GIFS.has(op)) {
+      try {
+        const d = json.data || {};
+        const slice = d.gif_search_slice || d.gif_enumerate_category_slice || {};
+        return {
+          items: (slice.items || [])
+            .slice(0, 60)
+            .map((x) => {
+              const t = (x.thumbnail_images || [])[0] || x.preview_image || {};
+              return { id: String(x.id || ''), alt: String(x.alt_text || '').slice(0, 200), url: String(t.url || ''), still: String(t.still_image_url || ''), w: t.width | 0, h: t.height | 0 };
+            })
+            .filter((x) => x.id && /^https:\/\/media\d?\.giphy\.com\//.test(x.url) && /^https:\/\/media\d?\.giphy\.com\//.test(x.still)),
+        };
+      } catch (e) {
+        return null;
+      }
+    }
     if (POSTING.has(op)) {
       const d = (json && json.data) || {};
       const r = d.create_tweet || d.notetweet_create || d.create_note_tweet || null;

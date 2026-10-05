@@ -213,6 +213,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
             latestRelease: () => post({ type: 'latestRelease' }),
             dexLogo: (u) => post({ type: 'dexLogo', url: String(u || '') }),
+            geckoLogo: (n, a) => post({ type: 'geckoLogo', network: String(n || ''), address: String(a || '') }),
             linkCard: (u) => post({ type: 'linkCard', url: String(u || '') }),
             charPalette: () => post({ type: 'charPalette' }),
             notifyStatus: () => post({ type: 'notifyStatus' }),
@@ -404,6 +405,38 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             }
             Task {
                 if let card = await LinkCard.fetch(url) { replyHandler(card, nil) } else { replyHandler(nil, "no card") }
+            }
+        // A token logo when DexScreener has none: GeckoTerminal's public API
+        // for that network and address, then CoinGecko's small image, as a
+        // data: URL. Only known networks, valid addresses, and those hosts.
+        case "geckoLogo":
+            let networks: Set<String> = ["eth", "base", "solana", "arbitrum", "optimism", "polygon_pos", "bsc", "avax", "blast", "linea", "zksync", "hyperevm", "unichain", "abstract", "sonic", "robinhood", "ink", "berachain", "mantle", "scroll", "tron", "pulsechain", "world-chain", "apechain", "monad", "megaeth", "plasma"]
+            let network = body["network"] as? String ?? ""
+            let address = body["address"] as? String ?? ""
+            guard networks.contains(network),
+                  address.range(of: "^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$", options: .regularExpression) != nil,
+                  let api = URL(string: "https://api.geckoterminal.com/api/v2/networks/" + network + "/tokens/" + address) else {
+                replyHandler(nil, "bad token")
+                return
+            }
+            Task {
+                var req = URLRequest(url: api)
+                req.setValue("application/json", forHTTPHeaderField: "Accept")
+                guard let (data, response) = try? await URLSession.shared.data(for: req),
+                      let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                      let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let attrs = (j["data"] as? [String: Any])?["attributes"] as? [String: Any],
+                      let raw = attrs["image_url"] as? String,
+                      let found = URL(string: raw.replacingOccurrences(of: "/large/", with: "/small/")), found.scheme == "https",
+                      let host = found.host, host == "coin-images.coingecko.com" || host == "assets.coingecko.com",
+                      let (img, imgResponse) = try? await URLSession.shared.data(from: found),
+                      let imgHttp = imgResponse as? HTTPURLResponse, (200..<300).contains(imgHttp.statusCode),
+                      let type = imgHttp.value(forHTTPHeaderField: "Content-Type")?.split(separator: ";").first.map(String.init),
+                      type.hasPrefix("image/"), img.count <= 200_000 else {
+                    replyHandler(nil, "no logo")
+                    return
+                }
+                replyHandler("data:" + type + ";base64," + img.base64EncodedString(), nil)
             }
         // Notification permission, asked for when the reader turns alerts on
         // (never at launch, out of context): "on", "off" or "ask".

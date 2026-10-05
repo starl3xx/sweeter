@@ -284,8 +284,8 @@
     ],
     extras: [
       { k: 'head', label: 'Crypto' },
-      { k: 'check', key: 'tokenLookup', label: 'Contract addresses', text: 'Show token details on click', note: 'Asks DexScreener only when you click an address or ticker card. Off: they open DexScreener.', lbl: true },
-      { k: 'check', key: 'tickerPrices', label: 'Ticker cards', text: 'Show prices', note: 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most.', lbl: true },
+      { k: 'check', key: 'tokenLookup', label: 'Contract addresses', text: 'Show token details on click', note: 'Asks DexScreener only when you click an address or ticker card (and GeckoTerminal for a logo DexScreener lacks). Off: they open DexScreener.', lbl: true },
+      { k: 'check', key: 'tickerPrices', label: 'Ticker cards', text: 'Show prices', note: 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most, and GeckoTerminal for a logo DexScreener lacks.', lbl: true },
     ],
   };
   // The Keyboard page’s list (the Settings sheet and the Mac app’s window).
@@ -770,8 +770,9 @@
 
     // Token logos: DexScreener's image, fetched small (64 px) from outside
     // X's page (its CSP allows only data: images from elsewhere) when the
-    // token's prices are fetched, cached by address. A token without one
-    // keeps its letter.
+    // token's prices are fetched, cached by address. When DexScreener has
+    // none, GeckoTerminal's for that chain and address (CoinGecko's small
+    // image). A token with neither keeps its letter.
     const logoCache = new Map(); // address -> data: URL, or '' for none
     const logoPending = new Set();
     function logoUrl(u) {
@@ -786,18 +787,27 @@
         return '';
       }
     }
-    async function tokenLogo(a, imageUrl) {
+    // DexScreener's chain ids to GeckoTerminal's networks (its own list,
+    // 2026-10-05). Sei's EVM id could not be matched, so it is left out.
+    const GECKO_NETS = { ethereum: 'eth', base: 'base', solana: 'solana', arbitrum: 'arbitrum', optimism: 'optimism', polygon: 'polygon_pos', bsc: 'bsc', avalanche: 'avax', blast: 'blast', linea: 'linea', zksync: 'zksync', hyperevm: 'hyperevm', unichain: 'unichain', abstract: 'abstract', sonic: 'sonic', robinhood: 'robinhood', ink: 'ink', berachain: 'berachain', mantle: 'mantle', scroll: 'scroll', tron: 'tron', pulsechain: 'pulsechain', worldchain: 'world-chain', apechain: 'apechain', monad: 'monad', megaeth: 'megaeth', plasma: 'plasma' };
+    const isData = (d) => /^data:image\/[a-z+.-]+;base64,/.test(d);
+    async function tokenLogo(a, imageUrl, chain) {
       if (logoCache.has(a) || logoPending.has(a)) return paintLogo(a);
       const u = logoUrl(imageUrl || '');
-      const get = native && native.dexLogo ? native.dexLogo : opts.dexLogo;
-      if (!u || !get) return logoCache.set(a, '');
+      const dex = native && native.dexLogo ? native.dexLogo : opts.dexLogo;
+      const gecko = native && native.geckoLogo ? native.geckoLogo : opts.geckoLogo;
+      const net = Object.prototype.hasOwnProperty.call(GECKO_NETS, chain) ? GECKO_NETS[chain] : null;
+      if (!(u && dex) && !(net && gecko)) return logoCache.set(a, '');
       logoPending.add(a);
       let data = '';
       try {
-        data = String((await get(u)) || '');
+        if (u && dex) data = String((await dex(u)) || '');
+      } catch (e) {}
+      try {
+        if (!isData(data) && net && gecko) data = String((await gecko(net, a)) || '');
       } catch (e) {}
       logoPending.delete(a);
-      logoCache.set(a, /^data:image\/[a-z+.-]+;base64,/.test(data) ? data : '');
+      logoCache.set(a, isData(data) ? data : '');
       while (logoCache.size > 400) logoCache.delete(logoCache.keys().next().value);
       paintLogo(a);
     }
@@ -882,7 +892,7 @@
       if (tokenFor !== a || pop.hidden) return;
       pop.innerHTML = html;
       placePop(el);
-      if (picked) tokenLogo(a, picked.logo);
+      if (picked) tokenLogo(a, picked.logo, picked.pair.chainId);
     }
 
     // Ticker cards: filled from DexScreener once on screen (if the reader
@@ -910,7 +920,7 @@
       el.querySelector('.tkc-n').textContent = d.token.name || '';
       const lt = el.querySelector('.tkc-l');
       if (lt && d.token.symbol) lt.textContent = d.token.symbol.slice(0, 1).toUpperCase();
-      tokenLogo(a, d.logo);
+      tokenLogo(a, d.logo, d.pair.chainId);
       if (d.priced) {
         el.querySelector('.tkc-p').textContent = usd(d.pair.priceUsd);
         const chg = d.pair.priceChange && d.pair.priceChange.h24 != null ? Number(d.pair.priceChange.h24) : null;

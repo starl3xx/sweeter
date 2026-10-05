@@ -19,7 +19,7 @@ It is in early testing. Things will break when X changes X Pro.
    - GitHub, to check for a newer version of Sweeter: once a day (you can turn this off in Settings) and when you choose Check for Updates;
    - a page you link in a post, from the Mac app: when you type or paste a link in the compose window, Sweeter loads that page once, without cookies, to show its title and image as X’s card will. The site sees that visit. Never for links to X. Turn it off in Settings ▸ Media;
    - GIPHY’s image servers, for the GIFs X Pro’s GIF search finds when you search in the compose window (the search itself goes to X, as in X Pro);
-   - [DexScreener](https://dexscreener.com)’s public API, for token prices and logos: when you click a crypto contract address, and for ticker cards ($RSR) on screen, every few minutes at most. DexScreener sees those requests like any website visit. Turn both off in Settings ▸ Extras. (In Safari, logos also need Sweeter allowed on cdn.dexscreener.com: Safari ▸ Settings ▸ Extensions ▸ Sweeter ▸ Edit Websites.)
+   - [DexScreener](https://dexscreener.com)’s public API, for token prices and logos: when you click a crypto contract address, and for ticker cards ($RSR) on screen, every few minutes at most. When DexScreener has no logo for a token, [GeckoTerminal](https://www.geckoterminal.com)’s public API is asked for it (that token’s chain and address), and the logo loads from CoinGecko. They see those requests like any website visit. Turn both off in Settings ▸ Extras. (In Safari, logos also need Sweeter allowed on cdn.dexscreener.com: Safari ▸ Settings ▸ Extensions ▸ Sweeter ▸ Edit Websites.)
 
    The [Privacy Policy](PRIVACY.md) has the details, and the [Terms of Use](TERMS.md) cover using Sweeter.
 

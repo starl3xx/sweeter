@@ -569,10 +569,33 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-grip::after{content:"";position:absolute;left:50%;bottom:2px;width:36px;height:4px;margin-left:-18px;border-radius:2px;background:var(--t3);opacity:0;transition:opacity .15s}
 .cmp-grip:hover::after,.cmp.sizing .cmp-grip::after{opacity:.55}
 .cmp.dragging .cmp-drop{display:grid;position:absolute;inset:0;place-items:center;background:color-mix(in srgb,var(--accent-solid) 12%,transparent);color:var(--accent-solid);font-weight:600;font-size:15px;z-index:2;pointer-events:none}
-.emo{position:absolute;z-index:3;left:56px;bottom:92px;width:304px;background:var(--sheet);border-radius:10px;box-shadow:0 0 0 1px var(--ring),0 12px 34px var(--shadow);padding:8px;display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.emo{position:absolute;z-index:6;width:352px;max-width:calc(100% - 16px);background:var(--sheet);color:var(--t2);border-radius:12px;box-shadow:0 0 0 1px var(--ring),0 16px 44px var(--shadow);display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
 .emo[hidden]{display:none}
-.emo button{border:0;background:none;font-size:20px;line-height:1;padding:5px 0;border-radius:3px;cursor:pointer}
-.emo .hint{grid-column:1 / -1;font-size:11px;color:var(--t3);padding:4px 2px 0}
+.emo-top{display:flex;align-items:center;gap:4px;padding:8px 8px 6px}
+.emo-top input{flex:1;min-width:0;height:28px;box-sizing:border-box;border-radius:7px;border:1px solid var(--div);background:var(--bg);color:var(--t1);padding:0 9px;font:inherit;font-size:13px;outline:none}
+.emo-top input::placeholder{color:var(--t3)}
+.emo-top input:focus{border-color:var(--accent-solid);box-shadow:0 0 0 3px var(--accent-hl)}
+.emo-tone{width:32px;height:28px;border:0;border-radius:7px;background:none;font-size:18px;line-height:1;cursor:pointer;padding:0}
+.emo-tones{display:flex;justify-content:flex-end;gap:2px;padding:0 8px 6px}
+.emo-tones[hidden]{display:none}
+.emo-tones button{width:32px;height:30px;border:0;border-radius:7px;background:none;font-size:19px;line-height:1;cursor:pointer;padding:0}
+.emo-tones button.on{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--accent-solid)}
+.emo-tabs{display:flex;justify-content:space-between;padding:0 6px 5px;border-bottom:1px solid var(--div)}
+.emo-tabs.off{opacity:.45}
+.emo-tabs button{width:30px;height:26px;border:0;border-radius:6px;background:none;color:var(--t3);display:grid;place-items:center;cursor:pointer;padding:0}
+.emo-tabs button svg{width:15px;height:15px}
+.emo-tabs button.on{color:var(--accent-solid);background:var(--tint)}
+.emo-grid{position:relative;height:260px;overflow-y:auto;overscroll-behavior:contain;padding:0 8px 6px}
+.emo-h{position:sticky;top:0;z-index:1;background:var(--sheet);font-size:11px;font-weight:600;color:var(--t3);padding:7px 2px 3px}
+.emo-row{display:grid;grid-template-columns:repeat(9,1fr)}
+.emo-row button{height:36px;border:0;border-radius:7px;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0;font-family:"Apple Color Emoji",sans-serif}
+.emo-row button.on{background:var(--tint);box-shadow:inset 0 0 0 1.5px var(--accent-solid)}
+.emo-empty{padding:40px 12px;text-align:center;color:var(--t3);font-size:13px}
+.emo-foot{display:flex;align-items:center;gap:7px;min-height:34px;padding:0 10px;border-top:1px solid var(--div);font-size:12px}
+.emo-foot .ef-e{font-size:19px;line-height:1;font-family:"Apple Color Emoji",sans-serif}
+.emo-foot .ef-n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t1)}
+.emo-foot .ef-k{color:var(--t3);white-space:nowrap}
+.emo-foot .ef-sys{border:0;background:none;color:var(--accent);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;padding:4px 0}
 
 /* conversation pane, pushed into a column like Tweetbot’s details view */
 .dpane{position:absolute;inset:var(--chh) 0 0 0;z-index:2;background:var(--bg);display:flex;flex-direction:column;animation:sweeter-push .22s ease-out}
@@ -926,7 +949,8 @@ button:active:not([disabled]){scale:.97}
 .x:hover{color:var(--t1)}
 .cmp-tools .tb:hover{background:var(--tint)}
 .cmp-tools .tb.xp:hover{color:var(--t2)}
-.emo button:hover{background:var(--tint)}
+.emo-row button:hover,.emo-tone:hover,.emo-tones button:hover,.emo-tabs button:hover{background:var(--tint)}
+.emo-foot .ef-sys:hover{text-decoration:underline}
 .dback:hover{background:var(--tint)}
 .lb-nav:hover{background:rgba(255,255,255,.24)}
 .lb-top a:hover{background:rgba(255,255,255,.12)}

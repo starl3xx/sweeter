@@ -37,6 +37,7 @@
         "src/ui/mark.js",
         "src/ui/loader.js",
         "src/ui/icons.js",
+        "src/ui/emoji.js",
         "src/ui/styles.js",
         "src/ui/render.js",
         "src/ui/palette.js",

@@ -214,6 +214,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             latestRelease: () => post({ type: 'latestRelease' }),
             dexLogo: (u) => post({ type: 'dexLogo', url: String(u || '') }),
             linkCard: (u) => post({ type: 'linkCard', url: String(u || '') }),
+            charPalette: () => post({ type: 'charPalette' }),
             notifyStatus: () => post({ type: 'notifyStatus' }),
             notifyRequest: () => post({ type: 'notifyRequest' }),
             notifySettings: () => post({ type: 'notifySettings' }),
@@ -388,6 +389,11 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 }
                 replyHandler("data:" + type + ";base64," + data.base64EncodedString(), nil)
             }
+        // macOS's Emoji & Symbols viewer, for the focused text (the compose
+        // window's text box): the emoji picker's All Emoji & Symbols.
+        case "charPalette":
+            NSApp.orderFrontCharacterPalette(nil)
+            replyHandler(nil, nil)
         // A link's preview card for the compose window (LinkCard.swift): the
         // page's own title and image, never from X's hosts or the local
         // network, with no cookies.

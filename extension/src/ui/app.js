@@ -469,9 +469,9 @@
       '<button class="lb-nav lb-next" type="button" data-cmd="lb-next" aria-label="Next (→)">›</button></div>' +
       '<div class="lb-cap"></div></div>' +
       '<div class="add-back" hidden><div class="addsheet" role="dialog" aria-modal="true" aria-label="Add a column">' +
-      '<div class="ptitle"><button class="x aback" type="button" data-cmd="add-back" aria-label="Back" hidden>‹</button>Add a column<button class="x aclose" type="button" data-cmd="add-close" aria-label="Close">×</button></div>' +
+      '<div class="ptitle"><button class="x aback" type="button" data-cmd="add-back" aria-label="Back" hidden>‹</button><span class="atitle">Add a column</span><button class="x aclose" type="button" data-cmd="add-close" aria-label="Close">×</button></div>' +
       '<div class="add-body"></div>' +
-      '<div class="pfoot"><span>Sweeter adds it through X Pro, so it appears on all your devices.</span></div>' +
+      '<div class="pfoot"><span class="afoot">Sweeter adds it through X Pro, so it appears on all your devices.</span></div>' +
       '</div></div>' +
       '<div class="ask-back" hidden><form class="ask" role="dialog" aria-modal="true"><div class="ask-t"></div><input class="ask-in" type="text" autocomplete="off" spellcheck="false" maxlength="40"><div class="ask-b"><button type="button" data-cmd="ask-no">Cancel</button><button type="submit" class="done">OK</button></div></form></div>' +
       '<div class="ov-back" hidden><div class="ov" role="dialog" aria-modal="true" aria-label="All decks"><div class="ptitle">All decks<button class="x" type="button" data-cmd="ov-close" aria-label="Close">×</button></div><div class="ov-body"></div><div class="pfoot"><span>Only the deck on screen loads posts. A click switches X Pro to that deck, on all your devices.</span></div></div></div>' +
@@ -3748,7 +3748,7 @@
         local || (s && s.kind === 'list') ? null : { id: 'xrename', title: 'Rename in X Pro…', symbol: 'pencil.line', enabled: own && mine },
         local || !xpro.canClear(m) ? null : { id: 'xclear', title: 'Clear in X Pro Too…', symbol: 'clear', enabled: own && mine },
         !local && m && m.col && m.col.cleared ? { id: 'xlatest', title: 'Show Latest Posts in X Pro', symbol: 'arrow.uturn.backward', enabled: own && mine } : null,
-        !local && s && s.kind === 'search' ? { id: 'xsearch', title: 'Edit Search in X Pro…', symbol: 'magnifyingglass', enabled: own && mine } : null,
+        !local && s && s.kind === 'search' ? { id: 'xsearch', title: 'Edit Search…', symbol: 'magnifyingglass', enabled: own && mine } : null,
         local ? null : { id: 'xcopy', title: 'Make a Copy in X Pro', symbol: 'plus.square.on.square', enabled: own && mine },
         !local && s && s.kind === 'list' ? { id: 'xconvert', title: 'Convert to Search Column…', symbol: 'magnifyingglass', enabled: own && mine } : null,
         local || decksNow().all.length < 2 ? null : { id: 'xmove', title: 'Move to Deck', symbol: 'rectangle.portrait.and.arrow.right', children: decksNow().all.filter((d) => !decksNow().act || d.id !== decksNow().act.id).map((d) => ({ id: 'xm:' + d.id, title: (d.icon ? d.icon + '  ' : '') + (d.title || 'Untitled'), enabled: own && mine })) },
@@ -3948,10 +3948,52 @@
       showConfirm('Move “' + titleOf(c.vid) + '” to ' + (d.icon ? d.icon + ' ' : '') + '“' + d.title + '”? X Pro then shows that deck on all your devices.', 'Move', () => xproOp(() => xpro.moveToDeck(m.id, label), 'Moved to “' + d.title + '”'));
     }
 
+    // Edit Search…: the add sheet’s search step, with this column’s query
+    // and the cheat sheet. Save types it into X Pro’s own field and checks
+    // X Pro saved it; if not, X Pro’s editor is handed over with the text
+    // in it, to finish there.
+    const searchQuery = (key) => String(key || '').split(':').slice(1, -1).join(':');
     function editSearch(c) {
       const m = mapOf(c);
       if (!m || refuseDelegated(c.key)) return;
-      xproHandoff(() => xpro.openSearchEditor(m.id), () => xpro.drawerOpen(m.id));
+      if (addState && addState.step === 'busy') return;
+      if (addState && addState.pickerId) xpro.removePicker(addState.pickerId);
+      closePop();
+      addState = { step: 'search', edit: { vid: c.vid, id: m.id, key: c.key }, q: searchQuery(c.key) };
+      addBack.hidden = false;
+      renderAdd();
+      const q = addBody.querySelector('#add-q');
+      q.focus();
+      q.setSelectionRange(q.value.length, q.value.length);
+    }
+    async function saveSearch(ed, q) {
+      addState = { step: 'busy', label: 'Changing the search in X Pro…', editing: true };
+      renderAdd();
+      const deckCol = () => {
+        for (const d of store.decks.decks()) for (const col of d.columns || []) if (String(col.id) === String(ed.id)) return col;
+        return null;
+      };
+      const savedQ = () => {
+        const col = deckCol();
+        return col ? new URLSearchParams((col.pathname || '').split('?')[1] || '').get('q') : null;
+      };
+      let opened = null;
+      const r = await runColumnOp(async () => {
+        const t = await xpro.editSearch(ed.id, q);
+        opened = t.opened || null;
+        if (!t.ok) return t;
+        for (let i = 0; i < 40 && savedQ() !== q; i++) await new Promise((res) => setTimeout(res, 150));
+        return savedQ() === q ? { ok: true } : { ok: false, reason: 'nochange' };
+      });
+      addState = null;
+      addBack.hidden = true;
+      if (r.ok) {
+        if (opened === 'opened' && xpro.drawerOpen(ed.id)) xpro.closeDrawer(ed.id);
+        return toast('Search changed');
+      }
+      // X Pro’s editor, open (with the text, when it got that far).
+      toast('X Pro didn’t take the change from Sweeter. Finish it in X Pro’s editor.', 'warn');
+      xproHandoff(() => (xpro.drawerOpen(ed.id) ? { ok: true } : xpro.openSearchEditor(ed.id)), () => xpro.drawerOpen(ed.id));
     }
     // Open as Column: the conversation open in this column becomes a column.
     async function conversationToColumn(c) {
@@ -4914,13 +4956,17 @@
             ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + '</div>'
             : '<p class="anote">You have no lists yet. Make one on x.com, then add it here.</p>';
       } else if (s.step === 'search') {
-        body = '<form class="asearch"><input id="add-q" type="search" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">Add Column</button></form><p class="anote">A search column shows the newest posts first.</p>' + searchCheats();
+        body = '<form class="asearch"><input id="add-q" type="search" value="' + h(s.q || '') + '" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">' + (s.edit ? 'Save' : 'Add Column') + '</button></form><p class="anote">A search column shows the newest posts first.</p>' + searchCheats();
       } else {
         body = '<p class="anote busy">' + h(s.label || 'Adding the column in X Pro…') + '</p>';
       }
       if (s.error) body += '<p class="anote err" role="alert">' + h(s.error) + '</p>';
       addBody.innerHTML = body;
-      addBack.querySelector('.aback').hidden = s.step === 'menu' || s.step === 'busy';
+      const editing = !!(s.edit || s.editing);
+      addBack.querySelector('.atitle').textContent = editing ? 'Edit search' : 'Add a column';
+      addBack.querySelector('.addsheet').setAttribute('aria-label', editing ? 'Edit search' : 'Add a column');
+      addBack.querySelector('.afoot').textContent = editing ? 'Sweeter changes it in X Pro, so it changes on all your devices.' : 'Sweeter adds it through X Pro, so it appears on all your devices.';
+      addBack.querySelector('.aback').hidden = s.step === 'menu' || s.step === 'busy' || editing;
       addBack.querySelector('.aclose').disabled = s.step === 'busy';
     }
     // X’s search syntax, a click away. Each adds its operator after the
@@ -5011,10 +5057,14 @@
       e.preventDefault();
       const q = (addBody.querySelector('#add-q').value || '').trim();
       if (!q) return;
+      const ed = addState.edit;
+      if (ed && q === searchQuery(ed.key)) return closeAddSheet();
       if (hasCol('search:' + q + ':Latest')) {
         addState.error = 'A search column for “' + q + '” is already in this deck.';
+        addState.q = q;
         return renderAdd();
       }
+      if (ed) return saveSearch(ed, q);
       doAdd(() => xpro.addSearch(q));
     });
 

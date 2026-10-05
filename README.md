@@ -19,6 +19,8 @@ It is in early testing. Things will break when X changes X Pro.
    - GitHub, to check for a newer version of Sweeter: once a day (you can turn this off in Settings) and when you choose Check for Updates;
    - [DexScreener](https://dexscreener.com)’s public API, for token prices and logos: when you click a crypto contract address, and for ticker cards ($RSR) on screen, every few minutes at most. DexScreener sees those requests like any website visit. Turn both off in Settings ▸ Extras. (In Safari, logos also need Sweeter allowed on cdn.dexscreener.com: Safari ▸ Settings ▸ Extensions ▸ Sweeter ▸ Edit Websites.)
 
+   The [Privacy Policy](PRIVACY.md) has the details, and the [Terms of Use](TERMS.md) cover using Sweeter.
+
 ## Install
 
 1. Download `Sweeter-x.y.z.zip` from the [latest release](https://github.com/starl3xx/sweeter/releases/latest) and unzip it.
@@ -70,6 +72,6 @@ How it works: `extension/src/page/recorder.js` listens to the responses X Pro’
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE.md). Free to use, change and share for any noncommercial purpose. Selling Sweeter or a version of it is not allowed.
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Free to use, change, and share for any noncommercial purpose. Selling Sweeter or a version of it is not allowed.
 
-Sweeter is not affiliated with or endorsed by X Corp. or Tapbots. X and X Pro are trademarks of X Corp.; Tweetbot is a trademark of Tapbots.
+Sweeter is independent. It is not made, endorsed, or sponsored by X Corp., and it is not affiliated with X, X Pro, or TweetDeck. X, X Pro, and TweetDeck are trademarks of X Corp.; Tweetbot is a trademark of Tapbots. See the [Terms of Use](TERMS.md) and the [Privacy Policy](PRIVACY.md).

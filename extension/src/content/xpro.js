@@ -1366,6 +1366,35 @@
     return { ok: true };
   }
 
+  // Change a search column’s query: the drawer’s Search tab holds X Pro’s
+  // own “Search query” field (a contenteditable, like the sidebar’s). Its
+  // text is replaced by a paste, and Enter searches, as a person does it.
+  // The caller checks that X Pro saved it (UpdateColumn in the deck model);
+  // if not, the drawer stays open with the text for the person to finish.
+  async function editSearch(id, q) {
+    if (isDelegated(columnWrap(id))) return { ok: false, reason: 'delegated' };
+    const opened = await openDrawer(id);
+    if (!opened) return { ok: false, reason: 'nooptions' };
+    const tab = Array.from(columnWrap(id).querySelectorAll('a[role="tab"]')).find((t) => t.textContent.trim() === 'Search');
+    if (!tab) {
+      if (opened === 'opened') closeDrawer(id);
+      return { ok: false, reason: 'nosearch' };
+    }
+    tab.click();
+    const field = () => (columnWrap(id) && columnWrap(id).querySelector('[role="textbox"][aria-label="Search query"]')) || null;
+    const box = await waitFor(field, 2500);
+    if (!box) return { ok: false, reason: 'nosearch', opened };
+    box.focus();
+    window.getSelection().selectAllChildren(box);
+    const dt = new DataTransfer();
+    dt.setData('text/plain', q);
+    box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    const typed = await waitFor(() => (field() && field().innerText.trim() === q ? field() : null), 2500);
+    if (!typed || document.querySelector('[role="option"][aria-selected="true"]')) return { ok: false, reason: 'notyped', opened };
+    typed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+    return { ok: true, opened };
+  }
+
   // Decks. Switching presses the nav’s deck button, matched by its exact
   // label; two pinned decks with one name are not guessed between.
   function switchDeck(title) {
@@ -1473,5 +1502,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

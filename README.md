@@ -51,7 +51,7 @@ The Sweeter app needs none of this.
 - In the Mac app, **⌘Y** shows a post’s photos in Quick Look, an alert for a post has **Like** and **Reply** buttons, every **Share** menu is the Mac’s own, and Shortcuts and Spotlight have **New Post**, **Next Unread**, **Open Column**, and **Show Sweeter**.
 - Crypto contract addresses in posts are links: click one for its price, liquidity, and market cap (⌘-click opens DexScreener). Tickers X tags, like $RSR, get a price card under the post.
 
-Columns are X Pro’s own columns. When you add, remove, rename, or reorder one in Sweeter (drag a column by its title, or press ⌥⌘← and ⌥⌘→), Sweeter does it with X Pro’s own controls, so the change follows you to every device. A search column takes X’s search syntax (`from:`, `url:`, `-filter:replies`, and more), and Add a column ▸ Search lists the common operators: click one to add it. Sweeter’s own touches (colors, icons, filters, merged columns, groups) stay on this Mac.
+Columns are X Pro’s own columns. When you add, remove, rename, or reorder one in Sweeter (drag a column by its title, or press ⌥⌘← and ⌥⌘→), Sweeter does it with X Pro’s own controls, so the change follows you to every device. A search column takes X’s search syntax (`from:`, `url:`, `-filter:replies`, and more), and Add a column ▸ Search lists the common operators: click one to add it. Edit Search…, in a search column’s … menu, changes its query in the same sheet. Sweeter’s own touches (colors, icons, filters, merged columns, groups) stay on this Mac.
 
 ## Report a problem
 

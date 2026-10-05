@@ -109,7 +109,7 @@
     { id: 'theme', text: 'Try the Sweeter, Catppuccin, Nord, or Dracula theme, each in light and dark: Settings ▸ General ▸ Theme.', act: ['Open Settings', 'prefs:general'] },
     { id: 'clearAll', text: '{⌥⌘K} clears every column in Sweeter. X Pro keeps its posts.' },
     { id: 'login', where: 'app', text: 'To start Sweeter when you log in, choose Open at Login from the bird in the menu bar.' },
-    { id: 'moveColumn', text: '{⌥⌘←} and {⌥⌘→} move the selected column in X Pro, on all your devices.' },
+    { id: 'moveColumn', text: 'Drag a column by its title to move it, or press {⌥⌘←} and {⌥⌘→}. X Pro keeps the new order on all your devices.' },
     { id: 'viewer', text: '{o} opens a post’s media. In the viewer, {←} and {→} move between photos.' },
     { id: 'fit', text: 'Fit two to five columns on screen, whatever the window’s size: Settings ▸ General ▸ Columns.', act: ['Open Settings', 'prefs:general'] },
     { id: 'pureBlack', text: 'For OLED displays and dark rooms: Settings ▸ General ▸ Pure black background.', act: ['Open Settings', 'prefs:general'] },

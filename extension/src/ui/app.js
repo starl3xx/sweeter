@@ -5841,7 +5841,7 @@
       try {
         ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
       } catch (e) {}
-      if (!ctx) return () => true;
+      if (!ctx) return 99;
       ctx.canvas.width = 40;
       ctx.canvas.height = 32;
       ctx.font = '24px "Apple Color Emoji", sans-serif';
@@ -5856,14 +5856,25 @@
         for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 40 && (Math.abs(px[i] - px[i + 1]) > 24 || Math.abs(px[i + 1] - px[i + 2]) > 24)) return true;
         return false;
       };
-      const ok = new Map();
-      let last = true;
+      // Once one version is missing, every later one is too.
+      let max = 11;
       for (const v of [...sample.keys()].sort((a, b) => a - b)) {
-        // Once one version is missing, every later one is too.
-        last = last && drawn(sample.get(v));
-        ok.set(v, last);
+        if (!drawn(sample.get(v))) break;
+        max = v;
       }
-      return (v) => v < 12 || ok.get(v) !== false;
+      return max;
+    }
+    // The newest Emoji version this Mac draws, measured once per system and
+    // kept (settings.emojiMax): the canvas reads wait on WebKit’s graphics
+    // process, which X Pro keeps busy, so they never run on a click.
+    const emojiSystem = () => (native && native.osVersion) || navigator.userAgent;
+    function emojiMax(d) {
+      const c = settings.emojiMax;
+      if (c && c.sys === emojiSystem() && typeof c.max === 'number') return c.max;
+      const max = emojiVersions(d);
+      settings.emojiMax = { sys: emojiSystem(), max };
+      persist();
+      return max;
     }
     function emojiData() {
       if (emo) return emo;
@@ -5871,7 +5882,8 @@
       try {
         d = JSON.parse(Sweeter.EMOJI_JSON || '{"g":[]}');
       } catch (e) {}
-      const ok = emojiVersions(d);
+      const max = emojiMax(d);
+      const ok = (v) => v <= max;
       const all = [];
       const groups = [];
       for (const [g, list] of d.g) {
@@ -5924,7 +5936,7 @@
       const sections = q ? [['Results', emojiSearch(q)]] : [['recent', recentEmoji()]].concat(emo.groups.filter(([, idx]) => idx.length));
       emo.sections = sections.filter(([, idx]) => idx.length);
       emoGrid.innerHTML = emo.sections.length
-        ? emo.sections.map(([g, idx]) => '<section class="emo-s" data-g="' + h(g) + '"><div class="emo-h">' + h(g === 'recent' ? 'Frequently used' : g) + '</div><div class="emo-row">' + idx.map(emoCell).join('') + '</div></section>').join('')
+        ? emo.sections.map(([g, idx]) => '<section class="emo-s" data-g="' + h(g) + '" style="contain-intrinsic-size:auto ' + (Math.ceil(idx.length / 9) * 36 + 26) + 'px"><div class="emo-h">' + h(g === 'recent' ? 'Frequently used' : g) + '</div><div class="emo-row">' + idx.map(emoCell).join('') + '</div></section>').join('')
         : '<div class="emo-empty">No emoji match “' + h(q) + '”.</div>';
       emoGrid.scrollTop = 0;
       emoTabs.classList.toggle('off', !!q);
@@ -6010,15 +6022,57 @@
       emoEl.style.top = Math.round(Math.max(8, up ? btn.top - b.top - hh - 6 : btn.bottom - b.top + 6)) + 'px';
     }
     function openEmoji() {
+      const t0 = performance.now();
       closeGifs(false);
       emoQ.value = '';
       emoTones.hidden = true;
       emoToneBtn.textContent = EMO_TONES[settings.emojiTone | 0];
       emoEl.hidden = false;
+      const fresh = !emo;
+      emojiData();
+      const t1 = performance.now();
       renderEmoji();
+      const t2 = performance.now();
       placeEmoji();
       emoQ.focus();
+      tracePicker('emoji', emoQ, emoEl, { data: t1 - t0, render: t2 - t1, place: performance.now() - t2, fresh });
     }
+    // The Mac app’s log gets one line per picker opened: how long each step
+    // took, until the next paint, and where the focus is a moment later
+    // (the Mac app’s window has the key focus; a test window does not).
+    function tracePicker(name, field, panel, steps) {
+      if (!native || !native.log) return;
+      const t0 = performance.now();
+      const where = () => (document.activeElement === host ? 'sweeter:' + ((shadow.activeElement && (shadow.activeElement.id || shadow.activeElement.className || shadow.activeElement.tagName)) || '-') : document.activeElement ? 'page:' + ((document.activeElement.dataset && document.activeElement.dataset.testid) || document.activeElement.tagName) : 'none');
+      requestAnimationFrame(() =>
+        setTimeout(() => {
+          const paint = performance.now() - t0;
+          setTimeout(() => {
+            const at300 = where();
+            setTimeout(() => {
+              const ms = Object.entries(steps).map(([k, v]) => k + ' ' + (typeof v === 'number' ? Math.round(v) + ' ms' : v)).join(', ');
+              native.log(name + ' picker: ' + ms + ', paint ' + Math.round(paint) + ' ms; focus 0.3 s ' + at300 + ', 1.5 s ' + where() + ', key window ' + document.hasFocus() + (panel.hidden ? ' (closed)' : ''));
+            }, 1200);
+          }, 300);
+        }, 0)
+      );
+    }
+    // While a picker is open its search field keeps the focus: if anything
+    // outside Sweeter takes it (X Pro, behind the cover), it comes back, a
+    // few times a second at most, so it can never fight another script.
+    function keepFocus(field, panel) {
+      let last = 0;
+      field.addEventListener('blur', (e) => {
+        if (panel.hidden || (e.relatedTarget && shadow.contains(e.relatedTarget)) || !document.hasFocus()) return;
+        const now = Date.now();
+        if (now - last < 250) return;
+        last = now;
+        setTimeout(() => {
+          if (!panel.hidden && document.activeElement !== host) field.focus({ preventScroll: true });
+        }, 0);
+      });
+    }
+    keepFocus(emoQ, emoEl);
     function closeEmoji(focusText) {
       if (emoEl.hidden) return;
       emoEl.hidden = true;
@@ -6154,7 +6208,9 @@
       gifQ.focus();
       const s = (gifSession = { opened: false, query: '' });
       gifRun(s, '');
+      tracePicker('GIF', gifQ, gifEl, {});
     }
+    keepFocus(gifQ, gifEl);
     function closeGifs(focusText) {
       if (gifEl.hidden && !gifSession) return;
       gifEl.hidden = true;
@@ -8355,6 +8411,13 @@
     paintDeck();
     for (const c of cols.values()) renderColumn(c, true);
     if (settings.visible) app.focus({ preventScroll: true });
+    // The emoji picker’s data (and its one-time drawable check) is ready
+    // before the first click.
+    setTimeout(() => {
+      try {
+        emojiData();
+      } catch (e) {}
+    }, 8000);
 
     if (native) app.classList.add('native');
     // Only when the app could turn off the web view’s own background does the

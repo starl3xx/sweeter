@@ -591,6 +591,7 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .emo-tabs button svg{width:15px;height:15px}
 .emo-tabs button.on{color:var(--accent-solid);background:var(--tint)}
 .emo-grid{position:relative;height:260px;overflow-y:auto;overscroll-behavior:contain;padding:0 8px 6px}
+.emo-s{content-visibility:auto}
 .emo-h{position:sticky;top:0;z-index:1;background:var(--sheet);font-size:11px;font-weight:600;color:var(--t3);padding:7px 2px 3px}
 .emo-row{display:grid;grid-template-columns:repeat(9,1fr)}
 .emo-row button{height:36px;border:0;border-radius:7px;background:none;font-size:24px;line-height:1;cursor:pointer;padding:0;font-family:"Apple Color Emoji",sans-serif}

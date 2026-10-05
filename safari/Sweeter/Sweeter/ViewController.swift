@@ -323,6 +323,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             replyHandler(nil, nil)
         case "telemetry":
             Telemetry.setEnabled(body["on"] as? Bool ?? false)
+            replyHandler(nil, nil)
         case "menuBar":
             (NSApp.delegate as? AppDelegate)?.setMenuBarVisible(body["on"] as? Bool ?? true)
             replyHandler(nil, nil)

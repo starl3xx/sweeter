@@ -1115,6 +1115,15 @@
       const s = e && store.get(e.key);
       return s ? columnTitle(e.key, s, e.m || (entryOf(e.base) || {}).m) : '';
     }
+    // A title inside a menu item: a long search query is cut at a word.
+    function clipTitle(t) {
+      t = String(t || '');
+      if (t.length <= 40) return t;
+      const cut = t.slice(0, 40);
+      const sp = cut.lastIndexOf(' ');
+      return (sp > 24 ? cut.slice(0, sp) : cut).trimEnd() + '…';
+    }
+    const menuTitleOf = (vid) => clipTitle(titleOf(vid));
     const modeOf = (vid) => (settings.colModes || {})[vid] || null;
     // The settings a column renders with: its own media mode, if it has one.
     function colSettings(c) {
@@ -3736,8 +3745,8 @@
         { id: 'groups', title: 'Groups', symbol: 'rectangle.3.group', children: deckGroups().map((g) => ({ id: 'gi:' + g.id, title: g.name, checked: g.vids.includes(c.vid) })).concat([{ separator: true }, { id: 'gnew1', title: 'New Group With This Column…' }]) },
         c.merge ? null : { id: 'dup', title: 'Duplicate as View', symbol: 'square.on.square' },
         c.view ? { id: 'rmview', title: 'Remove View', symbol: 'minus.square' } : null,
-        mergeable(me) && others.length ? { id: 'mergeWith', title: 'Merge With', symbol: 'arrow.triangle.merge', children: others.map((x) => ({ id: 'mw:' + x.vid, title: titleOf(x.vid) })) } : null,
-        c.merge ? { id: 'msrc', title: 'Merged Columns', symbol: 'arrow.triangle.merge', children: layout.filter((x) => mergeable(x)).map((x) => ({ id: 'ms:' + x.key, title: titleOf(x.vid), checked: c.merge.srcs.includes(x.key) })).concat(c.merge.srcs.filter((k) => !mappingFor(k)).map((k) => ({ id: 'ms:' + k, title: (store.get(k) ? columnTitle(k, store.get(k)) : k) + ' (not in this deck)', checked: true }))) } : null,
+        mergeable(me) && others.length ? { id: 'mergeWith', title: 'Merge With', symbol: 'arrow.triangle.merge', children: others.map((x) => ({ id: 'mw:' + x.vid, title: menuTitleOf(x.vid) })) } : null,
+        c.merge ? { id: 'msrc', title: 'Merged Columns', symbol: 'arrow.triangle.merge', children: layout.filter((x) => mergeable(x)).map((x) => ({ id: 'ms:' + x.key, title: menuTitleOf(x.vid), checked: c.merge.srcs.includes(x.key) })).concat(c.merge.srcs.filter((k) => !mappingFor(k)).map((k) => ({ id: 'ms:' + k, title: clipTitle(store.get(k) ? columnTitle(k, store.get(k)) : k) + ' (not in this deck)', checked: true }))) } : null,
         c.merge ? { id: 'unmerge', title: 'Unmerge', symbol: 'minus.square' } : null,
         { separator: true },
         cleared ? { id: 'uncleared', title: 'Show Cleared Posts', symbol: 'arrow.uturn.backward' } : { id: 'clear', title: 'Clear', symbol: 'clear' },
@@ -3756,7 +3765,7 @@
         local || decksNow().all.length < 2 ? null : { id: 'xmove', title: 'Move to Deck', symbol: 'rectangle.portrait.and.arrow.right', children: decksNow().all.filter((d) => !decksNow().act || d.id !== decksNow().act.id).map((d) => ({ id: 'xm:' + d.id, title: (d.icon ? d.icon + '  ' : '') + (d.title || 'Untitled'), enabled: own && mine })) },
         !local && s && s.kind === 'list' ? { id: 'xreport', title: 'Report List in X Pro…', symbol: 'exclamationmark.bubble', enabled: own && mine } : null,
         s && s.kind === 'notifications' ? { id: 'nsettings', title: 'Notification Settings…', symbol: 'gear' } : null,
-        local ? null : { id: 'remove', title: 'Remove “' + titleOf(c.vid) + '”…', symbol: 'minus.rectangle', enabled: removable(m) && !removing.has(c.vid) && mine },
+        local ? null : { id: 'remove', title: 'Remove “' + menuTitleOf(c.vid) + '”…', symbol: 'minus.rectangle', enabled: removable(m) && !removing.has(c.vid) && mine },
       ];
       const run = (choice) => {
         if (!choice) return;

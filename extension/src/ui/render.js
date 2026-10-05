@@ -171,16 +171,23 @@
 
   // A post's action bar. In the default hover mode it is hidden until the
   // pointer or the selection reaches the post, so it is built then (app.js
-  // fillActs): it was nearly half of every post's elements.
+  // fillActs): it was nearly half of every post's elements. Its items run in
+  // X's order, and Settings ▸ General ▸ Action bar hides any of them (the
+  // bar* settings; the keys work either way). Views are X's count of times
+  // the post was seen: shown with the other counts, never as a button.
   function acts(p, ctx) {
+    const s = ctx.settings;
+    const on = (k) => s[k] !== false;
+    const views = p.counts.views;
     return (
       '<div class="acts">' +
-      '<button type="button" data-act="reply" title="Reply (r)" aria-label="Reply" tabindex="-1">' + icon('reply') + count(p.counts.reply, ctx) + '</button>' +
-      '<button type="button" data-act="repost" class="' + (p.state.reposted ? 'on-rt' : '') + '" title="' + (p.state.reposted ? 'Undo repost or quote (t)' : 'Repost or quote (t)') + '" aria-label="' + (p.state.reposted ? 'Reposted. Undo repost or quote' : 'Repost or quote') + '" aria-pressed="' + !!p.state.reposted + '" tabindex="-1">' + icon(p.state.reposted ? 'repostOn' : 'repost') + count(p.counts.repost, ctx) + '</button>' +
-      '<button type="button" data-act="like" class="' + (p.state.liked ? 'on-like' : '') + '" title="' + (p.state.liked ? 'Unlike (l)' : 'Like (l)') + '" aria-label="Like" aria-pressed="' + !!p.state.liked + '" tabindex="-1">' + icon(p.state.liked ? 'likeOn' : 'like') + count(p.counts.like, ctx) + '</button>' +
-      '<button type="button" data-act="bookmark" class="' + (p.state.bookmarked ? 'on-bm' : '') + '" title="' + (p.state.bookmarked ? 'Remove bookmark (b)' : 'Bookmark (b)') + '" aria-label="Bookmark" aria-pressed="' + !!p.state.bookmarked + '" tabindex="-1">' + icon(p.state.bookmarked ? 'bookmarkOn' : 'bookmark') + '</button>' +
-      '<button type="button" data-act="copy" title="Copy link to post" aria-label="Copy link to post" tabindex="-1">' + icon('link') + '</button>' +
-      '<button type="button" data-act="open" title="Open on x.com" aria-label="Open on x.com" tabindex="-1">' + icon('open') + '</button>' +
+      (on('barReply') ? '<button type="button" data-act="reply" title="Reply (r)" aria-label="Reply" tabindex="-1">' + icon('reply') + count(p.counts.reply, ctx) + '</button>' : '') +
+      (on('barRepost') ? '<button type="button" data-act="repost" class="' + (p.state.reposted ? 'on-rt' : '') + '" title="' + (p.state.reposted ? 'Undo repost or quote (t)' : 'Repost or quote (t)') + '" aria-label="' + (p.state.reposted ? 'Reposted. Undo repost or quote' : 'Repost or quote') + '" aria-pressed="' + !!p.state.reposted + '" tabindex="-1">' + icon(p.state.reposted ? 'repostOn' : 'repost') + count(p.counts.repost, ctx) + '</button>' : '') +
+      (on('barLike') ? '<button type="button" data-act="like" class="' + (p.state.liked ? 'on-like' : '') + '" title="' + (p.state.liked ? 'Unlike (l)' : 'Like (l)') + '" aria-label="Like" aria-pressed="' + !!p.state.liked + '" tabindex="-1">' + icon(p.state.liked ? 'likeOn' : 'like') + count(p.counts.like, ctx) + '</button>' : '') +
+      (on('barViews') && s.counts && views ? '<span class="vw" title="' + h(views.toLocaleString('en-US')) + (views === 1 ? ' view' : ' views') + '">' + icon('chartbar') + count(views, ctx) + '</span>' : '') +
+      (on('barBookmark') ? '<button type="button" data-act="bookmark" class="' + (p.state.bookmarked ? 'on-bm' : '') + '" title="' + (p.state.bookmarked ? 'Remove bookmark (b)' : 'Bookmark (b)') + '" aria-label="Bookmark" aria-pressed="' + !!p.state.bookmarked + '" tabindex="-1">' + icon(p.state.bookmarked ? 'bookmarkOn' : 'bookmark') + '</button>' : '') +
+      (on('barCopy') ? '<button type="button" data-act="copy" title="Copy link to post" aria-label="Copy link to post" tabindex="-1">' + icon('link') + '</button>' : '') +
+      (on('barOpen') ? '<button type="button" data-act="open" title="Open on x.com" aria-label="Open on x.com" tabindex="-1">' + icon('open') + '</button>' : '') +
       '</div>'
     );
   }

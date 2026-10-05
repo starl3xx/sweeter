@@ -329,6 +329,8 @@ img{display:block}
 .acts .on-rt{color:var(--rt) !important}
 .acts .on-bm{color:var(--accent) !important}
 .acts .cnt{font-variant-numeric:tabular-nums}
+.acts .vw{display:flex;align-items:center;gap:4px;padding:4px 10px 4px 8px;color:var(--act);font-size:.82em;cursor:default}
+.acts .vw svg{width:15px;height:15px}
 .acts button.busy{opacity:.45;pointer-events:none}
 
 /* repost menu */

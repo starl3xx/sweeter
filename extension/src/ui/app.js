@@ -23,6 +23,14 @@
     longPosts: 'collapsed',
     repostLabel: 'above',
     actions: 'hover',
+    // The action bar's items (Settings ▸ General ▸ Action bar).
+    barReply: true,
+    barRepost: true,
+    barLike: true,
+    barViews: true,
+    barBookmark: true,
+    barCopy: true,
+    barOpen: true,
     round: true,
     tokenLookup: true, // a click on a contract address shows DexScreener's numbers
     tickerPrices: true, // ticker cards on screen show DexScreener's price
@@ -270,6 +278,14 @@
       { k: 'check', key: 'pinToTop', label: 'Timeline', text: 'Pin timeline to top when at top', note: 'Clicking a column header also jumps to the newest post and keeps it pinned.' },
       { k: 'check', key: 'pauseOnHover', label: '', text: 'Hold a pinned column still under the pointer', note: 'New posts wait above; the count shows how many.' },
       { k: 'select', key: 'dedupe', label: 'Seen elsewhere', opts: [['off', 'Show every post as usual'], ['dim', 'Dim posts you saw earlier in another column'], ['hide', 'Hide them']], note: 'A post counts as seen after a second on screen. Two copies on screen together are never dimmed.' },
+      { k: 'head', label: 'Action bar' },
+      { k: 'check', key: 'barReply', label: 'Show', text: 'Reply' },
+      { k: 'check', key: 'barRepost', label: '', text: 'Repost' },
+      { k: 'check', key: 'barLike', label: '', text: 'Like' },
+      { k: 'check', key: 'barViews', label: '', text: 'Views', note: 'How many times X counted the post seen. Shown with the other counts.' },
+      { k: 'check', key: 'barBookmark', label: '', text: 'Bookmark' },
+      { k: 'check', key: 'barCopy', label: '', text: 'Copy link' },
+      { k: 'check', key: 'barOpen', label: '', text: 'Open on x.com', note: 'The keys work either way: r, t, l, and b.' },
     ],
     media: [
       { k: 'select', key: 'media', label: 'Images', opts: [['full', 'Full thumbnails'], ['cropped', 'Cropped grid'], ['small', 'Small'], ['none', 'None']], note: 'Full thumbnails keep each image’s own shape, so nothing is cropped.' },
@@ -315,7 +331,7 @@
   ];
   // What a layout holds: Sweeter’s own arrangement, never X Pro’s decks.
   const LAYOUT_KEYS = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
-  const REBUILD = new Set(['actions', 'tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
+  const REBUILD = new Set(['barReply', 'barRepost', 'barLike', 'barViews', 'barBookmark', 'barCopy', 'barOpen', 'actions', 'tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
   const REPLY_OPTIONS = ['Everyone', 'Accounts you follow', 'Accounts you follow and who they follow', 'Only accounts you mention', 'Verified accounts'];
   // The picker’s categories (emoji-test.txt’s groups), each with its symbol.
   const EMO_TABS = [['recent', 'clock', 'Frequently used'], ['Smileys & Emotion', 'emoji'], ['People & Body', 'people'], ['Animals & Nature', 'paw'], ['Food & Drink', 'fork'], ['Travel & Places', 'plane'], ['Activities', 'football'], ['Objects', 'bulb'], ['Symbols', 'hash'], ['Flags', 'flag']];

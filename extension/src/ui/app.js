@@ -3617,18 +3617,25 @@
       const bar = document.createElement('div');
       bar.className = 'dropbar';
       bar.hidden = true;
-      // Each X Pro column on screen, with the views or merged column that
-      // follow it, left to right.
+      // Each X Pro column with the views or merged column that follow it
+      // (buildLayout puts them right after it), as far as they are on
+      // screen, left to right. A hidden column whose view shows still
+      // owns that view’s place; a follower of one that can’t move has none.
       const spans = () => {
         const out = [];
+        let cur = null;
         for (const x of layout) {
+          if (!x.view && !x.merge) {
+            cur = x.m && x.m.id && !removing.has(x.vid) ? { e: x, left: Infinity, right: -Infinity } : null;
+            if (cur) out.push(cur);
+          }
           const k = cols.get(x.vid);
-          const r = k && k.el.isConnected ? k.el.getBoundingClientRect() : null;
+          const r = cur && k && k.el.isConnected ? k.el.getBoundingClientRect() : null;
           if (!r || !r.width) continue;
-          if (!x.view && !x.merge && x.m && x.m.id && !removing.has(x.vid)) out.push({ e: x, left: r.left, right: r.right });
-          else if (out.length) out[out.length - 1].right = r.right;
+          cur.left = Math.min(cur.left, r.left);
+          cur.right = Math.max(cur.right, r.right);
         }
-        return out;
+        return out.filter((sp) => sp.right > sp.left);
       };
       const place = () => {
         frame = 0;

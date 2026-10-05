@@ -1,7 +1,8 @@
 // The Sweeter app icon: design/sweeter-icon-art.png (the painting, a full
 // square) inside the macOS squircle (a superellipse, n = 5, 824 px across
-// on a 1024 canvas) with a faint edge light, then every size the app, the
-// Safari extension, and the page use. Run by scripts/icons.sh.
+// on a 1024 canvas), then every size the app, the Safari extension, and the
+// page use. No edge light: on a light page it read as a white fringe. Run by
+// scripts/icons.sh.
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -54,11 +55,6 @@ let shape = squircle()
 ctx.addPath(shape)
 ctx.clip()
 ctx.draw(art, in: CGRect(x: 0, y: 0, width: 824, height: 824).insetBy(dx: -824 * (zoom - 1) / 2, dy: -824 * (zoom - 1) / 2).offsetBy(dx: 100, dy: 100))
-// The squircle's own edge light (half of a 4 px line, inside the clip).
-ctx.addPath(shape)
-ctx.setStrokeColor(CGColor(colorSpace: sRGB, components: [1, 1, 1, 0.35])!)
-ctx.setLineWidth(4)
-ctx.strokePath()
 let master = ctx.makeImage()!
 write(master, "design/icon-1024.png")
 

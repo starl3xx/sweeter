@@ -47,10 +47,11 @@ The Sweeter app needs none of this.
 - **⌥X** shows or hides Sweeter over X Pro. Anything Sweeter doesn’t do yet is one key away in X Pro itself.
 - **j / k** move through posts, **1–9** jump to a column, **n** writes a post, **/** finds in a column, **,** opens Settings.
 - **⇧⌘P** opens the command palette: every command, found by typing.
+- **The compose window** (**n**): drag it by its title to put it where you like. It grows as you write, links are underlined (in the Mac app, with a preview card), and the emoji button searches every emoji, in your skin tone (Return inserts one). GIFs, polls, scheduling, location, and Grok images open X Pro’s own composer with your text.
 - **Themes:** Classic (Tweetbot’s colors), Sweeter, Catppuccin, Nord, and Dracula, each in light and dark, in Settings ▸ General ▸ Theme. Appearance follows macOS or stays light or dark.
 - Each column’s **…** menu holds its filters, width, Icon & Color, merge, groups and pop-out window.
 - In the Mac app, **⌘Y** shows a post’s photos in Quick Look, an alert for a post has **Like** and **Reply** buttons, every **Share** menu is the Mac’s own, and Shortcuts and Spotlight have **New Post**, **Next Unread**, **Open Column**, and **Show Sweeter**.
-- Crypto contract addresses in posts are links: click one for its price, liquidity, and market cap (⌘-click opens DexScreener). Tickers X tags, like $RSR, get a price card under the post.
+- Crypto contract addresses in posts are links: click one for its price, liquidity, and market cap, and again to close it (⌘-click opens DexScreener). Tickers X tags, like $RSR, get a price card under the post.
 
 Columns are X Pro’s own columns. When you add, remove, rename, or reorder one in Sweeter (drag a column by its title, or press ⌥⌘← and ⌥⌘→), Sweeter does it with X Pro’s own controls, so the change follows you to every device. A search column takes X’s search syntax (`from:`, `url:`, `-filter:replies`, and more), and Add a column ▸ Search lists the common operators: click one to add it. Edit Search…, in a search column’s … menu, changes its query in the same sheet. Sweeter’s own touches (colors, icons, filters, merged columns, groups) stay on this Mac.
 

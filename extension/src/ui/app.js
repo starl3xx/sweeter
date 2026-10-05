@@ -65,6 +65,8 @@
     composePos: null, // the compose window moved from its usual place: { x, y } in px
     composeHeight: 0, // the compose text box’s least height in px (0: the usual 120)
     composeCards: true, // Mac app: a link in the compose window shows its page’s preview card
+    emojiRecent: [], // the emoji picker’s Frequently used, newest first (no skin tone)
+    emojiTone: 0, // the emoji picker’s skin tone: 0 (none) to 5 (dark)
   };
   Sweeter.DEFAULTS = DEFAULTS;
 
@@ -315,6 +317,10 @@
   const LAYOUT_KEYS = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
   const REBUILD = new Set(['actions', 'tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
   const REPLY_OPTIONS = ['Everyone', 'Accounts you follow', 'Accounts you follow and who they follow', 'Only accounts you mention', 'Verified accounts'];
+  // The picker’s categories (emoji-test.txt’s groups), each with its symbol.
+  const EMO_TABS = [['recent', 'clock', 'Frequently used'], ['Smileys & Emotion', 'emoji'], ['People & Body', 'people'], ['Animals & Nature', 'paw'], ['Food & Drink', 'fork'], ['Travel & Places', 'plane'], ['Activities', 'football'], ['Objects', 'bulb'], ['Symbols', 'hash'], ['Flags', 'flag']];
+  const EMO_TONES = ['✋', '✋🏻', '✋🏼', '✋🏽', '✋🏾', '✋🏿'];
+  // Frequently used, before the person has used any.
   const EMOJI = '😂 ❤️ 🔥 👀 🙏 😭 🫡 💯 🚀 ✅ 👍 👏 🤝 🎉 😅 🤔 🙌 😎 🥲 😬 💀 🤯 🫠 ✨ ⚡️ 🧠 📈 📉 💰 🪙 🎯 🛠️ 🤖 🙃 ☕️ 🍿 ⚾️ 🏈 🐐 👋'.split(' ');
   const ACCEPT = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime'];
   const DURATION_LABEL = { day: '1 Day', week: '1 Week', month: '1 Month', forever: 'Forever' };
@@ -456,7 +462,7 @@
       // that hand the post to X Pro’s own composer, in gray.
       '<div class="cmp-tools">' +
       '<button class="tb" type="button" data-cmd="cmp-photo" title="Add photos or a video. Paste or drop works too." aria-label="Add photos or a video. Paste or drop works too.">' + icon('photo') + '</button>' +
-      '<button class="tb" type="button" data-cmd="cmp-emoji" title="Emoji. ⌃⌘Space opens all of them." aria-label="Emoji. ⌃⌘Space opens all of them.">' + icon('emoji') + '</button>' +
+      '<button class="tb" type="button" data-cmd="cmp-emoji" title="Emoji" aria-label="Emoji">' + icon('emoji') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-bold" title="Bold (⌘B)" aria-label="Bold (⌘B)">' + icon('bold') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-italic" title="Italic (⌘I)" aria-label="Italic (⌘I)">' + icon('italic') + '</button>' +
       '<span class="sepv"></span>' +
@@ -466,12 +472,20 @@
         .join('') +
       '</div>' +
       '<div class="cmp-drop">Drop photos or a video</div>' +
-      '<div class="emo" hidden>' + EMOJI.map((e) => '<button type="button" data-emoji="' + e + '">' + e + '</button>').join('') + '<div class="hint">⌃⌘Space opens every emoji.</div></div>' +
       '<input type="file" id="cmp-file" accept="' + ACCEPT.join(',') + '" multiple hidden>' +
       '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for GIFs, polls, scheduling, and more">Open in X Pro</button>' +
       '<span class="cmp-status" id="cmp-status" role="status"></span><span class="grow"></span><span class="cmp-count"></span>' +
       '<button class="cmp-post" type="button" data-cmd="cmp-post" title="Post (⌘Return)">Post</button></div>' +
       '<div class="cmp-grip" title="Drag for a taller text box. Double-click to reset." aria-hidden="true"></div>' +
+      '</div>' +
+      // The emoji picker sits beside the compose window, so the window never clips it.
+      '<div class="emo" hidden role="dialog" aria-label="Emoji">' +
+      '<div class="emo-top"><input id="emo-q" type="text" placeholder="Search emoji" autocomplete="off" spellcheck="false" aria-label="Search emoji">' +
+      '<button class="emo-tone" type="button" title="Skin tone" aria-label="Skin tone" aria-expanded="false"></button></div>' +
+      '<div class="emo-tones" hidden>' + EMO_TONES.map((e, i) => '<button type="button" data-tone="' + i + '" aria-label="' + ['No skin tone', 'Light skin tone', 'Medium-light skin tone', 'Medium skin tone', 'Medium-dark skin tone', 'Dark skin tone'][i] + '">' + e + '</button>').join('') + '</div>' +
+      '<div class="emo-tabs">' + EMO_TABS.map(([g, ic, label]) => '<button type="button" data-g="' + h(g) + '" title="' + h(label || g) + '" aria-label="' + h(label || g) + '">' + icon(ic) + '</button>').join('') + '</div>' +
+      '<div class="emo-grid"></div>' +
+      '<div class="emo-foot"><span class="ef-e"></span><span class="ef-n"></span>' + (native ? '<button class="ef-sys" type="button" title="macOS’s own emoji picker (⌃⌘Space)">All Emoji & Symbols</button>' : '<span class="ef-k">⌃⌘Space: macOS’s picker</span>') + '</div>' +
       '</div></div>' +
       '<div class="lb" hidden role="dialog" aria-label="Media viewer">' +
       '<div class="lb-top"><span class="lb-count"></span><span class="grow"></span><a class="lb-orig" href="#" target="_blank" rel="noopener noreferrer">Open original</a>' +
@@ -540,6 +554,13 @@
     const cmpGrip = shadow.querySelector('.cmp-grip');
     const cmpCard = shadow.querySelector('.cmp-card');
     const emoEl = shadow.querySelector('.emo');
+    const emoQ = shadow.querySelector('#emo-q');
+    const emoGrid = shadow.querySelector('.emo-grid');
+    const emoTabs = shadow.querySelector('.emo-tabs');
+    const emoToneBtn = shadow.querySelector('.emo-tone');
+    const emoTones = shadow.querySelector('.emo-tones');
+    const emoName = shadow.querySelector('.ef-n');
+    const emoGlyph = shadow.querySelector('.ef-e');
     const lbEl = shadow.querySelector('.lb');
     const lbMedia = shadow.querySelector('.lb-media');
     const bootEl = shadow.querySelector('.boot');
@@ -5405,6 +5426,7 @@
       const y = Math.round(fit(pos.y || 0, b.top + 8 - r.top, b.bottom - 8 - r.bottom));
       cmpAt = { x, y };
       if (x || y) cmpBox.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+      placeEmoji();
     }
 
     // The text box grows with the text until the window meets the bottom of
@@ -5765,9 +5787,282 @@
       addFiles(cmpFile.files);
       cmpFile.value = '';
     });
-    emoEl.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-emoji]');
-      if (b) insertText(b.dataset.emoji);
+    // ---------- the emoji picker ----------
+    // Every emoji (emoji.js: Unicode’s list, CLDR’s names and keywords), by
+    // category or by search, Frequently used first, in the chosen skin tone.
+    // Emoji newer than this Mac can draw are left out. The search field keeps
+    // the focus: arrows move the highlight, Return inserts it and closes,
+    // a click inserts and stays open, Esc closes.
+    let emo = null;
+    const noVS = (t) => t.replace(/️/g, '');
+    // A version this Mac’s emoji font lacks draws as a box: one sample per
+    // version (12.0 and newer) must come out in color, and as one glyph.
+    function emojiVersions(d) {
+      const sample = new Map();
+      for (const [, list] of d.g) for (const x of list) if (x[3] >= 12 && (!sample.has(x[3]) || (Array.from(noVS(sample.get(x[3]))).length > 1 && Array.from(noVS(x[0])).length === 1))) sample.set(x[3], x[0]);
+      let ctx = null;
+      try {
+        ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+      } catch (e) {}
+      if (!ctx) return () => true;
+      ctx.canvas.width = 40;
+      ctx.canvas.height = 32;
+      ctx.font = '24px "Apple Color Emoji", sans-serif';
+      ctx.textBaseline = 'top';
+      const one = ctx.measureText('😀').width;
+      const drawn = (e) => {
+        if (ctx.measureText(e).width > one * 1.4) return false;
+        ctx.clearRect(0, 0, 40, 32);
+        ctx.fillStyle = '#000';
+        ctx.fillText(e, 0, 2);
+        const px = ctx.getImageData(0, 0, 40, 32).data;
+        for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 40 && (Math.abs(px[i] - px[i + 1]) > 24 || Math.abs(px[i + 1] - px[i + 2]) > 24)) return true;
+        return false;
+      };
+      const ok = new Map();
+      let last = true;
+      for (const v of [...sample.keys()].sort((a, b) => a - b)) {
+        // Once one version is missing, every later one is too.
+        last = last && drawn(sample.get(v));
+        ok.set(v, last);
+      }
+      return (v) => v < 12 || ok.get(v) !== false;
+    }
+    function emojiData() {
+      if (emo) return emo;
+      let d = { g: [] };
+      try {
+        d = JSON.parse(Sweeter.EMOJI_JSON || '{"g":[]}');
+      } catch (e) {}
+      const ok = emojiVersions(d);
+      const all = [];
+      const groups = [];
+      for (const [g, list] of d.g) {
+        const idx = [];
+        for (const [e, name, keys, ver, tones] of list) {
+          if (!ok(ver)) continue;
+          idx.push(all.length);
+          const low = name.toLowerCase();
+          all.push({ e, name, low, words: low.split(/[^a-z0-9’']+/).filter(Boolean), keys: keys ? keys.split('|') : [], tones: tones || 0 });
+        }
+        groups.push([g, idx]);
+      }
+      emo = { all, groups, byChar: new Map(all.map((x, i) => [noVS(x.e), i])), sections: [], at: null };
+      return emo;
+    }
+    // In the chosen skin tone, when the emoji has them.
+    function toned(x) {
+      const t = settings.emojiTone | 0;
+      if (!t || !x.tones) return x.e;
+      if (Array.isArray(x.tones)) return x.tones[t - 1] || x.e;
+      const cps = Array.from(x.e);
+      const rest = cps.slice(1);
+      if (rest[0] === '️') rest.shift();
+      return cps[0] + String.fromCodePoint(0x1f3fa + t) + rest.join('');
+    }
+    function emojiSearch(q) {
+      const words = q.split(/\s+/).filter(Boolean);
+      const hits = [];
+      emo.all.forEach((x, i) => {
+        let score = 0;
+        for (const w of words) {
+          const s = x.low.startsWith(w) ? 0 : x.words.some((n) => n.startsWith(w)) ? 1 : x.keys.some((k) => k.startsWith(w)) ? 2 : x.low.includes(w) ? 3 : x.keys.some((k) => k.includes(w)) ? 4 : -1;
+          if (s < 0) return;
+          score += s;
+        }
+        hits.push([score, i]);
+      });
+      hits.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      return hits.slice(0, 200).map((x) => x[1]);
+    }
+    function recentEmoji() {
+      const list = (settings.emojiRecent || []).length ? settings.emojiRecent : EMOJI;
+      const seen = new Set();
+      return list.map((e) => emo.byChar.get(noVS(e))).filter((i) => i != null && !seen.has(i) && seen.add(i)).slice(0, 45);
+    }
+    const emoCell = (i) => '<button type="button" data-i="' + i + '" aria-label="' + h(emo.all[i].name) + '">' + h(toned(emo.all[i])) + '</button>';
+    function renderEmoji() {
+      emojiData();
+      const q = emoQ.value.trim().toLowerCase().replace(/^:/, '');
+      const sections = q ? [['Results', emojiSearch(q)]] : [['recent', recentEmoji()]].concat(emo.groups.filter(([, idx]) => idx.length));
+      emo.sections = sections.filter(([, idx]) => idx.length);
+      emoGrid.innerHTML = emo.sections.length
+        ? emo.sections.map(([g, idx]) => '<section class="emo-s" data-g="' + h(g) + '"><div class="emo-h">' + h(g === 'recent' ? 'Frequently used' : g) + '</div><div class="emo-row">' + idx.map(emoCell).join('') + '</div></section>').join('')
+        : '<div class="emo-empty">No emoji match “' + h(q) + '”.</div>';
+      emoGrid.scrollTop = 0;
+      emoTabs.classList.toggle('off', !!q);
+      emo.at = null;
+      moveEmoji(emo.sections.length ? [0, 0] : null);
+      spyEmoji();
+    }
+    // The highlight: [section, position]. It shows in the footer too.
+    function moveEmoji(at) {
+      const old = emoGrid.querySelector('button.on');
+      if (old) old.classList.remove('on');
+      emo.at = at;
+      const i = at ? emo.sections[at[0]][1][at[1]] : null;
+      const b = i != null ? emoGrid.querySelector('button[data-i="' + i + '"]') : null;
+      if (b) {
+        // A recent emoji is also in its own category: the section decides which.
+        const rows = emoGrid.querySelectorAll('.emo-row');
+        const mine = rows[at[0]] && rows[at[0]].children[at[1]];
+        (mine || b).classList.add('on');
+        if (emo.scrollIt) (mine || b).scrollIntoView({ block: 'nearest' });
+      }
+      nameEmoji(i);
+    }
+    function nameEmoji(i) {
+      const x = i != null ? emo.all[i] : null;
+      emoGlyph.textContent = x ? toned(x) : '';
+      emoName.textContent = x ? x.name.charAt(0).toUpperCase() + x.name.slice(1) : '';
+    }
+    function stepEmoji(key) {
+      if (!emo.at) return;
+      const [s, p] = emo.at;
+      const len = (k) => emo.sections[k][1].length;
+      const COLS = 9;
+      let next = null;
+      if (key === 'ArrowRight') next = p + 1 < len(s) ? [s, p + 1] : s + 1 < emo.sections.length ? [s + 1, 0] : null;
+      else if (key === 'ArrowLeft') next = p > 0 ? [s, p - 1] : s > 0 ? [s - 1, len(s - 1) - 1] : null;
+      else if (key === 'ArrowDown') next = p + COLS < len(s) ? [s, p + COLS] : Math.floor(p / COLS) < Math.floor((len(s) - 1) / COLS) ? [s, len(s) - 1] : s + 1 < emo.sections.length ? [s + 1, Math.min(p % COLS, len(s + 1) - 1)] : null;
+      else if (key === 'ArrowUp') {
+        if (p - COLS >= 0) next = [s, p - COLS];
+        else if (s > 0) {
+          const n = len(s - 1);
+          const lastRow = Math.floor((n - 1) / COLS) * COLS;
+          next = [s - 1, Math.min(lastRow + (p % COLS), n - 1)];
+        }
+      }
+      if (next) {
+        emo.scrollIt = true;
+        moveEmoji(next);
+        emo.scrollIt = false;
+      }
+    }
+    // The category tab for what is at the top of the grid.
+    function spyEmoji() {
+      const top = emoGrid.scrollTop + 6;
+      let g = null;
+      // Sections, not their sticky headers: a stuck header reports where it sticks.
+      for (const sec of emoGrid.querySelectorAll('.emo-s')) {
+        if (sec.offsetTop > top) break;
+        g = sec.dataset.g;
+      }
+      for (const b of emoTabs.children) b.classList.toggle('on', b.dataset.g === g);
+    }
+    // Above the emoji button when it fits, else below; in a short window the
+    // grid gets shorter (to 140 px) on the side with more room.
+    function placeEmoji() {
+      if (emoEl.hidden) return;
+      emoGrid.style.height = '';
+      const b = cmpBack.getBoundingClientRect();
+      const btn = cmpBox.querySelector('[data-cmd="cmp-emoji"]').getBoundingClientRect();
+      const w = emoEl.offsetWidth;
+      let hh = emoEl.offsetHeight;
+      const above = btn.top - b.top - 14;
+      const below = b.bottom - btn.bottom - 14;
+      const up = hh <= above || (hh > below && above >= below);
+      const room = up ? above : below;
+      if (hh > room) {
+        const grid = emoGrid.offsetHeight;
+        emoGrid.style.height = Math.max(140, grid - (hh - room)) + 'px';
+        hh = emoEl.offsetHeight;
+      }
+      emoEl.style.left = Math.round(Math.max(8, Math.min(b.width - w - 8, btn.left - b.left - 14))) + 'px';
+      emoEl.style.top = Math.round(Math.max(8, up ? btn.top - b.top - hh - 6 : btn.bottom - b.top + 6)) + 'px';
+    }
+    function openEmoji() {
+      emoQ.value = '';
+      emoTones.hidden = true;
+      emoToneBtn.textContent = EMO_TONES[settings.emojiTone | 0];
+      emoEl.hidden = false;
+      renderEmoji();
+      placeEmoji();
+      emoQ.focus();
+    }
+    function closeEmoji(focusText) {
+      if (emoEl.hidden) return;
+      emoEl.hidden = true;
+      if (focusText) cmpText.focus();
+    }
+    function insertEmoji(i, close) {
+      const x = emo.all[i];
+      if (!x) return;
+      insertText(toned(x));
+      const base = noVS(x.e);
+      settings.emojiRecent = [x.e].concat((settings.emojiRecent || []).filter((e) => noVS(e) !== base)).slice(0, 45);
+      persist();
+      if (close) closeEmoji(true);
+    }
+    // Keys while the search field has the focus. True when handled.
+    function emojiKey(e) {
+      if (e.key === 'Escape') return closeEmoji(true), true;
+      if (/^Arrow(Up|Down)$/.test(e.key) || (/^Arrow(Left|Right)$/.test(e.key) && !emoQ.value)) return stepEmoji(e.key), true;
+      if (e.key === 'Enter') {
+        if (emo && emo.at) insertEmoji(emo.sections[emo.at[0]][1][emo.at[1]], true);
+        return true;
+      }
+      return false;
+    }
+    emoQ.addEventListener('input', renderEmoji);
+    emoGrid.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-i]');
+      if (b) insertEmoji(Number(b.dataset.i), false);
+    });
+    emoGrid.addEventListener('mouseover', (e) => {
+      const b = e.target.closest('button[data-i]');
+      if (b) nameEmoji(Number(b.dataset.i));
+    });
+    emoGrid.addEventListener('mouseleave', () => {
+      if (emo) moveEmoji(emo.at);
+    });
+    emoGrid.addEventListener('scroll', () => requestAnimationFrame(spyEmoji), { passive: true });
+    emoTabs.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-g]');
+      if (!b) return;
+      if (emoQ.value) {
+        emoQ.value = '';
+        renderEmoji();
+      }
+      const sec = emoGrid.querySelector('.emo-s[data-g="' + CSS.escape(b.dataset.g) + '"]');
+      // The grid is the sections’ offset parent.
+      if (sec) emoGrid.scrollTop = sec.offsetTop;
+      const s = emo.sections.findIndex(([g]) => g === b.dataset.g);
+      if (s >= 0) moveEmoji([s, 0]);
+      emoQ.focus();
+    });
+    emoToneBtn.addEventListener('click', () => {
+      emoTones.hidden = !emoTones.hidden;
+      emoToneBtn.setAttribute('aria-expanded', String(!emoTones.hidden));
+      for (const b of emoTones.children) b.classList.toggle('on', Number(b.dataset.tone) === (settings.emojiTone | 0));
+      placeEmoji();
+    });
+    emoTones.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-tone]');
+      if (!b) return;
+      settings.emojiTone = Number(b.dataset.tone);
+      persist();
+      emoToneBtn.textContent = EMO_TONES[settings.emojiTone];
+      emoTones.hidden = true;
+      emoToneBtn.setAttribute('aria-expanded', 'false');
+      const at = emo && emo.at;
+      const top = emoGrid.scrollTop;
+      renderEmoji();
+      emoGrid.scrollTop = top;
+      if (at) moveEmoji(at);
+      placeEmoji();
+      emoQ.focus();
+    });
+    // The Mac’s own picker (Character Viewer), into the compose window.
+    const emoSys = shadow.querySelector('.ef-sys');
+    if (emoSys)
+      emoSys.addEventListener('click', () => {
+        closeEmoji(true);
+        if (native && native.charPalette) native.charPalette();
+      });
+    // A click elsewhere in the compose window closes the picker.
+    cmpBox.addEventListener('pointerdown', (e) => {
+      if (!emoEl.hidden && !e.target.closest('[data-cmd="cmp-emoji"]')) closeEmoji(false);
     });
 
     function endPassthrough() {
@@ -5896,7 +6191,8 @@
           cmpFile.click();
           break;
         case 'cmp-emoji':
-          emoEl.hidden = !emoEl.hidden;
+          if (emoEl.hidden) openEmoji();
+          else closeEmoji(true);
           break;
         case 'cmp-bold':
           applyStyle('bold');
@@ -6262,11 +6558,13 @@
         renderPrefs();
         return;
       }
-      if (t.closest('.cmp-back') && !t.closest('.cmp')) {
-        closeCompose(true);
+      if (t.closest('.cmp-back') && !t.closest('.cmp') && !t.closest('.emo')) {
+        // The first click outside closes the emoji picker, the next the window.
+        if (!emoEl.hidden) closeEmoji(true);
+        else closeCompose(true);
         return;
       }
-      if (t.closest('.prefs') || t.closest('.pop') || t.closest('.cmp') || t.closest('.find')) return;
+      if (t.closest('.prefs') || t.closest('.pop') || t.closest('.cmp') || t.closest('.emo') || t.closest('.find')) return;
       // The click that ends a column drag is not a click.
       if (Date.now() - colDragEnd < 400 && t.closest('.col > .ch')) return;
       // A collapsed column opens again on a click anywhere on it.
@@ -7557,7 +7855,8 @@
       }
       if (!cmpBack.hidden) {
         if (e.key === 'Escape') {
-          closeCompose(true);
+          if (!emoEl.hidden) closeEmoji(true);
+          else closeCompose(true);
           return true;
         }
         return false;
@@ -7828,6 +8127,8 @@
           } else if (e.metaKey && t.id === 'cmp-text' && (e.key === 'b' || e.key === 'i')) {
             applyStyle(e.key === 'b' ? 'bold' : 'italic');
             handled = true;
+          } else if (t.id === 'emo-q' && emojiKey(e)) {
+            handled = true;
           } else if (e.key === 'Escape') handled = handleKey(e);
         } else handled = handleKey(e);
         if (handled) e.preventDefault();
@@ -7913,6 +8214,7 @@
         if (!ipBack.hidden) return closePicker(false), true;
         if (!ovBack.hidden) return closeOverview(), true;
         if (!addBack.hidden) return closeAddSheet(), true;
+        if (!emoEl.hidden) return closeEmoji(true), true;
         if (!cmpBack.hidden) return closeCompose(true), true;
         if (!prefsEl.hidden) return closePrefs(), true;
         if (!profBack.hidden) return closeProfile(), true;

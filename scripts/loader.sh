@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # The loading screen's flapping bird: design/loader/sweeter-loader-sprite.png
-# (starl3xx's eight 256 px poses in a row, 130 ms each, looped) as one WebP
-# at 240 px cells (2x the 120 pt it shows at), for the page
-# (extension/src/ui/loader.js, inline, since X Pro's page allows no other
-# image host) and the Mac app's first screen (extension/src/ui/loader.webp,
-# read from the bundle). Needs cwebp (brew install webp).
+# (starl3xx's eight 256 px poses in a row, 130 ms each, looped; scripts/bird.sh
+# draws them from the icon art) as one WebP at 240 px cells (2x the 120 pt it
+# shows at), for the page (extension/src/ui/loader.js, inline, since X Pro's
+# page allows no other image host) and the Mac app's first screen
+# (extension/src/ui/loader.webp, read from the bundle). Needs cwebp (brew
+# install webp).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"

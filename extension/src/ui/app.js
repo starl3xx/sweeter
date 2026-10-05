@@ -954,7 +954,7 @@
       el.dataset.key = key;
       el.dataset.vid = e.vid;
       el.innerHTML =
-        '<header class="ch" title="Click: where you stopped reading. Click again: the top, and stay there."><span class="cic" hidden></span><span class="ct"></span><input class="ren" type="text" hidden aria-label="Column title" autocomplete="off" spellcheck="false"><span class="live" title="Pinned to the top: new posts stream in"></span><span class="stl" hidden>' + icon('clock') + '</span><span class="cs"></span>' +
+        '<header class="ch" title="Click: where you stopped reading. Click again: the top, and stay there.' + (e.view || e.merge ? '' : ' Drag: move the column.') + '"><span class="cic" hidden></span><span class="ct"></span><input class="ren" type="text" hidden aria-label="Column title" autocomplete="off" spellcheck="false"><span class="live" title="Pinned to the top: new posts stream in"></span><span class="stl" hidden>' + icon('clock') + '</span><span class="cs"></span>' +
         '<button class="fchip" type="button" data-cmd="filter" hidden title="Filters on. Click to change them."></button>' +
         '<input class="find" type="search" placeholder="Find in loaded posts" aria-label="Find in this column’s loaded posts" autocomplete="off" spellcheck="false" hidden>' +
         '<span class="fnum" hidden></span>' +
@@ -3595,6 +3595,98 @@
       hnd.addEventListener('pointerup', up);
       hnd.addEventListener('pointercancel', up);
     });
+    // Drag an X Pro column by its title bar to move it: X Pro gets the new
+    // order, as with Move Left and Right, so every device follows. Views and
+    // merged columns ride along after their column. A press that doesn’t
+    // move stays a click.
+    let colDragEnd = 0;
+    let colDragCancel = null; // while a drag is on: Esc ends it (onWindowKey)
+    colsEl.addEventListener('pointerdown', (e) => {
+      const head = e.target.closest && e.target.closest('.col > .ch');
+      if (!head || e.button !== 0 || e.target.closest('button, input')) return;
+      const c = cols.get(head.parentElement.dataset.vid);
+      if (!c || c.view || c.merge || removing.has(c.vid) || actingAs(c.vid) !== null || !removable(mapOf(c))) return;
+      e.preventDefault();
+      head.setPointerCapture(e.pointerId);
+      const x0 = e.clientX;
+      const y0 = e.clientY;
+      let x = x0;
+      let on = false;
+      let target = null;
+      let frame = 0;
+      const bar = document.createElement('div');
+      bar.className = 'dropbar';
+      bar.hidden = true;
+      // Each X Pro column on screen, with the views or merged column that
+      // follow it, left to right.
+      const spans = () => {
+        const out = [];
+        for (const x of layout) {
+          const k = cols.get(x.vid);
+          const r = k && k.el.isConnected ? k.el.getBoundingClientRect() : null;
+          if (!r || !r.width) continue;
+          if (!x.view && !x.merge && x.m && x.m.id && !removing.has(x.vid)) out.push({ e: x, left: r.left, right: r.right });
+          else if (out.length) out[out.length - 1].right = r.right;
+        }
+        return out;
+      };
+      const place = () => {
+        frame = 0;
+        if (!on) return;
+        const box = colsEl.getBoundingClientRect();
+        // Near an edge, the columns scroll.
+        const edge = x < box.left + 48 ? -1 : x > box.right - 48 ? 1 : 0;
+        if (edge) colsEl.scrollLeft += edge * 14;
+        const all = spans();
+        const a = all.findIndex((s) => s.e.vid === c.vid);
+        const others = all.filter((s) => s.e.vid !== c.vid);
+        const k = others.filter((s) => (s.left + s.right) / 2 < x).length;
+        target = a < 0 || k === a ? null : k < a ? others[k].e : others[k - 1].e;
+        if (target) {
+          const at = k < others.length ? others[k].left : others[others.length - 1].right;
+          bar.style.left = Math.round(Math.max(box.left, Math.min(box.right, at)) - 2) + 'px';
+          bar.style.top = Math.round(box.top) + 'px';
+          bar.style.height = Math.round(box.height) + 'px';
+        }
+        bar.hidden = !target;
+        if (edge) frame = requestAnimationFrame(place);
+      };
+      const move = (ev) => {
+        x = ev.clientX;
+        if (!on) {
+          if (Math.abs(x - x0) < 6 && Math.abs(ev.clientY - y0) < 6) return;
+          on = true;
+          closePop();
+          c.el.classList.add('lifted');
+          app.classList.add('reordering');
+          app.appendChild(bar);
+        }
+        if (!frame) frame = requestAnimationFrame(place);
+      };
+      const end = (ev) => {
+        head.removeEventListener('pointermove', move);
+        head.removeEventListener('pointerup', end);
+        head.removeEventListener('pointercancel', end);
+        cancelAnimationFrame(frame);
+        colDragCancel = null;
+        if (!on) return;
+        colDragEnd = Date.now();
+        c.el.classList.remove('lifted');
+        app.classList.remove('reordering');
+        bar.remove();
+        if (ev && ev.type === 'pointerup' && target) moveTo(c, target);
+      };
+      // Esc puts it back where it was.
+      colDragCancel = () => {
+        if (!on) return false;
+        target = null;
+        end(null);
+        return true;
+      };
+      head.addEventListener('pointermove', move);
+      head.addEventListener('pointerup', end);
+      head.addEventListener('pointercancel', end);
+    });
     colsEl.addEventListener('dblclick', (e) => {
       const hnd = e.target.closest && e.target.closest('.rsz');
       if (!hnd) return;
@@ -3764,10 +3856,13 @@
     // Move Left / Right: past the neighbor Sweeter shows (X Pro may hold
     // columns Sweeter does not show between them, so count X Pro’s own).
     function moveBy(c, dir) {
+      moveTo(c, neighbor(c, dir));
+    }
+    // To the place of n, another X Pro column (a drag ends here too).
+    function moveTo(c, n) {
       if (refuseDelegated(c.key)) return;
       const m = mapOf(c);
-      const n = neighbor(c, dir);
-      if (!m || !n || !removable(m)) return;
+      if (!m || !n || !n.m || n.vid === c.vid || !removable(m)) return;
       const order = xpro.wrappers().map((w) => w.id);
       const a = order.indexOf(m.id);
       const b = order.indexOf(n.m.id);
@@ -4808,7 +4903,7 @@
             ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + '</div>'
             : '<p class="anote">You have no lists yet. Make one on x.com, then add it here.</p>';
       } else if (s.step === 'search') {
-        body = '<form class="asearch"><input id="add-q" type="search" placeholder="#buildinpublic, from:tapbots, sweeter" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">Add Column</button></form><p class="anote">A search column shows the newest posts first.</p>';
+        body = '<form class="asearch"><input id="add-q" type="search" placeholder="sweeter from:tapbots -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">Add Column</button></form><p class="anote">A search column shows the newest posts first.</p>' + searchCheats();
       } else {
         body = '<p class="anote busy">' + h(s.label || 'Adding the column in X Pro…') + '</p>';
       }
@@ -4816,6 +4911,44 @@
       addBody.innerHTML = body;
       addBack.querySelector('.aback').hidden = s.step === 'menu' || s.step === 'busy';
       addBack.querySelector('.aclose').disabled = s.step === 'busy';
+    }
+    // X’s search syntax, a click away. Each adds its operator after the
+    // cursor, with the part to change ({…}) selected.
+    function searchCheats() {
+      const d = new Date(Date.now() - 7 * 864e5);
+      const day = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      const groups = [
+        ['Words', [['"{exact phrase}"', 'This exact phrase'], ['OR {word}', 'Either word', 'cats OR dogs'], ['-{word}', 'Without this word'], ['#{hashtag}', 'This hashtag']]],
+        ['People', [['from:{user}', 'Posted by this account'], ['to:{user}', 'Replies to this account'], ['@{user}', 'Mentions this account'], ['filter:follows', 'Only accounts you follow']]],
+        ['Links and media', [['url:{site.com}', 'Links to this site'], ['filter:links', 'Has a link'], ['filter:images', 'Has a photo'], ['filter:videos', 'Has a video']]],
+        ['More', [['-filter:replies', 'No replies'], ['min_faves:{10}', 'At least 10 likes'], ['lang:{en}', 'In this language'], ['since:{' + day + '}', 'On or after this day']]],
+      ];
+      return '<div class="cheats">' + groups.map(([name, ops]) => '<div class="cg"><h4>' + h(name) + '</h4>' + ops.map(([ins, what, shown]) => '<button type="button" data-cmd="add-ins" data-ins="' + h(ins) + '"><code>' + h(shown || ins.replace(/[{}]/g, '')) + '</code><span>' + h(what) + '</span></button>').join('') + '</div>').join('') + '</div>';
+    }
+    function insertOp(el) {
+      const q = addBody.querySelector('#add-q');
+      if (!q) return;
+      const tpl = el.dataset.ins;
+      const text = tpl.replace(/[{}]/g, '');
+      // After the word or "quoted phrase" at the cursor, never inside it
+      // (or over a selection, which stays).
+      const v = q.value;
+      let at = q.selectionEnd == null ? v.length : q.selectionEnd;
+      if ((v.slice(0, at).match(/"/g) || []).length % 2) {
+        const close = v.indexOf('"', at);
+        at = close < 0 ? v.length : close + 1;
+      }
+      while (at < v.length && !/\s/.test(v[at])) at++;
+      const before = q.value.slice(0, at);
+      const after = q.value.slice(at);
+      const pre = before && !/\s$/.test(before) ? ' ' : '';
+      const post = after && !/^\s/.test(after) ? ' ' : '';
+      q.value = before + pre + text + post + after;
+      const start = before.length + pre.length;
+      const a = tpl.indexOf('{');
+      q.focus();
+      if (a < 0) q.setSelectionRange(start + text.length, start + text.length);
+      else q.setSelectionRange(start + a, start + tpl.indexOf('}') - 1);
     }
     async function doAdd(fn, onFail) {
       addState = { step: 'busy' };
@@ -5631,6 +5764,9 @@
         case 'add-open':
           openAddSheet();
           break;
+        case 'add-ins':
+          insertOp(el);
+          break;
         case 'deckmenu':
           showDeckMenu(el);
           break;
@@ -5848,6 +5984,8 @@
         return;
       }
       if (t.closest('.prefs') || t.closest('.pop') || t.closest('.cmp') || t.closest('.find')) return;
+      // The click that ends a column drag is not a click.
+      if (Date.now() - colDragEnd < 400 && t.closest('.col > .ch')) return;
       // A collapsed column opens again on a click anywhere on it.
       const strip = t.closest('.col.collapsed');
       if (strip) {
@@ -6711,7 +6849,7 @@
       const opt = (v, label, cur) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + label + '</option>';
       return '<div class="fedit" role="group" aria-label="' + (e.id ? 'Edit filter' : 'New filter') + '"><div class="pgrid">' +
         '<label class="pl" for="fe-name">Name:</label><div class="pc"><input type="text" id="fe-name" value="' + h(e.name) + '" placeholder="Links from mutuals" autocomplete="off"></div>' +
-        '<label class="pl" for="fe-inc">Only posts with:</label><div class="pc"><input type="text" id="fe-inc" value="' + h(e.include) + '" placeholder="macstories.net OR sixcolors.com" autocomplete="off" spellcheck="false"><div class="note">Words, names or link domains. Separate choices with OR or commas. Empty means any post.</div></div>' +
+        '<label class="pl" for="fe-inc">Only posts with:</label><div class="pc"><input type="text" id="fe-inc" value="' + h(e.include) + '" placeholder="macstories.net OR sixcolors.com" autocomplete="off" spellcheck="false"><div class="note">Words, names, or link domains. Separate choices with OR or commas. Empty means any post.</div></div>' +
         '<label class="pl" for="fe-exc">Hide posts with:</label><div class="pc"><input type="text" id="fe-exc" value="' + h(e.exclude) + '" placeholder="tiktok" autocomplete="off" spellcheck="false"></div>' +
         '<div class="pl">Rules:</div><div class="pc"><div class="frules">' +
         XF.CRITERIA.map(([k, label]) => '<label class="frl"><span>' + h(label) + '</span><select data-rule="' + k + '">' + opt('', 'Doesn’t matter', rule(k)) + opt('yes', 'Yes', rule(k)) + opt('no', 'No', rule(k)) + '</select></label>').join('') +
@@ -6724,8 +6862,8 @@
       const quick = XF.QUICK.map((f, i) => h(f.name) + ' <kbd>⌥' + (i + 1) + '</kbd>').join(', ');
       return 'A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '.';
     }
-    const MUTES_HINT = 'Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd> or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists and searches.';
-    const MUTE_NOTES_NOTE = 'A like, repost or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.';
+    const MUTES_HINT = 'Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd>, or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists, and searches.';
+    const MUTE_NOTES_NOTE = 'A like, repost, or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.';
     const LAYOUTS_HINT = 'A layout is Sweeter’s own arrangement: views, merged columns, groups, widths, filters, titles, icons, colors, media and the column layout. X Pro’s decks and columns stay as they are, so a layout fits the decks it was made with.';
     function filtersPart() {
       const n0 = XF.QUICK.length;
@@ -7366,6 +7504,11 @@
       }
       const t = path[0];
       const typing = inHost && t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if (e.type === 'keydown' && e.key === 'Escape' && colDragCancel && colDragCancel()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       if (e.type === 'keydown') {
         let handled = false;
         if (palette && palette.isOpen()) handled = palette.handleKey(e);

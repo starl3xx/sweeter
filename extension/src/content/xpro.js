@@ -1366,11 +1366,30 @@
     return { ok: true };
   }
 
+  // Paste over all of a Draft.js field’s text. Draft keeps its own
+  // selection, takes a new one only from a select event, and ignores that
+  // event until the render its focus handler asked for has run. So: focus,
+  // a moment, select, a moment, paste (verified live 2026-10-05; a paste
+  // straight after the select went beside the old text).
+  async function pasteOver(box, text) {
+    box.focus();
+    await wait(50);
+    window.getSelection().selectAllChildren(box);
+    document.dispatchEvent(new Event('selectionchange'));
+    await wait(50);
+    const dt = new DataTransfer();
+    dt.setData('text/plain', text);
+    box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }
+
   // Change a search column’s query: the drawer’s Search tab holds X Pro’s
-  // own “Search query” field (a contenteditable, like the sidebar’s). Its
-  // text is replaced by a paste, and Enter searches, as a person does it.
-  // The caller checks that X Pro saved it (UpdateColumn in the deck model);
-  // if not, the drawer stays open with the text for the person to finish.
+  // own “Search query” field (Draft.js, like the sidebar’s). Its text is
+  // replaced by a paste, and Enter searches, as a person does it. X Pro
+  // also saves the field by itself about 2 s after any change (verified
+  // 2026-10-05), so a text that came out wrong is put back to the old query
+  // rather than left to be saved. The caller checks that X Pro saved the
+  // new one (UpdateColumn in the deck model); if not, the drawer stays open
+  // for the person to finish.
   async function editSearch(id, q) {
     if (isDelegated(columnWrap(id))) return { ok: false, reason: 'delegated' };
     const opened = await openDrawer(id);
@@ -1384,14 +1403,27 @@
     const field = () => (columnWrap(id) && columnWrap(id).querySelector('[role="textbox"][aria-label="Search query"]')) || null;
     const box = await waitFor(field, 2500);
     if (!box) return { ok: false, reason: 'nosearch', opened };
-    box.focus();
-    window.getSelection().selectAllChildren(box);
-    const dt = new DataTransfer();
-    dt.setData('text/plain', q);
-    box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-    const typed = await waitFor(() => (field() && field().innerText.trim() === q ? field() : null), 2500);
-    if (!typed || document.querySelector('[role="option"][aria-selected="true"]')) return { ok: false, reason: 'notyped', opened };
-    typed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+    const before = box.innerText.trim();
+    // Draft showed the pasted text within 300 ms (verified 2026-10-05), so
+    // each check is short: two misses and the restore all land within
+    // about 1 s, before X Pro’s own save of the wrong text.
+    const put = async (text) => {
+      for (let i = 0; i < 2; i++) {
+        if (!field()) return null;
+        await pasteOver(field(), text);
+        const b = await waitFor(() => (field() && field().innerText.trim() === text ? field() : null), 300);
+        if (b) return b;
+      }
+      return null;
+    };
+    const typed = await put(q);
+    if (!typed) {
+      if (before) await put(before);
+      return { ok: false, reason: 'notyped', opened };
+    }
+    // With a suggestion selected, Enter would take the suggestion; X Pro’s
+    // own save still comes, so the caller waits for it either way.
+    if (!document.querySelector('[role="option"][aria-selected="true"]')) typed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
     return { ok: true, opened };
   }
 

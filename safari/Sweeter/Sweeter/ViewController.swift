@@ -1151,13 +1151,17 @@ final class SweeterWindow: NSWindow {
     /// content go to the page as ever.
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown, event.clickCount == 2, fitContentWidth > 0, !styleMask.contains(.fullScreen) {
-            // Only past the content, in the resize margin: just inside the
-            // right edge is the last column's resize handle, whose own
-            // double-click resets the column's width.
+            // On the left, the sidebar: up to 4 points in, or past the edge.
+            // On the right, just inside is the last column's resize handle,
+            // whose own double-click resets the column's width, so only past
+            // the edge; unless the window meets the screen's edge, which
+            // leaves no margin past it: then its outermost 2 points.
             let x = event.locationInWindow.x
             let y = event.locationInWindow.y
-            let left = x < 0
-            if (left || x > frame.width), y > 6, y < frame.height - 6 {
+            let atRight = screen.map { frame.maxX >= $0.visibleFrame.maxX - 1 } ?? false
+            let left = x <= 4
+            let right = x > frame.width || (atRight && x >= frame.width - 2)
+            if left || right, y > 6, y < frame.height - 6 {
                 setFrame(fittedFrame(left: left), display: true, animate: true)
                 return
             }

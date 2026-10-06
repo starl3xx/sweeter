@@ -2049,7 +2049,11 @@
           setTimeout(() => mk.classList.remove('fresh'), 1800);
           c.marker = mk;
         }
+        // Each redraw takes the marker out and puts it back, which would
+        // restart its animation: only its first placing draws it in.
+        if (c.marker.__placed) c.marker.classList.remove('fresh');
         c.list.insertBefore(c.marker, boundary);
+        c.marker.__placed = true;
       }
 
       if (pinned) {

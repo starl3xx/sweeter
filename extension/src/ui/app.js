@@ -2655,6 +2655,12 @@
         readerDetail(key.slice(7));
         return;
       }
+      // Posts X Pro looked up by id: the reader’s body or its embedded posts.
+      if (key === 'posts') {
+        if (rd && rd.state !== 'ready') readerDetail(rd.id);
+        else if (rd && rd.post.article && (rd.post.article.body || []).some((b) => b.t === 'post')) renderReader(false);
+        return;
+      }
       if (key === 'decks') {
         // X Pro’s deck model changed: remap, then refresh titles and tabs.
         host.dataset.decks = store.decks.synced() ? 'sync' : store.decks.ready() ? 'saved' : 'none';
@@ -3520,12 +3526,29 @@
     // One article load at a time: each opens and pops a level of an X Pro
     // stack, so two at once could close each other’s conversation.
     let rdLoads = Promise.resolve();
+    // Articles whose conversation X Pro opened and drew for them this
+    // session: an embedded post that still never arrived (deleted,
+    // withheld) is not asked for again on every open. A load that failed
+    // is not counted.
+    const rdTried = new Set();
+    // Reader-bar actions waiting for an article load, by reader and action:
+    // one each.
+    const rdQueued = new Set();
 
-    // The post as its conversation carries it, with the article’s body.
+    // The post as its conversation (or X Pro’s lookup by id) carries it,
+    // with the article’s body.
     function articleOf(id) {
       const d = store.detail(id);
       for (const b of d ? d.blocks : []) if (b.kind === 'post' && b.post.id === id && b.post.article && b.post.article.body) return b.post;
-      return null;
+      const one = store.post(id);
+      return one && one.article && one.article.body ? one : null;
+    }
+
+    // A post an article embeds: one Sweeter shows, or one X Pro looked up.
+    const embedded = (id) => findPost(id) || store.post(id);
+    function embedsLoaded(post) {
+      const body = post && post.article && post.article.body;
+      return !body || body.every((b) => b.t !== 'post' || !!embedded(b.id));
     }
 
     function openReader(post, key) {
@@ -3538,19 +3561,28 @@
       applyReaderStyle();
       renderReader(true);
       rdScroll.focus({ preventScroll: true });
-      if (full) return;
+      // The body and every embedded post: nothing to load.
+      if (full && embedsLoaded(full)) return;
       // X Pro loaded this conversation without the body: asking again won’t
       // bring it, and its stack is the conversation Sweeter shows.
-      if (store.detail(post.id)) return readerFailed(token, 'nobody');
+      if (!full && store.detail(post.id)) return readerFailed(token, 'nobody');
+      // The body, but not every embedded post (X Pro asks for those only
+      // while it draws the article): open the conversation again for them,
+      // unless Sweeter shows it now. That stack is the conversation pane’s,
+      // and a level opened and closed over it would close the pane’s too.
+      if (full && Array.from(cols.values()).some((c) => c.detail && c.detail.id === post.id)) return;
+      if (full && rdTried.has(post.id)) return;
       rdLoads = rdLoads.then(async () => {
-        // Closed, or another article, while it waited: nothing to load.
-        if (!rd || rd.token !== token || rd.state === 'ready') return;
-        if (articleOf(post.id)) return readerDetail(post.id);
+        // Closed, or another article, while it waited; or all there now.
+        if (!rd || rd.token !== token) return;
+        const now = articleOf(post.id);
+        if (now && embedsLoaded(now)) return rd.state === 'ready' ? renderReader(false) : readerDetail(post.id);
         const hold = 'article:' + token;
         holds.add(hold);
         try {
-          const r = await xpro.loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id) });
-          if (!r.ok) readerFailed(token, r.reason);
+          const r = await xpro.loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id), settled: () => embedsLoaded(articleOf(post.id)) });
+          if (r.ok) rdTried.add(post.id);
+          else readerFailed(token, r.reason);
         } catch (e) {
           readerFailed(token, 'error');
         } finally {
@@ -3579,7 +3611,7 @@
     function renderReader(first) {
       if (!rd) return;
       const ctx = { settings, now: Date.now(), viewer, expanded };
-      rdPage.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: findPost });
+      rdPage.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: embedded });
       if (first) rdScroll.scrollTop = 0;
       renderReaderBar();
     }
@@ -7230,35 +7262,55 @@
         const inReader = cell.classList.contains('rd-cell');
         const key = colEl ? colEl.dataset.vid : inReader ? cell.dataset.vid || null : null;
         if (!inReader) selectCell(cell, false);
-        switch (act.dataset.act) {
-          case 'like':
-            doLike(cell.dataset.id, key);
-            break;
-          case 'bookmark':
-            doBookmark(cell.dataset.id, key);
-            break;
-          case 'repost':
-            showRepostMenu(act, cell.dataset.id, key);
-            break;
-          case 'reply':
-            openCompose('reply', cell.dataset.id, key);
-            break;
-          case 'copy':
-            copyText(cell.dataset.url, 'Link copied');
-            break;
-          case 'more-text': {
-            const id = cell.dataset.id;
-            const open = !expanded.has(id);
-            if (open) expanded.add(id);
-            else expanded.delete(id);
-            const tx = act.previousElementSibling;
-            if (tx) tx.classList.toggle('open', open);
-            act.textContent = open ? 'Show less' : 'Show more';
-            break;
+        // The reader’s bar acts after an article load in progress: both
+        // open and close levels of an X Pro stack.
+        const runAct = () => {
+          switch (act.dataset.act) {
+            case 'like':
+              doLike(cell.dataset.id, key);
+              break;
+            case 'bookmark':
+              doBookmark(cell.dataset.id, key);
+              break;
+            case 'repost':
+              showRepostMenu(act, cell.dataset.id, key);
+              break;
+            case 'reply':
+              openCompose('reply', cell.dataset.id, key);
+              break;
+            case 'copy':
+              copyText(cell.dataset.url, 'Link copied');
+              break;
+            case 'more-text': {
+              const id = cell.dataset.id;
+              const open = !expanded.has(id);
+              if (open) expanded.add(id);
+              else expanded.delete(id);
+              const tx = act.previousElementSibling;
+              if (tx) tx.classList.toggle('open', open);
+              act.textContent = open ? 'Show less' : 'Show more';
+              break;
+            }
+            default:
+              openUrl(cell.dataset.url);
           }
-          default:
-            openUrl(cell.dataset.url);
-        }
+        };
+        const name = act.dataset.act;
+        if (inReader && name !== 'copy' && name !== 'open') {
+          // Once that load is done, and only while this reader is open; a
+          // redrawn bar acts through its current button.
+          const tok = rd && rd.token;
+          const slot = tok + ':' + name; // per reader: a closed one blocks nothing
+          if (rdQueued.has(slot)) return;
+          rdQueued.add(slot);
+          rdLoads.then(() => {
+            rdQueued.delete(slot);
+            if (!rd || rd.token !== tok) return;
+            if (act.isConnected) return runAct();
+            const fresh = rdFoot.querySelector('[data-act="' + name + '"]');
+            if (fresh) fresh.click();
+          });
+        } else runAct();
         return;
       }
       const mediaBox = t.closest('.media');

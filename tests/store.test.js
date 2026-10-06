@@ -198,3 +198,23 @@ test('a refused column write never reaches the deck model', () => {
   s.ingest({ op: 'UpdateColumn', vars: { columnId: '1', pathname: '/notifications' }, body: { __status: 403 } });
   eq(s.decks.column('1').pathname, '/home');
 });
+
+test('posts X Pro looks up by id are kept by id (an article’s embedded posts, verified 2026-10-06)', () => {
+  const F = require('./fixtures');
+  const store = Sweeter.createStore({});
+  const seen = [];
+  store.subscribe((k) => seen.push(k));
+  const a = F.tweet({ text: 'Embedded one' });
+  const b = F.tweet({ text: 'Embedded two' });
+  eq(store.ingest({ op: 'TweetResultsByRestIds', vars: { tweetIds: [a.rest_id, b.rest_id] }, body: { data: { tweetResult: [{ result: a }, { result: b }, { result: { __typename: 'TweetTombstone' } }] } } }), 'posts');
+  eq(store.post(a.rest_id).plain, 'Embedded one');
+  eq(store.post(b.rest_id).plain, 'Embedded two');
+  // The single lookup: one result, not a list.
+  const c = F.tweet({ text: 'Single' });
+  eq(store.ingest({ op: 'TweetResultByRestId', vars: { tweetId: c.rest_id }, body: { data: { tweetResult: { result: c } } } }), 'posts');
+  eq(store.post(c.rest_id).plain, 'Single');
+  eq(seen, ['posts', 'posts']);
+  // Nothing usable: no event.
+  eq(store.ingest({ op: 'TweetResultsByRestIds', vars: {}, body: { data: { tweetResult: [] } } }), null);
+  eq(store.post('404'), null);
+});

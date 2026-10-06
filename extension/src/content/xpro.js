@@ -905,7 +905,11 @@
     if (!r.ok) return r;
     let shown = await waitFor(here, 6000);
     try {
-      return (await waitFor(o.ready, 10000)) ? { ok: true } : { ok: false, reason: 'nobody' };
+      if (!(await waitFor(o.ready, 10000))) return { ok: false, reason: 'nobody' };
+      // The posts the article embeds: X Pro asks for them as it draws the
+      // article (TweetResultsByRestIds), so the stack stays a little longer.
+      if (o.settled) await waitFor(o.settled, 4000);
+      return { ok: true };
     } finally {
       shown = here() || (shown && shown.isConnected ? shown : null);
       const w = wrapOf(shown);

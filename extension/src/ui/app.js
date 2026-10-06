@@ -390,7 +390,7 @@
       { k: 'check', key: 'barViews', label: '', text: 'Views', note: 'How many times X counted the post seen. Shown with the other counts.' },
       { k: 'check', key: 'barBookmark', label: '', text: 'Bookmark' },
       { k: 'check', key: 'barCopy', label: '', text: 'Copy link' },
-      { k: 'check', key: 'barOpen', label: '', text: 'Open on x.com', note: 'The keys work either way: r, t, l, and b.' },
+      { k: 'check', key: 'barOpen', label: '', text: 'Open on x.com', note: 'In a narrow column, Open on x.com, then Copy link, then views step aside, only as many as the room needs: turning one off makes room for the others. The keys work either way: r, t, l, and b.' },
     ],
     media: [
       { k: 'select', key: 'media', label: 'Images', opts: [['full', 'Full thumbnails'], ['cropped', 'Cropped grid'], ['small', 'Small'], ['none', 'None']], note: 'Full thumbnails keep each image’s own shape, so nothing is cropped.' },

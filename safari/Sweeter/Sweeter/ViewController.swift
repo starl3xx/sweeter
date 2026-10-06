@@ -923,6 +923,10 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         panel.isReleasedWhenClosed = false
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = true
+        // A floating panel is left out of Mission Control and ⌘` by
+        // default; the compose window is a window of its own to the person
+        // (Jake, 2026-10-06), so it takes part in both.
+        panel.collectionBehavior = [.managed, .participatesInCycle, .fullScreenAuxiliary]
         panel.becomesKeyOnlyIfNeeded = false
         panel.title = "New post"
         panel.contentView = popup

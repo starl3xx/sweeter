@@ -589,9 +589,8 @@
       '<div class="cmp-back" hidden><div class="cmp" role="dialog" aria-modal="true" aria-label="Compose">' +
       '<div class="cmp-head" title="Drag to move. Double-click to put it back."><span class="cmp-title">New post</span><button class="x" type="button" data-cmd="cmp-cancel" aria-label="Close and keep the draft" title="Close and keep the draft">×</button></div>' +
       '<div class="cmp-ctx"></div>' +
-      // The links’ underlines are drawn on a copy of the text behind the
-      // textarea, which cannot style part of its own text.
-      '<div class="cmp-body"><div class="cmp-av"></div><div class="cmp-field"><div class="cmp-hl" aria-hidden="true"></div><textarea id="cmp-text" placeholder="What’s happening?" spellcheck="true" aria-label="Post text" aria-describedby="cmp-status"></textarea></div></div>' +
+      // A rich text box (editor.js): real bold and italic, links underlined.
+      '<div class="cmp-body"><div class="cmp-av"></div><div class="cmp-field"><div id="cmp-text" class="cmp-ed" contenteditable="plaintext-only" role="textbox" aria-multiline="true" spellcheck="true" aria-label="Post text" aria-describedby="cmp-status" data-placeholder="What’s happening?"></div></div></div>' +
       '<div class="cmp-card" hidden></div>' +
       '<div class="cmp-media"></div>' +
       // Who can reply, on its own line under the text, as X shows it.
@@ -700,6 +699,7 @@
     const cmpCtx = shadow.querySelector('.cmp-ctx');
     const cmpAv = shadow.querySelector('.cmp-av');
     const cmpText = shadow.querySelector('#cmp-text');
+    Sweeter.editor.textbox(cmpText);
     const cmpCount = shadow.querySelector('.cmp-count');
     const cmpStatus = shadow.querySelector('.cmp-status');
     const cmpPost = shadow.querySelector('.cmp-post');
@@ -708,8 +708,6 @@
     const cmpReply = shadow.querySelector('#cmp-reply');
     const cmpFile = shadow.querySelector('#cmp-file');
     const cmpHead = shadow.querySelector('.cmp-head');
-    const cmpHl = shadow.querySelector('.cmp-hl');
-    const cmpField = shadow.querySelector('.cmp-field');
     const cmpGrip = shadow.querySelector('.cmp-grip');
     const cmpCard = shadow.querySelector('.cmp-card');
     const emoEl = shadow.querySelector('.emo');
@@ -5878,35 +5876,13 @@
 
     // ---------- the compose window’s place and size ----------
 
-    // The same text on a layer behind the textarea, scrolling with it: each
-    // link in a <u> for its underline and, once the draft has bold or
-    // italic, the visible text itself (the textarea's turns transparent).
-    // Bold is a stroke and italic a slant of each word, so no glyph changes
-    // width and the caret stays on its letter; a word too long for a line
-    // stays upright, since a slanted word can't wrap.
+    // The text box shows the draft's bold and italic as its own spans,
+    // redrawn only when they no longer match (editor.js), and underlines
+    // links without touching the text.
     function paintLinks() {
-      const t = cmpText.value;
       const st = compose && compose.styles ? compose.styles : { bold: [], italic: [] };
-      cmpField.classList.toggle('styled', st.bold.length > 0 || st.italic.length > 0);
-      const links = Sweeter.text.draftLinks(t);
-      const cuts = new Set([0, t.length]);
-      for (const l of links) cuts.add(l.start).add(l.end);
-      for (const [a, b] of st.bold.concat(st.italic)) cuts.add(Math.min(a, t.length)).add(Math.min(b, t.length));
-      const pts = Array.from(cuts).sort((x, y) => x - y);
-      const inside = (list, x) => list.some(([a, b]) => x >= a && x < b);
-      let html = '';
-      for (let i = 0; i < pts.length - 1; i++) {
-        const a = pts[i];
-        const seg = t.slice(a, pts[i + 1]);
-        let part = inside(st.italic, a) ? seg.split(/(\s+)/).map((w) => (!w || /^\s+$/.test(w) || w.length > 40 ? h(w) : '<i>' + h(w) + '</i>')).join('') : h(seg);
-        if (inside(st.bold, a)) part = '<b>' + part + '</b>';
-        if (links.some((l) => a >= l.start && a < l.end)) part = '<u>' + part + '</u>';
-        html += part;
-      }
-      // The zero-width space gives a last, empty line its height.
-      cmpHl.innerHTML = html + '\u200b';
-      cmpHl.style.width = cmpText.clientWidth + 'px';
-      cmpHl.style.transform = cmpText.scrollTop ? 'translateY(' + -cmpText.scrollTop + 'px)' : '';
+      cmpText.syncStyles(st);
+      cmpText.underline(Sweeter.text.draftLinks(cmpText.value));
     }
 
     // Where the person put the window (settings.composePos: px from its
@@ -6028,9 +6004,6 @@
       persist();
       fitCompose();
     });
-    cmpText.addEventListener('scroll', () => {
-      cmpHl.style.transform = cmpText.scrollTop ? 'translateY(' + -cmpText.scrollTop + 'px)' : '';
-    });
     window.addEventListener('resize', () => fitCompose());
     // A status line, a quoted post, or media can change the window’s height.
     if ('ResizeObserver' in window) {
@@ -6101,9 +6074,9 @@
       syncStyles();
       compose.styles[style] = Sweeter.text.toggleRange(compose.styles[style], a, b);
       cmpText.focus();
+      paintLinks();
       cmpText.setSelectionRange(a, b);
       updateCount();
-      paintLinks();
     }
 
     function insertText(t) {

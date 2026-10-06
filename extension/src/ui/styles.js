@@ -622,11 +622,13 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-hl u{text-decoration:underline;text-decoration-color:var(--accent-solid);text-decoration-thickness:1.5px;text-underline-offset:3px}
 /* Real bold and italic while writing: once the draft has some, the
    mirror shows the text and the textarea only its caret and selection.
-   A stroke and a slant keep every glyph's width, so the two stay aligned. */
+   A copy of each glyph a hair to the right (a stroke on all sides crowded
+   the letters) and a slant keep every glyph's width, so the two stay
+   aligned. */
 .cmp-field.styled textarea{color:transparent;caret-color:var(--t1)}
 .cmp-field.styled textarea::selection{color:transparent;background:color-mix(in srgb,var(--accent) 26%,transparent)}
 .cmp-field.styled .cmp-hl{color:var(--t1)}
-.cmp-hl b{font-weight:inherit;-webkit-text-stroke:.045em currentColor}
+.cmp-hl b{font-weight:inherit;text-shadow:.04em 0 currentColor}
 .cmp-hl i{font-style:normal;display:inline-block;transform:skewX(-11deg)}
 .cmp textarea::placeholder{color:var(--t3)}
 .cmp-foot{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--div)}

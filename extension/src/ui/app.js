@@ -4940,6 +4940,9 @@
     function reportFit() {
       if (!native || !native.fitWidth) return;
       clearTimeout(fitTimer);
+      // A newer measurement is coming: an apply still waiting would use a
+      // width from before it.
+      clearTimeout(fitApplyTimer);
       fitTimer = setTimeout(() => {
         const side = shadow.querySelector('.side');
         let w = side ? side.getBoundingClientRect().width : 76;

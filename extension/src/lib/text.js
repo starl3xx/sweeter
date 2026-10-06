@@ -44,6 +44,26 @@
     const hide = new Set((opts && opts.hideUrls) || []);
     const spans = [];
     const e = entities || {};
+    // Real bold and italic (a long post's richtext), as code point ranges
+    // {s, e, bold, italic}: a mask per code point (1 bold, 2 italic).
+    const mask = new Uint8Array(cps.length);
+    for (const r of (opts && opts.styles) || []) {
+      const bit = (r.bold ? 1 : 0) | (r.italic ? 2 : 0);
+      for (let i = Math.max(0, r.s); i < Math.min(cps.length, r.e); i++) mask[i] |= bit;
+    }
+    const wrap = (html, m) => (m & 2 ? '<em>' : '') + (m & 1 ? '<strong>' : '') + html + (m & 1 ? '</strong>' : '') + (m & 2 ? '</em>' : '');
+    // Plain text from a to b, in runs of one style each.
+    const plain = (a, b) => {
+      let html = '';
+      let i = a;
+      while (i < b) {
+        let j = i + 1;
+        while (j < b && mask[j] === mask[i]) j++;
+        html += wrap(plainLinked(cps.slice(i, j).join('')), mask[i]);
+        i = j;
+      }
+      return html;
+    };
 
     for (const u of e.urls || []) {
       if (!u.indices) continue;
@@ -117,11 +137,11 @@
     let pos = start;
     for (const sp of spans) {
       if (sp.s < pos || sp.s >= end) continue; // overlapping or outside the visible range
-      out += plainLinked(cps.slice(pos, sp.s).join(''));
-      out += sp.html;
+      out += plain(pos, sp.s);
+      out += sp.html ? wrap(sp.html, mask[sp.s]) : '';
       pos = Math.min(sp.e, end);
     }
-    if (pos < end) out += plainLinked(cps.slice(pos, end).join(''));
+    if (pos < end) out += plain(pos, end);
     return out.replace(/^(\s|<br>)+|(\s|<br>)+$/g, '');
   }
 

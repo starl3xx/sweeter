@@ -161,6 +161,49 @@
     return out;
   }
 
+  function noteMedia(text, media) {
+    const out = [];
+    const t = String(text || '');
+    for (const m of media || []) {
+      const i = m && m.url ? t.indexOf(m.url) : -1;
+      if (i < 0) continue;
+      const s = Array.from(t.slice(0, i)).length;
+      out.push(Object.assign({}, m, { indices: [s, s + Array.from(m.url).length] }));
+    }
+    return out;
+  }
+
+  // Real bold and italic in a long post (note_tweet richtext, written with
+  // X's composer formatting). Its tags count UTF-16 units, unlike the
+  // entities beside them, which count code points: X's composer measures
+  // them with string lengths, and only that reading starts each range on a
+  // word in live posts with an emoji before them (verified 2026-10-06).
+  // Returned as code point ranges for richText.
+  function richtextStyles(text, richtext) {
+    const tags = (richtext && richtext.richtext_tags) || [];
+    if (!tags.length) return [];
+    // UTF-16 offset -> code point index.
+    const at = [];
+    let cp = 0;
+    for (const ch of String(text)) {
+      for (let k = 0; k < ch.length; k++) at.push(cp);
+      cp++;
+    }
+    at.push(cp);
+    const idx = (u) => at[Math.max(0, Math.min(at.length - 1, u | 0))];
+    const out = [];
+    for (const t of tags) {
+      const types = (t.richtext_types || []).map((x) => String(x).toLowerCase());
+      const bold = types.includes('bold');
+      const italic = types.includes('italic');
+      if (!bold && !italic) continue;
+      const s = idx(t.from_index);
+      const e = idx(t.to_index);
+      if (e > s) out.push({ s, e, bold, italic });
+    }
+    return out;
+  }
+
   // ---------- article bodies ----------
   // Only a conversation carries an article's text: X Pro's TweetDetail asks
   // for content_state (withArticleRichContentState); timelines carry the
@@ -319,7 +362,13 @@
 
     const note = r.note_tweet && r.note_tweet.note_tweet_results && r.note_tweet.note_tweet_results.result;
     const text = note ? note.text : legacy.full_text || '';
-    const entities = note ? Object.assign({}, note.entity_set, { media: (legacy.entities || {}).media }) : legacy.entities || {};
+    const styles = note ? richtextStyles(text, note.richtext) : [];
+    // A long post's media come from the short legacy text, and so do their
+    // indices: they point into legacy.full_text, not the note's text, which
+    // (in every capture, 29 posts) doesn't hold the media link at all.
+    // Applied to the note they cut 23 letters from its middle. Only a media
+    // link the note really contains is hidden, found by its own address.
+    const entities = note ? Object.assign({}, note.entity_set, { media: noteMedia(note.text, (legacy.entities || {}).media) }) : legacy.entities || {};
     const range = note ? null : legacy.display_text_range;
     const hideUrls = [];
     if (legacy.quoted_status_permalink && legacy.quoted_status_permalink.url) hideUrls.push(legacy.quoted_status_permalink.url);
@@ -337,7 +386,7 @@
       url: 'https://x.com/' + author.handle + '/status/' + id,
       author,
       createdMs: isFinite(createdMs) ? createdMs : Date.parse(legacy.created_at),
-      html: richText(text, entities, range, { hideUrls }),
+      html: richText(text, entities, range, { hideUrls, styles }),
       plain: plainText(text, range, entities),
       lang: legacy.lang || '',
       source: sourceName(r.source),

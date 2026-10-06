@@ -211,7 +211,8 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             act: (a) => post({ type: 'act', json: JSON.stringify(a) }),
             copy: (t) => { post({ type: 'copy', text: String(t || '') }); },
             save: (f) => { post({ type: 'save', name: String(f.name || 'Sweeter.json'), text: String(f.text || '') }); },
-            allowPopup: () => post({ type: 'allowPopup' }),
+            allowPopup: (kind) => post({ type: 'allowPopup', kind: String(kind || '') }),
+            composeFront: () => post({ type: 'composeFront' }),
             show: () => post({ type: 'show' }),
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
             latestRelease: () => post({ type: 'latestRelease' }),
@@ -470,9 +471,14 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             replyHandler(true, nil)
         case "allowPopup":
             // Sweeter is about to open a pop-out window (a blank page it
-            // writes into). Only the next blank window, within two seconds.
+            // writes into). Only the next blank window, within two seconds;
+            // "compose" makes it the compose window.
             popupAllowedUntil = Date.now + 2
+            popupKind = body["kind"] as? String ?? ""
             replyHandler(true, nil)
+        case "composeFront":
+            composePanel?.makeKeyAndOrderFront(nil)
+            replyHandler(nil, nil)
         case "show":
             showWindow()
             replyHandler(true, nil)
@@ -850,6 +856,10 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     /// Pop-out windows Sweeter opened; kept until they close.
     private var popoutWindows: [NSWindow] = []
     private var popupAllowedUntil = Date.distantPast
+    private var popupKind = ""
+    /// The compose window, while one is open, and its title binding.
+    private var composePanel: NSPanel?
+    private var composeTitle: NSKeyValueObservation?
     private let popoutNav = PopoutNavigation()
 
     /// target=_blank and window.open go to the default browser, except a
@@ -858,6 +868,10 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         let blank = navigationAction.request.url.map { $0.absoluteString.isEmpty || $0.absoluteString == "about:blank" } ?? true
         if blank && Date.now < popupAllowedUntil {
             popupAllowedUntil = .distantPast
+            if popupKind == "compose" {
+                popupKind = ""
+                return composeWindow(configuration, size: NSSize(width: windowFeatures.width?.doubleValue ?? 600, height: windowFeatures.height?.doubleValue ?? 460))
+            }
             let size = NSSize(width: windowFeatures.width?.doubleValue ?? 440, height: windowFeatures.height?.doubleValue ?? 860)
             let popup = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: configuration)
             popup.uiDelegate = self
@@ -881,6 +895,54 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             NSWorkspace.shared.open(url)
         }
         return nil
+    }
+
+    /// The compose window: a panel above Sweeter (it hides while another
+    /// app is in front), titled by its page, that keeps the size and place
+    /// the person gives it. Closing it with its own button keeps the draft
+    /// (the page hears of it through Sweeter.native.composeClosed).
+    private func composeWindow(_ configuration: WKWebViewConfiguration, size: NSSize) -> WKWebView {
+        let popup = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: configuration)
+        popup.uiDelegate = self
+        popup.navigationDelegate = popoutNav
+        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = true
+        panel.becomesKeyOnlyIfNeeded = false
+        panel.title = "New post"
+        panel.contentView = popup
+        panel.contentMinSize = NSSize(width: 380, height: 260)
+        if !panel.setFrameUsingName("SweeterCompose") {
+            if let main = view.window?.frame {
+                panel.setFrameOrigin(NSPoint(x: main.midX - panel.frame.width / 2, y: main.maxY - panel.frame.height - 120))
+            } else {
+                panel.center()
+            }
+        }
+        panel.setFrameAutosaveName("SweeterCompose")
+        composeTitle = popup.observe(\.title, options: [.new]) { [weak panel] web, _ in
+            let title = web.title ?? ""
+            MainActor.assumeIsolated { panel?.title = title }
+        }
+        popoutWindows.append(panel)
+        composePanel = panel
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: panel, queue: .main) { [weak self] note in
+            self?.popoutWindows.removeAll { $0 === note.object as? NSWindow }
+            self?.composeWindowClosed(note.object as? NSWindow)
+        }
+        panel.makeKeyAndOrderFront(nil)
+        Log.write("compose window opened")
+        return popup
+    }
+
+    /// The compose window closed (its button, ⌘W, or the page): the page
+    /// hears of it, and keeps the draft when it didn't close it itself.
+    private func composeWindowClosed(_ window: NSWindow?) {
+        guard let window, window === composePanel else { return }
+        composePanel = nil
+        composeTitle = nil
+        webView.evaluateJavaScript("Sweeter.native && Sweeter.native.composeClosed && Sweeter.native.composeClosed()", in: nil, in: world) { _ in }
     }
 
     /// A pop-out window closed from its page (window.close()).

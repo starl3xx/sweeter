@@ -73,6 +73,7 @@
     composePos: null, // the compose window moved from its usual place: { x, y } in px
     composeHeight: 0, // the compose text box’s least height in px (0: the usual 120)
     composeCards: true, // Mac app: a link in the compose window shows its page’s preview card
+    composeWindow: true, // Mac app: the compose window is a window of its own, above Sweeter
     articleReader: true, // an X Article opens in Sweeter’s reader (⌘-click: x.com)
     readerSize: 18, // the reader’s text size, in px (READER_SIZES)
     readerFont: 'sans', // the reader’s typeface (READER_FONTS)
@@ -399,6 +400,7 @@
       { k: 'check', key: 'obscureSensitive', label: 'Sensitive media', text: 'Obscure possibly sensitive media' },
       { k: 'sep' },
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
+      { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'It floats above Sweeter, keeps the size and place you give it, and needs no room in the columns.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
@@ -687,6 +689,13 @@
     const rdFoot = shadow.querySelector('.rd-foot');
     const profFoot = shadow.querySelector('.pf-foot');
     const cmpBack = shadow.querySelector('.cmp-back');
+    // Where the compose sheet lives in Sweeter, for when it comes back from
+    // a compose window (Mac app).
+    const cmpHome = cmpBack.parentNode;
+    const cmpHomeNext = cmpBack.nextSibling;
+    let cmpWin = null;
+    // The compose window is open in the main window (not a window of its own).
+    const cmpHere = () => !cmpBack.hidden && !cmpWin;
     const cmpTitle = shadow.querySelector('.cmp-title');
     const cmpCtx = shadow.querySelector('.cmp-ctx');
     const cmpAv = shadow.querySelector('.cmp-av');
@@ -4866,7 +4875,7 @@
     // opened by hand counts as this launch’s greeting.
     let greeted = false;
     let greetTimer = 0;
-    const sheetOpen = () => !wcBack.hidden || !prefsEl.hidden || !cmpBack.hidden || !profBack.hidden || !rdBack.hidden || !addBack.hidden || !askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden || !upBack.hidden || !!(palette && palette.isOpen()) || !!lb || passthrough;
+    const sheetOpen = () => !wcBack.hidden || !prefsEl.hidden || cmpHere() || !profBack.hidden || !rdBack.hidden || !addBack.hidden || !askBack.hidden || !ovBack.hidden || !ipBack.hidden || !ntBack.hidden || !upBack.hidden || !!(palette && palette.isOpen()) || !!lb || passthrough;
     function greet() {
       clearTimeout(greetTimer);
       if (greeted || booting || !settings.visible) return;
@@ -5877,6 +5886,12 @@
     let cmpAt = { x: 0, y: 0 };
     function placeCompose(pos) {
       if (cmpBack.hidden) return;
+      if (cmpWin) {
+        cmpBox.style.transform = '';
+        placeEmoji();
+        placeGifs();
+        return;
+      }
       pos = pos || settings.composePos || { x: 0, y: 0 };
       cmpBox.style.transform = '';
       const b = cmpBack.getBoundingClientRect();
@@ -5896,6 +5911,13 @@
     const CMP_MIN = 120;
     function fitCompose() {
       if (cmpBack.hidden) return;
+      // In a window of its own the layout gives the text box the window's
+      // height (styles.js .cmpwin); the person sizes the window.
+      if (cmpWin) {
+        paintLinks();
+        placeCompose();
+        return;
+      }
       const st = cmpText.scrollTop;
       cmpText.style.height = 'auto';
       const chrome = cmpBox.offsetHeight - cmpText.offsetHeight;
@@ -6095,10 +6117,106 @@
       renderMedia();
       cmpStatus.textContent = '';
       updateCount();
+      showCompose();
+    }
+
+    // ---------- the compose window as a window of its own (Mac app) ----------
+    // With Settings ▸ Media ▸ Compose on, the compose sheet (the window, its
+    // emoji and GIF pickers) moves into a blank window Sweeter writes into,
+    // as a pop-out column does; the app shows it as a panel above Sweeter
+    // that keeps its size and place. Its controls keep their listeners, and
+    // the posting itself still happens in X Pro, in the main window.
+    async function showCompose() {
+      const c = compose;
+      if (native && native.allowPopup && settings.composeWindow !== false) {
+        const w = await composeWindow();
+        // Closed or replaced while the window opened.
+        if (compose !== c) return;
+        if (w) w.document.title = cmpTitle.textContent;
+      }
       cmpBack.hidden = false;
       fitCompose();
       cmpText.focus();
       cmpText.setSelectionRange(cmpText.value.length, cmpText.value.length);
+    }
+
+    async function composeWindow() {
+      if (cmpWin && !cmpWin.closed) {
+        if (native.composeFront) native.composeFront();
+        return cmpWin;
+      }
+      cmpWin = null;
+      await native.allowPopup('compose');
+      // The name keeps Sweeter's own scripts out of this window (main.js).
+      const w = window.open('', 'sweeter-compose', 'popup,width=600,height=460');
+      if (!w) return null;
+      const d = w.document;
+      d.open();
+      d.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>New post</title></head><body style="margin:0"></body></html>');
+      d.close();
+      const st = d.createElement('style');
+      st.textContent = Sweeter.css;
+      d.head.appendChild(st);
+      const root = d.createElement('div');
+      root.className = 'app cmpwin';
+      d.body.appendChild(root);
+      popLook({ root });
+      root.appendChild(cmpBack);
+      root.addEventListener('click', (e) => {
+        const cmd = e.target.closest && e.target.closest('[data-cmd]');
+        if (cmd) run(cmd.dataset.cmd, cmd);
+      });
+      w.addEventListener('keydown', composeWinKey, true);
+      w.addEventListener('resize', () => fitCompose());
+      cmpWin = w;
+      return w;
+    }
+
+    // The sheet goes home to Sweeter and the window closes.
+    function releaseComposeWindow() {
+      if (!cmpWin) return;
+      const w = cmpWin;
+      cmpWin = null;
+      cmpBack.hidden = true;
+      cmpHome.insertBefore(cmpBack, cmpHomeNext && cmpHomeNext.parentNode === cmpHome ? cmpHomeNext : null);
+      try {
+        if (!w.closed) w.close();
+      } catch (e) {}
+    }
+
+    // The person closed the window (its close button or ⌘W in the app):
+    // the draft stays, as with Esc. Called by the app.
+    function composeWindowClosed() {
+      if (!cmpWin) return;
+      if (compose) closeCompose(true);
+      else releaseComposeWindow();
+    }
+
+    // Keys in the compose window: the compose window's own, nothing else.
+    function composeWinKey(e) {
+      if (!e.isTrusted) return;
+      const t = e.target;
+      let handled = false;
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && t.id === 'cmp-text') {
+        submitCompose();
+        handled = true;
+      } else if (e.metaKey && t.id === 'cmp-text' && (e.key === 'b' || e.key === 'i')) {
+        applyStyle(e.key === 'b' ? 'bold' : 'italic');
+        handled = true;
+      } else if (t.id === 'emo-q' && emojiKey(e)) {
+        handled = true;
+      } else if (t.id === 'gif-q' && gifKey(e)) {
+        handled = true;
+      } else if (e.key === 'Escape' || (e.metaKey && e.key.toLowerCase() === 'w')) {
+        if (!gifEl.hidden) closeGifs(true);
+        else if (!emoEl.hidden) closeEmoji(true);
+        else closeCompose(true);
+        handled = true;
+      }
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     }
 
     function closeCompose(keepDraft) {
@@ -6114,6 +6232,7 @@
       compose = null;
       queueCard();
       cmpBack.hidden = true;
+      releaseComposeWindow();
       app.focus({ preventScroll: true });
     }
 
@@ -6519,12 +6638,15 @@
     function keepFocus(field, panel) {
       let last = 0;
       field.addEventListener('blur', (e) => {
-        if (panel.hidden || (e.relatedTarget && shadow.contains(e.relatedTarget)) || !document.hasFocus()) return;
+        // In a compose window the field's own document is that window's.
+        const doc = field.ownerDocument;
+        const ours = (n) => n && (shadow.contains(n) || (doc !== document && doc.contains(n)));
+        if (panel.hidden || ours(e.relatedTarget) || !doc.hasFocus()) return;
         const now = Date.now();
         if (now - last < 250) return;
         last = now;
         setTimeout(() => {
-          if (!panel.hidden && document.activeElement !== host) field.focus({ preventScroll: true });
+          if (!panel.hidden && (doc !== document || document.activeElement !== host)) field.focus({ preventScroll: true });
         }, 0);
       });
     }
@@ -6858,6 +6980,7 @@
           compose = null;
           queueCard();
           cmpBack.hidden = true;
+          releaseComposeWindow();
           if (c) handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null);
           break;
         }
@@ -8586,7 +8709,7 @@
         }
         return false;
       }
-      if (!rdBack.hidden && pop.hidden && !lb && cmpBack.hidden) return readerKey(e);
+      if (!rdBack.hidden && pop.hidden && !lb && !cmpHere()) return readerKey(e);
       if (!profBack.hidden && pop.hidden && !lb) {
         if (e.key === 'Escape' || (e.metaKey && e.key.toLowerCase() === 'w')) {
           if (prof && prof.confirm) {
@@ -8610,7 +8733,7 @@
         } else return false;
         return true;
       }
-      if (!cmpBack.hidden) {
+      if (cmpHere()) {
         if (e.key === 'Escape') {
           if (!gifEl.hidden) closeGifs(true);
           else if (!emoEl.hidden) closeEmoji(true);
@@ -8968,6 +9091,8 @@
       toggle,
       host,
       prefs: prefsDo,
+      // The Mac app: the compose window was closed with its own button.
+      composeClosed: composeWindowClosed,
       // ⌘W in the Mac app: the top sheet closes first, as on a Mac; false
       // when nothing was open, and the window closes instead.
       closeTop() {
@@ -8983,7 +9108,7 @@
         if (!addBack.hidden) return closeAddSheet(), true;
         if (!gifEl.hidden) return closeGifs(true), true;
         if (!emoEl.hidden) return closeEmoji(true), true;
-        if (!cmpBack.hidden) return closeCompose(true), true;
+        if (cmpHere()) return closeCompose(true), true;
         if (!prefsEl.hidden) return closePrefs(), true;
         if (!profBack.hidden) return closeProfile(), true;
         return false;
@@ -9043,7 +9168,7 @@
             if (!ipBack.hidden) closePicker(false);
             if (!ovBack.hidden) closeOverview();
             if (!addBack.hidden) closeAddSheet();
-            if (!cmpBack.hidden) closeCompose(true);
+            if (cmpHere()) closeCompose(true);
             if (!wcBack.hidden) {
               wcPaused = true;
               wcBack.hidden = true;
@@ -9058,7 +9183,7 @@
             if (!pop.hidden) return closePop();
             // Only what is in front: under a sheet, Back would close
             // something the reader cannot see.
-            if ((palette && palette.isOpen()) || !prefsEl.hidden || !cmpBack.hidden || !wcBack.hidden || !upBack.hidden || !ntBack.hidden || !askBack.hidden || !ovBack.hidden || !ipBack.hidden || !addBack.hidden) return;
+            if ((palette && palette.isOpen()) || !prefsEl.hidden || cmpHere() || !wcBack.hidden || !upBack.hidden || !ntBack.hidden || !askBack.hidden || !ovBack.hidden || !ipBack.hidden || !addBack.hidden) return;
             if (lb) return closeLightbox();
             if (!profBack.hidden) return closeProfile();
             const fc = focusCol();
@@ -9090,7 +9215,7 @@
           case 'xpro':
             return toggle();
           case 'find':
-            if (!cmpBack.hidden || !prefsEl.hidden) return;
+            if (cmpHere() || !prefsEl.hidden) return;
             if (!settings.visible) toggle(true);
             return openFind(focusCol());
           case 'filter':

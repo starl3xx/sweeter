@@ -339,12 +339,14 @@ img{display:block}
 /* Narrow columns: the bar spans the text's width with tighter buttons, as
    X's does, so its items share what room there is. */
 @container col (max-width:31.5em){.acts{justify-content:space-between;gap:0;margin-left:-6px;margin-right:-6px}.acts button,.acts a,.acts .vw{padding:4px 6px;gap:3px}}
-/* Narrower still: Open on x.com goes first (the post's time opens the same
-   page), then the buttons tighten. */
-@container col (max-width:26.5em){.acts [data-act="open"]{display:none}.acts{margin-left:-4px;margin-right:-4px}.acts button,.acts a,.acts .vw{padding:4px}}
+/* Narrower still, as few items step aside as the room needs, counting only
+   the ones Settings ▸ General ▸ Action bar shows (so turning one off makes
+   room for the rest): Open on x.com first (the post's time opens the same
+   page), then Copy link, then the view count; the buttons tighten too. */
+@container col (max-width:26.5em){.acts:has(> :nth-child(7)) > [data-act="open"],.acts:has(> :nth-child(7)):not(:has(> [data-act="open"])) > [data-act="copy"],.acts:has(> :nth-child(7)):not(:has(> [data-act="open"])):not(:has(> [data-act="copy"])) > .vw{display:none}.acts{margin-left:-4px;margin-right:-4px}.acts button,.acts a,.acts .vw{padding:4px}}
 @container col (max-width:22.75em){.acts svg,.acts .vw svg{width:15px;height:15px}.acts button,.acts a,.acts .vw{padding:4px 3px}}
-@container col (max-width:21.25em){.acts [data-act="copy"]{display:none}}
-@container col (max-width:20em){.acts .vw{display:none}}
+@container col (max-width:21.25em){.acts:has(> :nth-child(6)) > [data-act="open"],.acts:has(> :nth-child(6)):not(:has(> [data-act="open"])) > [data-act="copy"],.acts:has(> :nth-child(7)):has(> [data-act="open"]) > [data-act="copy"],.acts:has(> :nth-child(6)):not(:has(> [data-act="open"])):not(:has(> [data-act="copy"])) > .vw,.acts:has(> :nth-child(7)):has(> [data-act="open"]):not(:has(> [data-act="copy"])) > .vw,.acts:has(> :nth-child(7)):has(> [data-act="copy"]):not(:has(> [data-act="open"])) > .vw{display:none}}
+@container col (max-width:20em){.acts:has(> :nth-child(5)) > [data-act="open"],.acts:has(> :nth-child(5)):not(:has(> [data-act="open"])) > [data-act="copy"],.acts:has(> :nth-child(6)):has(> [data-act="open"]) > [data-act="copy"],.acts:has(> :nth-child(5)):not(:has(> [data-act="open"])):not(:has(> [data-act="copy"])) > .vw,.acts:has(> :nth-child(6)):has(> [data-act="open"]):not(:has(> [data-act="copy"])) > .vw,.acts:has(> :nth-child(6)):has(> [data-act="copy"]):not(:has(> [data-act="open"])) > .vw,.acts:has(> :nth-child(7)):has(> [data-act="open"]):has(> [data-act="copy"]) > .vw{display:none}}
 .acts button.busy{opacity:.45;pointer-events:none}
 
 /* repost menu */

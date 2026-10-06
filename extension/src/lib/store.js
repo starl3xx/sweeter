@@ -13,6 +13,11 @@
     const sources = new Map(); // key -> column state
     const listNames = new Map(); // listId -> name
     const details = new Map(); // focal post id -> { blocks (X’s order), updated }
+    // Single posts X Pro looked up by id, by id: TweetResultByRestId, and
+    // TweetResultsByRestIds, which brings the posts an X Article embeds
+    // (verified 2026-10-06). The newest POSTS_MAX are kept.
+    const posts = new Map();
+    const POSTS_MAX = 300;
     // Profiles Sweeter asked X Pro to open: the person (by lowercase handle)
     // and their timelines (by user id, then by X’s operation name, one per
     // profile tab). A watched user’s timelines never become columns.
@@ -83,6 +88,21 @@
       if (Sweeter.decks.OPS.has(msg.op)) {
         if (decks.ingest(msg)) emit('decks');
         return 'decks';
+      }
+      if (msg.op === 'TweetResultsByRestIds' || msg.op === 'TweetResultByRestId') {
+        const d = (msg.body.data && msg.body.data.tweetResult) || [];
+        let n = 0;
+        for (const r of Array.isArray(d) ? d : [d]) {
+          const p = r && r.result ? N.post(r.result, 0) : null;
+          if (!p || p.unavailable || !p.id) continue;
+          posts.delete(p.id);
+          posts.set(p.id, p);
+          n++;
+        }
+        while (posts.size > POSTS_MAX) posts.delete(posts.keys().next().value);
+        if (!n) return null;
+        emit('posts');
+        return 'posts';
       }
       if (msg.op === 'ListByRestId') {
         const info = N.listInfo(msg.body);
@@ -295,6 +315,7 @@
       },
       get: (key) => sources.get(key),
       detail: (id) => details.get(String(id)) || null,
+      post: (id) => posts.get(String(id)) || null,
       profile: (handle) => profiles.get(String(handle).toLowerCase()) || null,
       // Route this person’s timelines to the profile, by id or (when only
       // the handle is known) once X Pro’s profile response names the id.

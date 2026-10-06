@@ -92,6 +92,11 @@
     'Likes',
     'Bookmarks',
     'TweetDetail',
+    // Posts X Pro looks up by id: an X Article's embedded posts arrive as
+    // one TweetResultsByRestIds as X Pro draws the article (verified
+    // 2026-10-06), and TweetResultByRestId can carry the article itself.
+    'TweetResultsByRestIds',
+    'TweetResultByRestId',
     // X Pro's answer when the reader posts (CreateTweet, or CreateNoteTweet
     // for a long post): only the new post's id or X's error is passed on,
     // never the text (see trim).

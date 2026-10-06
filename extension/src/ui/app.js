@@ -2553,6 +2553,12 @@
         readerDetail(key.slice(7));
         return;
       }
+      // Posts X Pro looked up by id: the reader’s body or its embedded posts.
+      if (key === 'posts') {
+        if (rd && rd.state !== 'ready') readerDetail(rd.id);
+        else if (rd && rd.post.article && (rd.post.article.body || []).some((b) => b.t === 'post')) renderReader(false);
+        return;
+      }
       if (key === 'decks') {
         // X Pro’s deck model changed: remap, then refresh titles and tabs.
         host.dataset.decks = store.decks.synced() ? 'sync' : store.decks.ready() ? 'saved' : 'none';
@@ -3419,11 +3425,20 @@
     // stack, so two at once could close each other’s conversation.
     let rdLoads = Promise.resolve();
 
-    // The post as its conversation carries it, with the article’s body.
+    // The post as its conversation (or X Pro’s lookup by id) carries it,
+    // with the article’s body.
     function articleOf(id) {
       const d = store.detail(id);
       for (const b of d ? d.blocks : []) if (b.kind === 'post' && b.post.id === id && b.post.article && b.post.article.body) return b.post;
-      return null;
+      const one = store.post(id);
+      return one && one.article && one.article.body ? one : null;
+    }
+
+    // A post an article embeds: one Sweeter shows, or one X Pro looked up.
+    const embedded = (id) => findPost(id) || store.post(id);
+    function embedsLoaded(post) {
+      const body = post && post.article && post.article.body;
+      return !body || body.every((b) => b.t !== 'post' || !!embedded(b.id));
     }
 
     function openReader(post, key) {
@@ -3447,7 +3462,7 @@
         const hold = 'article:' + token;
         holds.add(hold);
         try {
-          const r = await xpro.loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id) });
+          const r = await xpro.loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id), settled: () => embedsLoaded(articleOf(post.id)) });
           if (!r.ok) readerFailed(token, r.reason);
         } catch (e) {
           readerFailed(token, 'error');
@@ -3477,7 +3492,7 @@
     function renderReader(first) {
       if (!rd) return;
       const ctx = { settings, now: Date.now(), viewer, expanded };
-      rdPage.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: findPost });
+      rdPage.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: embedded });
       if (first) rdScroll.scrollTop = 0;
       renderReaderBar();
     }

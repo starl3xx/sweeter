@@ -232,3 +232,39 @@ test('smart tags and cashtag attachments become ticker cards; the text shows $TI
   eq(p.plain, 'hot in here $RSR and $XRP');
   eq(N.post(F.tweet({ text: 'plain' })).tickers, []);
 });
+
+test('a long post’s real bold and italic show; its tags count UTF-16 units (live shape, 2026-10-06)', () => {
+  const text = 'Burn 🔥\n\n→ High burn: for @nadiabuilds now. Quiet end';
+  // UTF-16 offsets, as X's composer writes them: 🔥 and → count 2 and 1.
+  const u = (s) => text.indexOf(s);
+  const t = F.tweet({ text: 'short' });
+  t.note_tweet = { is_expandable: true, note_tweet_results: { result: {
+    id: 'n1', text,
+    entity_set: { user_mentions: [{ screen_name: 'nadiabuilds', indices: [Array.from(text.slice(0, u('@nadia'))).length, Array.from(text.slice(0, u('@nadia'))).length + 12] }], urls: [], hashtags: [], symbols: [] },
+    richtext: { richtext_tags: [
+      { from_index: u('High'), to_index: u('High burn') + 9, richtext_types: ['Bold'] },
+      { from_index: u('for'), to_index: u(' now'), richtext_types: ['Bold', 'Italic'] },
+      { from_index: u('Quiet'), to_index: u('Quiet') + 5, richtext_types: ['Italic'] },
+      { from_index: 0, to_index: 4, richtext_types: ['Underline'] },
+    ] },
+  } } };
+  const p = N.post(t, 0);
+  ok(p.html.includes('→ <strong>High burn</strong>:'), p.html);
+  ok(p.html.includes('<em><strong>for </strong></em><em><strong><a class="m"'), p.html);
+  ok(p.html.includes('<em>Quiet</em> end'), p.html);
+  ok(p.html.startsWith('Burn 🔥'), 'unknown types are ignored');
+  // A post without richtext is unchanged.
+  ok(!N.post(F.tweet({ text: 'plain' }), 0).html.includes('<strong>'));
+});
+
+test('a long post with media keeps its whole text: legacy media indices point into the short text (live, 2026-10-06)', () => {
+  const long = 'First line.\n\nIf the protocol burns nothing, nothing unlocks. And more text after that to make it long.';
+  const t = F.tweet({ text: 'First line. https://t.co/media1' });
+  t.legacy.entities.media = [{ url: 'https://t.co/media1', indices: [12, 31], type: 'photo', media_url_https: 'https://pbs.twimg.com/media/x.jpg', original_info: { width: 10, height: 10 } }];
+  t.note_tweet = { note_tweet_results: { result: { id: 'n2', text: long, entity_set: { urls: [], user_mentions: [], hashtags: [], symbols: [] } } } };
+  const p = N.post(t, 0);
+  ok(p.html.includes('If the protocol burns nothing, nothing unlocks.'), p.html);
+  // When the note does hold the media link, it is still hidden.
+  t.note_tweet.note_tweet_results.result.text = long + ' https://t.co/media1';
+  ok(!N.post(t, 0).html.includes('t.co/media1'));
+});

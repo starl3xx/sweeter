@@ -230,15 +230,26 @@
     return out;
   }
 
+  // A quoted post. One that is only an X Article has no text of its own
+  // (its one link is the article's, which the text hides), so the article's
+  // label, title, and preview stand in, with its cover as the thumbnail.
   function quote(q, ctx) {
     if (!q) return '';
     if (q.unavailable) return '<div class="quote gone">This post is unavailable.</div>';
+    const a = q.article;
+    const thumb = q.media.length ? { url: q.media[0].url, alt: q.media[0].alt } : a && a.image ? { url: a.image, alt: '' } : null;
+    const tx = q.html || (q.media.length ? '<span class="gone">Media</span>' : '');
     return '<div class="quote" data-url="' + h(safeUrl(q.url)) + '"><div class="meta"><img class="qav" src="' + h(avatar(q.author.avatar, true)) + '" alt="" loading="lazy" decoding="async">' +
       '<span class="nm">' + h(q.author.name) + '</span>' + badges(q.author, ctx) + '<span class="hd">@' + h(q.author.handle) + '</span><span class="tm">' + h(timeLabel(q.createdMs, ctx)) + '</span></div>' +
-      (ctx.settings.quoteMedia && q.media.length && ctx.settings.media !== 'none'
-        ? '<img class="qm" src="' + h(mediaUrl(q.media[0].url, 'small')) + '" alt="' + h(q.media[0].alt) + '" loading="lazy" decoding="async">'
+      (ctx.settings.quoteMedia && thumb && ctx.settings.media !== 'none'
+        ? '<img class="qm" src="' + h(mediaUrl(thumb.url, 'small')) + '" alt="' + h(thumb.alt) + '" loading="lazy" decoding="async">'
         : '') +
-      '<div class="tx">' + (q.html || (q.media.length ? '<span class="gone">Media</span>' : '')) + '</div></div>';
+      (tx || !a ? '<div class="tx">' + tx + '</div>' : '') +
+      (a
+        ? '<div class="qart"><div class="qal">' + icon('news') + 'Article</div><div class="qat">' + h(a.title) + '</div>' +
+          (a.preview ? '<div class="qap">' + h(a.preview) + '</div>' : '') + '</div>'
+        : '') +
+      '</div>';
   }
 
   // Token cards for a post's cashtags: the symbol now, the name, price and

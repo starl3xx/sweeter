@@ -7567,7 +7567,8 @@
       const hostPost = hostCell ? findPost(hostCell.dataset.id) : null;
       const colEl = t.closest('.col');
       const hostCol = colEl ? cols.get(colEl.dataset.vid) : null;
-      if (t.closest('.quote .qm') && hostPost && hostPost.quote) return openLightbox(hostPost.quote, 0);
+      // An Article's cover (a quote with no media) opens the quote, below.
+      if (t.closest('.quote .qm') && hostPost && hostPost.quote && hostPost.quote.media && hostPost.quote.media.length) return openLightbox(hostPost.quote, 0);
       const ph = t.closest('[data-photo]');
       if (ph) return hostPost ? openLightbox(hostPost, Number(ph.dataset.i) || 0) : openUrl(ph.dataset.photo);
       const vd = t.closest('[data-video]');

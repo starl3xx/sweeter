@@ -219,6 +219,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             geckoLogo: (n, a) => post({ type: 'geckoLogo', network: String(n || ''), address: String(a || '') }),
             linkCard: (u) => post({ type: 'linkCard', url: String(u || '') }),
             charPalette: () => post({ type: 'charPalette' }),
+            fitWidth: (w) => post({ type: 'fitWidth', width: Number(w) || 0 }),
             notifyStatus: () => post({ type: 'notifyStatus' }),
             notifyRequest: () => post({ type: 'notifyRequest' }),
             notifySettings: () => post({ type: 'notifySettings' }),
@@ -397,6 +398,11 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         // window's text box): the emoji picker's All Emoji & Symbols.
         case "charPalette":
             NSApp.orderFrontCharacterPalette(nil)
+            replyHandler(nil, nil)
+        // The width the columns need at their own sizes (app.js reportFit),
+        // for a double-click on the window's left or right edge.
+        case "fitWidth":
+            (view.window as? SweeterWindow)?.fitContentWidth = CGFloat((body["width"] as? Double) ?? 0)
             replyHandler(nil, nil)
         // A link's preview card for the compose window (LinkCard.swift): the
         // page's own title and image, never from X's hosts or the local
@@ -1127,6 +1133,78 @@ final class NativeStorage {
         if let out = try? JSONSerialization.data(withJSONObject: data) {
             try? out.write(to: url, options: .atomic)
         }
+    }
+}
+
+/// The main window. macOS answers a double-click on a window's left or
+/// right edge by stretching that edge to the screen; here it fits the
+/// window to its columns instead (the width the page reports), keeping
+/// the other edge where it is.
+final class SweeterWindow: NSWindow {
+    /// The sidebar and the columns at their own widths, in points (0: not
+    /// reported yet).
+    var fitContentWidth: CGFloat = 0
+
+    /// The double-click itself, before AppKit stretches the edge: a window
+    /// already as wide as the screen gets no frame change from AppKit at
+    /// all, so it would never shrink to its columns. Clicks inside the
+    /// content go to the page as ever.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, event.clickCount == 2, fitContentWidth > 0, !styleMask.contains(.fullScreen) {
+            // On the left, the sidebar: up to 4 points in, or past the edge.
+            // On the right, just inside is the last column's resize handle,
+            // whose own double-click resets the column's width, so only past
+            // the edge; unless the window meets the screen's edge, which
+            // leaves no margin past it: then its outermost 2 points.
+            let x = event.locationInWindow.x
+            let y = event.locationInWindow.y
+            let atRight = screen.map { frame.maxX >= $0.visibleFrame.maxX - 1 } ?? false
+            let left = x <= 4
+            let right = x > frame.width || (atRight && x >= frame.width - 2)
+            if left || right, y > 6, y < frame.height - 6 {
+                setFrame(fittedFrame(left: left), display: true, animate: true)
+                return
+            }
+        }
+        super.sendEvent(event)
+    }
+
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        super.setFrame(fitted(frameRect), display: flag)
+    }
+
+    override func setFrame(_ frameRect: NSRect, display displayFlag: Bool, animate animateFlag: Bool) {
+        super.setFrame(fitted(frameRect), display: displayFlag, animate: animateFlag)
+    }
+
+    /// The frame for a width change that comes from a double-click on the
+    /// left or right edge; any other frame as it is.
+    private func fitted(_ r: NSRect) -> NSRect {
+        guard fitContentWidth > 0, !inLiveResize, !styleMask.contains(.fullScreen),
+              let e = NSApp.currentEvent, e.window === self, e.clickCount == 2,
+              e.type == .leftMouseDown || e.type == .leftMouseUp,
+              abs(r.height - frame.height) < 1, abs(r.width - frame.width) >= 1 else { return r }
+        let x = e.locationInWindow.x
+        let left = x <= 6
+        guard left || x >= frame.width - 6 else { return r }
+        var out = fittedFrame(left: left)
+        out.origin.y = r.origin.y
+        out.size.height = r.height
+        return out
+    }
+
+    /// The window fitted to its columns, the edge opposite the clicked one
+    /// kept in place, within the screen and the minimum size.
+    private func fittedFrame(left: Bool) -> NSRect {
+        let chrome = frame.width - (contentView?.frame.width ?? frame.width)
+        var width = max(minSize.width, ceil(fitContentWidth + chrome))
+        let visible = screen?.visibleFrame
+        if let v = visible { width = min(width, v.width) }
+        var out = frame
+        out.size.width = width
+        out.origin.x = left ? frame.maxX - width : frame.minX
+        if let v = visible { out.origin.x = min(max(out.origin.x, v.minX), v.maxX - width) }
+        return out
     }
 }
 

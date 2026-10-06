@@ -604,6 +604,18 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 /* compose window */
 .cmp-back{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.18);display:flex;justify-content:center;align-items:flex-start;padding:10vh 16px 16px}
 .cmp-back[hidden]{display:none}
+/* The compose window in a window of its own (Mac app): the sheet fills it,
+   with the app's own title bar in place of its header and the window's
+   edges in place of its grip. */
+.app.cmpwin{display:block;background:var(--bg)}
+.app.cmpwin .cmp-back{background:none;padding:0;display:block}
+.app.cmpwin .cmp-back[hidden]{display:none}
+.app.cmpwin .cmp{width:100%;height:100%;border-radius:0;box-shadow:none;transform:none !important}
+.app.cmpwin .cmp-head,.app.cmpwin .cmp-grip{display:none}
+/* The text box takes whatever height the window leaves. */
+.app.cmpwin .cmp-body{flex:1 1 auto;min-height:0}
+.app.cmpwin .cmp-field{display:flex;flex-direction:column}
+.app.cmpwin .cmp textarea{flex:1 1 auto;min-height:60px;height:auto !important}
 .cmp{width:min(540px,100%);background:var(--bg);color:var(--t2);border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px rgba(0,0,0,.14);display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
 .cmp-head{display:flex;align-items:center;justify-content:center;position:relative;padding:10px 40px;border-bottom:1px solid var(--div);color:var(--t1);font-weight:600;font-size:13px;background:var(--sub);-webkit-user-select:none;user-select:none;touch-action:none}
 .cmp-head .x{position:absolute;right:8px}

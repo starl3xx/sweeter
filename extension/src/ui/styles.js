@@ -425,7 +425,8 @@ img{display:block}
 .rd-back{position:absolute;inset:0;background:rgba(0,0,0,.28);display:grid;place-items:center;z-index:5;padding:24px}
 .rd-back[hidden]{display:none}
 .rd{--rd-size:18px;--rd-font:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;position:relative;width:min(760px,100%);height:min(1000px,100%);display:flex;flex-direction:column;background:var(--bg);color:var(--t1);border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px rgba(0,0,0,.12);overflow:hidden;animation:sweeter-sheet .22s cubic-bezier(.2,.85,.25,1)}
-.rd[data-font="serif"]{--rd-font:"New York",ui-serif,Georgia,serif}
+.rd[data-font="serif"]{--rd-font:"Iowan Old Style","New York",ui-serif,Georgia,serif}
+.rd[data-font="sohne"]{--rd-font:"Söhne",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
 .rd[data-font="rounded"]{--rd-font:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
 .rd[data-font="mono"]{--rd-font:ui-monospace,"SF Mono",Menlo,monospace}
 .rd-top{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--sep)}
@@ -441,7 +442,8 @@ img{display:block}
 .rd-sz.l{font-size:17px}
 .rd-sep{width:1px;height:16px;background:var(--sep);margin:0 4px}
 .rd-f[aria-pressed="true"]{background:var(--bg);color:var(--t1);box-shadow:0 1px 2px var(--shadow)}
-.rd-f[data-font="serif"]{font-family:"New York",ui-serif,Georgia,serif}
+.rd-f[data-font="serif"]{font-family:"Iowan Old Style","New York",ui-serif,Georgia,serif}
+.rd-f[data-font="sohne"]{font-family:"Söhne",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
 .rd-f[data-font="rounded"]{font-family:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
 .rd-f[data-font="mono"]{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px}
 .rd-scroll{flex:1 1 0;min-height:0;overflow-y:auto;outline:none;overscroll-behavior:contain}

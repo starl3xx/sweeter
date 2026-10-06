@@ -413,7 +413,9 @@
 
   // The article reader’s typefaces (data-font on .rd, styles.js) and text
   // sizes, in px.
-  const READER_FONTS = [['sans', 'Sans serif'], ['serif', 'Serif'], ['rounded', 'Rounded'], ['mono', 'Monospace']];
+  // Söhne is not part of macOS: it shows only where it is installed (and
+  // the page may use it; Safari keeps most installed fonts from pages).
+  const READER_FONTS = [['sans', 'Sans serif'], ['sohne', 'Söhne'], ['serif', 'Serif (Iowan Old Style)'], ['rounded', 'Rounded'], ['mono', 'Monospace']];
   const READER_SIZES = [14, 16, 18, 20, 22, 25, 28];
   // The Keyboard page’s list (the Settings sheet and the Mac app’s window).
   const KEY_LIST = [
@@ -3625,8 +3627,33 @@
       rdFoot.innerHTML = '<div class="cell rd-cell" data-id="' + h(p.id) + '" data-url="' + h(safeUrl(p.url)) + '" data-vid="' + h(rd.key || '') + '">' + R.acts(p, { settings }) + '</div>';
     }
 
+    // Whether the page can draw a font: text in it measures differently
+    // from both fallbacks. Checked once.
+    const fontOk = new Map();
+    function hasFont(family) {
+      if (!fontOk.has(family)) {
+        let ok = false;
+        try {
+          const ctx = document.createElement('canvas').getContext('2d');
+          const w = (f) => {
+            ctx.font = '72px ' + f;
+            return ctx.measureText('mmmmmmmmmmlliWQ@ 0123').width;
+          };
+          ok = ['monospace', 'serif'].every((fb) => w('"' + family + '", ' + fb) !== w(fb));
+        } catch (e) {
+          ok = false;
+        }
+        fontOk.set(family, ok);
+      }
+      return fontOk.get(family);
+    }
+
     function applyReaderStyle() {
-      const font = READER_FONTS.some((f) => f[0] === settings.readerFont) ? settings.readerFont : 'sans';
+      const sohne = hasFont('Söhne');
+      const known = READER_FONTS.some((f) => f[0] === settings.readerFont);
+      const font = known && (settings.readerFont !== 'sohne' || sohne) ? settings.readerFont : 'sans';
+      const sb = rdBox.querySelector('.rd-f[data-font="sohne"]');
+      if (sb) sb.hidden = !sohne;
       const size = Number(settings.readerSize) || 18;
       rdBox.dataset.font = font;
       rdBox.style.setProperty('--rd-size', size + 'px');

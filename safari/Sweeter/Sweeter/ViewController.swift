@@ -1147,13 +1147,17 @@ final class SweeterWindow: NSWindow {
 
     /// The double-click itself, before AppKit stretches the edge: a window
     /// already as wide as the screen gets no frame change from AppKit at
-    /// all, so it would never shrink to its columns.
+    /// all, so it would never shrink to its columns. Clicks inside the
+    /// content go to the page as ever.
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown, event.clickCount == 2, fitContentWidth > 0, !styleMask.contains(.fullScreen) {
+            // Only past the content, in the resize margin: just inside the
+            // right edge is the last column's resize handle, whose own
+            // double-click resets the column's width.
             let x = event.locationInWindow.x
             let y = event.locationInWindow.y
-            let left = x <= 6
-            if (left || x >= frame.width - 6), y > 6, y < frame.height - 6 {
+            let left = x < 0
+            if (left || x > frame.width), y > 6, y < frame.height - 6 {
                 setFrame(fittedFrame(left: left), display: true, animate: true)
                 return
             }

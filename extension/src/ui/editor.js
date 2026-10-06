@@ -139,19 +139,46 @@
       return r;
     }
 
-    function selection() {
+    // The selection, kept while the box doesn't have it, as a textarea
+    // keeps its own: a toolbar button or the emoji picker's search field
+    // takes the page's selection, and must still see the box's.
+    let saved = null;
+    let watched = null;
+    function live() {
       const r = range();
-      if (!r) {
-        const n = text().length;
-        return [n, n];
-      }
+      if (!r) return null;
       const a = offsetOf(r.startContainer, r.startOffset);
       const b = offsetOf(r.endContainer, r.endOffset);
       return [a == null ? 0 : a, b == null ? 0 : b];
     }
+    function onSelect() {
+      const s = live();
+      if (s) saved = s;
+    }
+    // Listens in whichever document holds the box (it moves into a compose
+    // window and back).
+    function watch() {
+      const d = doc();
+      if (watched === d) return;
+      try {
+        if (watched) watched.removeEventListener('selectionchange', onSelect);
+      } catch (e) {}
+      watched = d;
+      d.addEventListener('selectionchange', onSelect);
+    }
+    function selection() {
+      watch();
+      const s = live();
+      if (s) return (saved = s);
+      const n = text().length;
+      if (!saved) return [n, n];
+      return [Math.min(saved[0], n), Math.min(saved[1], n)];
+    }
 
     function select(a, b) {
+      watch();
       const n = text().length;
+      saved = [Math.max(0, Math.min(a, n)), Math.max(0, Math.min(b, n))];
       const p = pointAt(Math.max(0, Math.min(a, n)));
       const q = pointAt(Math.max(0, Math.min(b, n)));
       const sel = win().getSelection();
@@ -277,6 +304,8 @@
     el.syncStyles = sync;
     el.underline = underline;
     el.classList.toggle('empty', !text());
+    watch();
+    el.addEventListener('focus', watch);
     // An emptied box keeps no stray <br>, so its placeholder shows.
     el.addEventListener('input', () => {
       if (!text()) el.innerHTML = '';

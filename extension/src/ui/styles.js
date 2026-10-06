@@ -409,8 +409,19 @@ img{display:block}
 .snip{margin-top:3px;color:var(--t3);-webkit-line-clamp:3;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
 
 /* reading position */
-.marker{position:relative;height:0;border-top:2px solid var(--accent);margin-top:-1px;z-index:1}
-.marker span{position:absolute;right:10px;top:-9px;font-size:10px;font-weight:600;letter-spacing:.04em;background:var(--accent);color:var(--bg);border-radius:3px;padding:0 5px;line-height:16px;text-transform:uppercase}
+.marker{position:relative;height:0;margin-top:-1px;z-index:1;pointer-events:none}
+/* Where you stopped: an accent line that fades at both ends, with a soft
+   glow, and a pill on it. It draws itself in once, when it first appears
+   (.fresh); later redraws only move it. */
+.marker::before{content:"";position:absolute;left:0;right:0;top:-1px;height:2px;border-radius:1px;background:linear-gradient(90deg,transparent,var(--accent) 16%,var(--accent) 84%,transparent);box-shadow:0 0 10px color-mix(in srgb,var(--accent) 40%,transparent)}
+.marker span{position:absolute;left:50%;top:0;transform:translate(-50%,-50%);display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 13%,var(--bg));color:var(--accent);box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 32%,transparent),0 2px 8px color-mix(in srgb,var(--accent) 16%,transparent);font-size:11px;font-weight:600;line-height:14px;letter-spacing:.01em;white-space:nowrap}
+.marker span::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.marker.fresh::before{animation:sweeter-mark-line .55s cubic-bezier(.2,.8,.2,1) both}
+.marker.fresh span{animation:sweeter-mark-pill .45s .15s cubic-bezier(.2,.9,.3,1.25) both}
+.marker.fresh span::before{animation:sweeter-mark-dot 1.2s .5s ease-out both}
+@keyframes sweeter-mark-line{from{transform:scaleX(0);opacity:0}to{transform:none;opacity:1}}
+@keyframes sweeter-mark-pill{from{transform:translate(-50%,-50%) scale(.8);opacity:0}to{transform:translate(-50%,-50%);opacity:1}}
+@keyframes sweeter-mark-dot{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}}
 
 /* Settings window, laid out like a Mac settings pane */
 /* Profile sheet: the size of Settings, over the columns. */

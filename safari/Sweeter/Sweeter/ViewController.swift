@@ -1145,6 +1145,22 @@ final class SweeterWindow: NSWindow {
     /// reported yet).
     var fitContentWidth: CGFloat = 0
 
+    /// The double-click itself, before AppKit stretches the edge: a window
+    /// already as wide as the screen gets no frame change from AppKit at
+    /// all, so it would never shrink to its columns.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, event.clickCount == 2, fitContentWidth > 0, !styleMask.contains(.fullScreen) {
+            let x = event.locationInWindow.x
+            let y = event.locationInWindow.y
+            let left = x <= 6
+            if (left || x >= frame.width - 6), y > 6, y < frame.height - 6 {
+                setFrame(fittedFrame(left: left), display: true, animate: true)
+                return
+            }
+        }
+        super.sendEvent(event)
+    }
+
     override func setFrame(_ frameRect: NSRect, display flag: Bool) {
         super.setFrame(fitted(frameRect), display: flag)
     }
@@ -1163,11 +1179,20 @@ final class SweeterWindow: NSWindow {
         let x = e.locationInWindow.x
         let left = x <= 6
         guard left || x >= frame.width - 6 else { return r }
+        var out = fittedFrame(left: left)
+        out.origin.y = r.origin.y
+        out.size.height = r.height
+        return out
+    }
+
+    /// The window fitted to its columns, the edge opposite the clicked one
+    /// kept in place, within the screen and the minimum size.
+    private func fittedFrame(left: Bool) -> NSRect {
         let chrome = frame.width - (contentView?.frame.width ?? frame.width)
         var width = max(minSize.width, ceil(fitContentWidth + chrome))
         let visible = screen?.visibleFrame
         if let v = visible { width = min(width, v.width) }
-        var out = r
+        var out = frame
         out.size.width = width
         out.origin.x = left ? frame.maxX - width : frame.minX
         if let v = visible { out.origin.x = min(max(out.origin.x, v.minX), v.maxX - width) }

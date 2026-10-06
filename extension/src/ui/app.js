@@ -4897,8 +4897,10 @@
         let n = 0;
         for (const el of colsEl.children) {
           if (!el.classList.contains('col') || el.classList.contains('hiddencol')) continue;
-          const basis = parseFloat(getComputedStyle(el).flexBasis);
-          w += isFinite(basis) && basis > 0 ? basis : settings.colWidth;
+          // Its own width in every fit mode (Fit 2–5 size columns from the
+          // window, which would make this circular).
+          const own = el.classList.contains('sized') ? parseFloat(el.style.getPropertyValue('--w')) : NaN;
+          w += el.classList.contains('collapsed') ? 34 : isFinite(own) && own > 0 ? own : settings.colWidth;
           n++;
         }
         if (!n) w += settings.colWidth;

@@ -6171,6 +6171,11 @@
       cmpWin = w;
       return w;
     }
+    // A reload ends the page whose listeners the sheet carries: the window
+    // closes with it, as pop-out columns do.
+    window.addEventListener('pagehide', () => {
+      if (cmpWin && !cmpWin.closed) cmpWin.close();
+    });
 
     // The sheet goes home to Sweeter and the window closes.
     function releaseComposeWindow() {
@@ -6184,7 +6189,8 @@
       } catch (e) {}
     }
 
-    // The person closed the window (its close button or ⌘W in the app):
+    // The person asked to close the window (its close button, or ⌘W from
+    // the app's menu), or the app closed it: the sheet comes home first and
     // the draft stays, as with Esc. Called by the app.
     function composeWindowClosed() {
       if (!cmpWin) return;
@@ -6328,7 +6334,8 @@
 
     function syncWho() {
       const o = cmpReply.selectedOptions[0];
-      shadow.querySelector('.who-t').textContent = o ? o.textContent : '';
+      // Looked up in the sheet: in a compose window it isn't in Sweeter's tree.
+      cmpBack.querySelector('.who-t').textContent = o ? o.textContent : '';
     }
     cmpReply.addEventListener('change', syncWho);
 
@@ -6479,8 +6486,8 @@
       emoGrid.scrollTop = 0;
       // The rest fill in as they near the view (a tab or the arrows fill
       // theirs at once); their height is held meanwhile, so tabs land right.
-      emoIO.disconnect();
-      for (const sec of emoGrid.querySelectorAll('.emo-s[style]')) emoIO.observe(sec);
+      emoIO().disconnect();
+      for (const sec of emoGrid.querySelectorAll('.emo-s[style]')) emoIO().observe(sec);
       emoTabs.classList.toggle('off', !!q);
       emo.at = null;
       moveEmoji(emo.sections.length ? [0, 0] : null);
@@ -6493,15 +6500,26 @@
     function fillEmoji(k) {
       const sec = emoGrid.querySelector('.emo-s[data-k="' + k + '"]');
       if (!sec || !sec.hasAttribute('style')) return;
-      emoIO.unobserve(sec);
+      emoIO().unobserve(sec);
       sec.querySelector('.emo-row').innerHTML = emo.sections[k][1].map(emoCell).join('');
       sec.removeAttribute('style');
     }
-    const emoIO = 'IntersectionObserver' in window
-      ? new IntersectionObserver((entries) => {
-          for (const en of entries) if (en.isIntersecting) fillEmoji(Number(en.target.dataset.k));
-        }, { root: emoGrid, rootMargin: '360px 0px' })
-      : { observe: (sec) => fillEmoji(Number(sec.dataset.k)), unobserve() {}, disconnect() {} };
+    // Made in the window that holds the grid (a compose window has its own:
+    // an observer can't watch another document), and again when it moves.
+    let emoIOWin = null;
+    let emoIOObj = null;
+    function emoIO() {
+      const win = emoGrid.ownerDocument.defaultView;
+      if (emoIOObj && emoIOWin === win) return emoIOObj;
+      if (emoIOObj) emoIOObj.disconnect();
+      emoIOWin = win;
+      emoIOObj = win && 'IntersectionObserver' in win
+        ? new win.IntersectionObserver((entries) => {
+            for (const en of entries) if (en.isIntersecting) fillEmoji(Number(en.target.dataset.k));
+          }, { root: emoGrid, rootMargin: '360px 0px' })
+        : { observe: (sec) => fillEmoji(Number(sec.dataset.k)), unobserve() {}, disconnect() {} };
+      return emoIOObj;
+    }
     // The highlight: [section, position]. It shows in the footer too.
     function moveEmoji(at) {
       if (at) fillEmoji(at[0]);

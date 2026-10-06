@@ -785,7 +785,18 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     }
 
     /// Closing hides the window, so X Pro keeps refreshing for the Dock badge.
+    /// The compose window's close button (or ⌘W) asks the page instead: it
+    /// brings its sheet home, keeps the draft, and closes the window itself;
+    /// if it doesn't within a second, the window closes anyway.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if sender === composePanel {
+            webView.evaluateJavaScript("Sweeter.native && Sweeter.native.composeClosed && Sweeter.native.composeClosed()", in: nil, in: world) { _ in }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                guard let self, let panel = self.composePanel, panel === sender, panel.isVisible else { return }
+                panel.close()
+            }
+            return false
+        }
         sender.orderOut(nil)
         return false
     }
@@ -913,6 +924,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         panel.title = "New post"
         panel.contentView = popup
         panel.contentMinSize = NSSize(width: 380, height: 260)
+        panel.delegate = self
         if !panel.setFrameUsingName("SweeterCompose") {
             if let main = view.window?.frame {
                 panel.setFrameOrigin(NSPoint(x: main.midX - panel.frame.width / 2, y: main.maxY - panel.frame.height - 120))
@@ -955,7 +967,8 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
         panel.canChooseDirectories = false
-        guard let window = view.window else { return completionHandler(nil) }
+        // On the window that asked: the compose window has its own.
+        guard let window = webView.window ?? view.window else { return completionHandler(nil) }
         panel.beginSheetModal(for: window) { response in
             completionHandler(response == .OK ? panel.urls : nil)
         }

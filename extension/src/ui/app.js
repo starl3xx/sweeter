@@ -6184,6 +6184,7 @@
       cmpWin = null;
       cmpBack.hidden = true;
       cmpHome.insertBefore(cmpBack, cmpHomeNext && cmpHomeNext.parentNode === cmpHome ? cmpHomeNext : null);
+      dropEmoIO();
       try {
         if (!w.closed) w.close();
       } catch (e) {}
@@ -6508,10 +6509,18 @@
     // an observer can't watch another document), and again when it moves.
     let emoIOWin = null;
     let emoIOObj = null;
+    // An observer from a compose window that has closed may not answer.
+    function dropEmoIO() {
+      try {
+        if (emoIOObj) emoIOObj.disconnect();
+      } catch (e) {}
+      emoIOObj = null;
+      emoIOWin = null;
+    }
     function emoIO() {
       const win = emoGrid.ownerDocument.defaultView;
       if (emoIOObj && emoIOWin === win) return emoIOObj;
-      if (emoIOObj) emoIOObj.disconnect();
+      dropEmoIO();
       emoIOWin = win;
       emoIOObj = win && 'IntersectionObserver' in win
         ? new win.IntersectionObserver((entries) => {

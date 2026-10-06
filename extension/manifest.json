@@ -42,6 +42,7 @@
         "src/ui/render.js",
         "src/ui/palette.js",
         "src/ui/tips.js",
+        "src/ui/editor.js",
         "src/ui/app.js",
         "src/content/main.js"
       ],

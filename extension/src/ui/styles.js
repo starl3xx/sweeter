@@ -615,7 +615,7 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 /* The text box takes whatever height the window leaves. */
 .app.cmpwin .cmp-body{flex:1 1 auto;min-height:0}
 .app.cmpwin .cmp-field{display:flex;flex-direction:column}
-.app.cmpwin .cmp textarea{flex:1 1 auto;min-height:60px;height:auto !important}
+.app.cmpwin .cmp-ed{flex:1 1 auto;min-height:60px;height:auto !important}
 .cmp{width:min(540px,100%);background:var(--bg);color:var(--t2);border-radius:12px;box-shadow:0 24px 70px var(--shadow),0 0 0 1px rgba(0,0,0,.14);display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
 .cmp-head{display:flex;align-items:center;justify-content:center;position:relative;padding:10px 40px;border-bottom:1px solid var(--div);color:var(--t1);font-weight:600;font-size:13px;background:var(--sub);-webkit-user-select:none;user-select:none;touch-action:none}
 .cmp-head .x{position:absolute;right:8px}
@@ -630,21 +630,16 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-av{width:40px;height:40px;border-radius:50%;background:var(--sub) center/cover no-repeat;flex:0 0 auto}
 .app[data-round="false"] .cmp-av{border-radius:6px}
 .cmp-field{flex:1 1 auto;min-width:0;position:relative;overflow:hidden}
-.cmp textarea,.cmp-hl{margin:0;padding:0;border:0;font:inherit;font-size:15px;line-height:1.4;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:8}
-.cmp textarea{position:relative;z-index:1;display:block;width:100%;box-sizing:border-box;height:120px;resize:none;overflow-y:auto;outline:none;background:transparent;color:var(--t1)}
-.cmp-hl{position:absolute;top:0;left:0;z-index:0;color:transparent;pointer-events:none}
-.cmp-hl u{text-decoration:underline;text-decoration-color:var(--accent-solid);text-decoration-thickness:1.5px;text-underline-offset:3px}
-/* Real bold and italic while writing: once the draft has some, the
-   mirror shows the text and the textarea only its caret and selection.
-   A copy of each glyph a hair to the right (a stroke on all sides crowded
-   the letters) and a slant keep every glyph's width, so the two stay
-   aligned. */
-.cmp-field.styled textarea{color:transparent;caret-color:var(--t1)}
-.cmp-field.styled textarea::selection{color:transparent;background:color-mix(in srgb,var(--accent) 26%,transparent)}
-.cmp-field.styled .cmp-hl{color:var(--t1)}
-.cmp-hl b{font-weight:inherit;text-shadow:.04em 0 currentColor}
-.cmp-hl i{font-style:normal;display:inline-block;transform:skewX(-11deg)}
-.cmp textarea::placeholder{color:var(--t3)}
+.cmp-ed{margin:0;padding:0;border:0;font:inherit;font-size:15px;line-height:1.4;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:8}
+.cmp-ed{display:block;width:100%;box-sizing:border-box;height:120px;overflow-y:auto;outline:none;background:transparent;color:var(--t1);cursor:text}
+/* Links in the text box: a highlight (no DOM), so typing keeps its undo. */
+::highlight(sweeter-link){text-decoration:underline;text-decoration-color:var(--accent-solid,#1d9bf0);text-decoration-thickness:1.5px;text-underline-offset:3px}
+/* Real bold and italic while writing: the text box's own spans. */
+.cmp-ed{-webkit-user-select:text;user-select:text}
+.cmp-ed b{font-weight:700}
+.cmp-ed i{font-style:italic}
+/* The placeholder, over an empty box (its caret stays at the start). */
+.cmp-ed.empty::before{content:attr(data-placeholder);position:absolute;left:0;top:0;color:var(--t3);pointer-events:none}
 .cmp-foot{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--div)}
 .cmp-foot .grow{flex:1}
 .cmp-count{font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums}

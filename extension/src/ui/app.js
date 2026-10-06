@@ -4446,10 +4446,18 @@
       const act = store.decks.activeDeck();
       return { all, act, pinned: all.filter((d) => d.pinned) };
     }
+    let paintedDeck = null;
     function paintDeck() {
       const { act } = decksNow();
       deckEl.hidden = !act;
       if (!act) return;
+      // Another deck than the last one painted (not the first): fit the
+      // window to it (Mac app).
+      if (paintedDeck && act.id !== paintedDeck) {
+        fitDeckUntil = Date.now() + 5000;
+        reportFit();
+      }
+      paintedDeck = act.id;
       deckEl.textContent = act.icon || '★';
       deckEl.title = 'Deck: ' + (act.title || 'Untitled') + ' (click for decks)';
       deckEl.setAttribute('aria-label', deckEl.title);
@@ -4924,9 +4932,23 @@
     // edge is double-clicked.
     let fitSent = 0;
     let fitTimer = 0;
+    // After a deck switch, the window fits the new deck's columns once they
+    // settle (they arrive over several redraws): until fitDeckUntil, each
+    // new width re-arms a short wait, and the last one is applied.
+    let fitDeckUntil = 0;
+    let fitApplyTimer = 0;
+    let fitApplyPending = false;
     function reportFit() {
       if (!native || !native.fitWidth) return;
       clearTimeout(fitTimer);
+      // A newer measurement is coming: an apply still waiting would use a
+      // width from before it, so it moves to that one. Whether one is due is
+      // settled now, not when the measurement runs (which may be past the
+      // deck switch's 5 s).
+      clearTimeout(fitApplyTimer);
+      const apply = fitApplyPending || Date.now() < fitDeckUntil;
+      // Marked now, so a newer call during this one's wait inherits it.
+      if (apply) fitApplyPending = true;
       fitTimer = setTimeout(() => {
         const side = shadow.querySelector('.side');
         let w = side ? side.getBoundingClientRect().width : 76;
@@ -4941,6 +4963,12 @@
         }
         if (!n) w += settings.colWidth;
         w = Math.ceil(w + Math.max(0, n - 1));
+        if (apply) {
+          fitApplyTimer = setTimeout(() => {
+            fitApplyPending = false;
+            native.fitWidth(w, true);
+          }, 500);
+        }
         if (w === fitSent) return;
         fitSent = w;
         native.fitWidth(w);

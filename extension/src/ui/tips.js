@@ -90,7 +90,7 @@
     { id: 'alerts', where: 'app', text: 'Get a banner, or a banner and a sound, for new posts in a column: its … menu ▸ Alerts.', act: ['Open Column Menu', 'colMenu'] },
     { id: 'seen', text: 'Seeing the same post in two columns? Settings ▸ General ▸ Seen elsewhere can dim or hide the second copy.', act: ['Open Settings', 'prefs:general'] },
     { id: 'layouts', text: 'Save Sweeter’s whole arrangement as a layout, and export it to another Mac: Settings ▸ Layouts.', act: ['Open Layouts', 'prefs:layouts'] },
-    { id: 'compose', text: 'In the compose window, {⌘B} and {⌘I} make selected text bold or italic, and {⌘Return} posts.' },
+    { id: 'compose', text: 'In the compose window, {⌘B} and {⌘I} make selected text really bold or italic, as X shows it, and {⌘Return} posts.' },
     { id: 'goKeys', text: '{g} then {h} goes to Home. {g} then {n}, {r}, {i}, or {b} goes to Notifications, Mentions, a list, or Bookmarks.' },
     { id: 'hover', text: 'A pinned column holds still under the pointer, and new posts wait above it.' },
     { id: 'popout', text: 'Give a column a window of its own: its … menu ▸ Open in New Window.', act: ['Open Column Menu', 'colMenu'] },

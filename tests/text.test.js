@@ -136,3 +136,31 @@ test('draft links: bare domains as X links them', () => {
   eq(at('https://a.example.com/x and me@example.com'), [['https://a.example.com/x', 'https://a.example.com/x']]);
   eq(at('(sweeter.app)'), [['sweeter.app', 'https://sweeter.app']]);
 });
+
+test('style ranges follow edits, toggle, and merge (real bold and italic while writing)', () => {
+  const T = globalThis.Sweeter.text;
+  eq(T.normRanges([[5, 8], [0, 2], [2, 4], [7, 9], [3, 3]]), [[0, 4], [5, 9]]);
+  ok(T.rangesCover([[0, 4], [4, 8]], 1, 7));
+  ok(!T.rangesCover([[0, 4]], 2, 5));
+  // Toggle on, then off a middle part.
+  eq(T.toggleRange([], 2, 6), [[2, 6]]);
+  eq(T.toggleRange([[2, 6]], 3, 5), [[2, 3], [5, 6]]);
+  eq(T.toggleRange([[2, 3]], 1, 5), [[1, 5]]);
+  const ed = (a, b) => T.textEdit(a, b);
+  eq(ed('hello', 'hello!'), { at: 5, removed: 0, inserted: 1 });
+  eq(ed('abcdef', 'abXYef'), { at: 2, removed: 2, inserted: 2 });
+  const sh = (r, a, b) => T.shiftRanges(r, ed(a, b));
+  // Typing at a range's end joins it; just before its start, it moves.
+  eq(sh([[0, 4]], 'bold rest', 'boldy rest'), [[0, 5]]);
+  eq(sh([[4, 8]], 'say bold', 'say xbold'), [[5, 9]]);
+  // Inside it grows; deleting inside shrinks; deleting it all removes it.
+  eq(sh([[0, 8]], 'abcdefgh', 'abcZdefgh'), [[0, 9]]);
+  eq(sh([[0, 8]], 'abcdefgh', 'abgh'), [[0, 4]]);
+  eq(sh([[4, 8]], 'say bold', 'say '), []);
+  // Replacing a whole styled word keeps the style; text after moves.
+  eq(sh([[4, 8], [9, 11]], 'say bold it', 'say x it'), [[4, 5], [6, 8]]);
+  // A deletion that runs into a range's start.
+  eq(sh([[3, 10]], 'abcdefghijk', 'aefghijk'), [[1, 7]]);
+  // UTF-16: an emoji counts two.
+  eq(sh([[2, 4]], '🔥ab', '🔥🔥ab'), [[4, 6]]);
+});

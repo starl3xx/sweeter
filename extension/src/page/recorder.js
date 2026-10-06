@@ -10,6 +10,49 @@
   if (window.__sweeterRecorder || !/^pro\.(x|twitter)\.com$/.test(location.hostname) || /^sweeter-/.test(window.name)) return;
   window.__sweeterRecorder = true;
 
+  // X moved Bookmarks to a History page (feature switch
+  // responsive_web_history_screen_enabled, seen 2026-10-05). X's router then
+  // redirects /i/bookmarks/all, an All Bookmarks column's path, to
+  // /i/history, which X Pro can't show in a column, so the column loads
+  // nothing. Jake chose (2026-10-05) to turn that one switch off in X Pro's
+  // page before X Pro reads it: X Pro's router keeps its own Bookmarks
+  // screen, and X Pro loads bookmarks with its own request, as it did
+  // before. X Pro's HTML assigns the switches in an inline script
+  // (window.__INITIAL_STATE__.featureSwitch: defaultConfig and user.config,
+  // verified); this sets them as they arrive. Nothing else in it changes.
+  const SWITCHES_OFF = ['responsive_web_history_screen_enabled'];
+  function switchesOff(st) {
+    const fs = st && typeof st === 'object' ? st.featureSwitch : null;
+    if (!fs || typeof fs !== 'object') return;
+    for (const conf of [fs.defaultConfig, fs.user && fs.user.config]) {
+      if (!conf || typeof conf !== 'object') continue;
+      for (const k of SWITCHES_OFF) if (conf[k] && typeof conf[k] === 'object') conf[k].value = false;
+    }
+  }
+  try {
+    // Injected after X Pro's script (a late injection): keep the state that
+    // is there; the switch may already have been read.
+    let initialState = window.__INITIAL_STATE__;
+    if (initialState !== undefined) switchesOff(initialState);
+    Object.defineProperty(window, '__INITIAL_STATE__', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return initialState;
+      },
+      set(v) {
+        try {
+          switchesOff(v);
+        } catch (e) {
+          // X's state as it came
+        }
+        initialState = v;
+      },
+    });
+  } catch (e) {
+    // already defined: X Pro keeps its own switches
+  }
+
   // While Sweeter covers X Pro, nobody can click anything in X Pro, so a
   // window X Pro opens then is one nobody asked for: it is not opened.
   // X Pro's router opens a route it can't show in a column with

@@ -3451,14 +3451,21 @@
       applyReaderStyle();
       renderReader(true);
       rdScroll.focus({ preventScroll: true });
-      if (full) return;
+      // The body and every embedded post: nothing to load.
+      if (full && embedsLoaded(full)) return;
       // X Pro loaded this conversation without the body: asking again won’t
       // bring it, and its stack is the conversation Sweeter shows.
-      if (store.detail(post.id)) return readerFailed(token, 'nobody');
+      if (!full && store.detail(post.id)) return readerFailed(token, 'nobody');
+      // The body, but not every embedded post (X Pro asks for those only
+      // while it draws the article): open the conversation again for them,
+      // unless Sweeter shows it now. That stack is the conversation pane’s,
+      // and a level opened and closed over it would close the pane’s too.
+      if (full && Array.from(cols.values()).some((c) => c.detail && c.detail.id === post.id)) return;
       rdLoads = rdLoads.then(async () => {
-        // Closed, or another article, while it waited: nothing to load.
-        if (!rd || rd.token !== token || rd.state === 'ready') return;
-        if (articleOf(post.id)) return readerDetail(post.id);
+        // Closed, or another article, while it waited; or all there now.
+        if (!rd || rd.token !== token) return;
+        const now = articleOf(post.id);
+        if (now && embedsLoaded(now)) return rd.state === 'ready' ? renderReader(false) : readerDetail(post.id);
         const hold = 'article:' + token;
         holds.add(hold);
         try {

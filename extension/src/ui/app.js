@@ -4937,12 +4937,16 @@
     // new width re-arms a short wait, and the last one is applied.
     let fitDeckUntil = 0;
     let fitApplyTimer = 0;
+    let fitApplyPending = false;
     function reportFit() {
       if (!native || !native.fitWidth) return;
       clearTimeout(fitTimer);
       // A newer measurement is coming: an apply still waiting would use a
-      // width from before it.
+      // width from before it, so it moves to that one. Whether one is due is
+      // settled now, not when the measurement runs (which may be past the
+      // deck switch's 5 s).
       clearTimeout(fitApplyTimer);
+      const apply = fitApplyPending || Date.now() < fitDeckUntil;
       fitTimer = setTimeout(() => {
         const side = shadow.querySelector('.side');
         let w = side ? side.getBoundingClientRect().width : 76;
@@ -4957,9 +4961,12 @@
         }
         if (!n) w += settings.colWidth;
         w = Math.ceil(w + Math.max(0, n - 1));
-        if (Date.now() < fitDeckUntil) {
-          clearTimeout(fitApplyTimer);
-          fitApplyTimer = setTimeout(() => native.fitWidth(fitSent, true), 500);
+        if (apply) {
+          fitApplyPending = true;
+          fitApplyTimer = setTimeout(() => {
+            fitApplyPending = false;
+            native.fitWidth(w, true);
+          }, 500);
         }
         if (w === fitSent) return;
         fitSent = w;

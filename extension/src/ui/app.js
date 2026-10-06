@@ -4947,6 +4947,8 @@
       // deck switch's 5 s).
       clearTimeout(fitApplyTimer);
       const apply = fitApplyPending || Date.now() < fitDeckUntil;
+      // Marked now, so a newer call during this one's wait inherits it.
+      if (apply) fitApplyPending = true;
       fitTimer = setTimeout(() => {
         const side = shadow.querySelector('.side');
         let w = side ? side.getBoundingClientRect().width : 76;
@@ -4962,7 +4964,6 @@
         if (!n) w += settings.colWidth;
         w = Math.ceil(w + Math.max(0, n - 1));
         if (apply) {
-          fitApplyPending = true;
           fitApplyTimer = setTimeout(() => {
             fitApplyPending = false;
             native.fitWidth(w, true);

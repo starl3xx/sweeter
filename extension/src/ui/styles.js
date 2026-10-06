@@ -256,6 +256,11 @@ img{display:block}
 .quote .tx{-webkit-line-clamp:6;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
 .quote .qm{float:right;width:calc(var(--fs) * 3.6);height:calc(var(--fs) * 3.6);object-fit:cover;border-radius:4px;margin:3px 0 4px 8px;background:var(--sub)}
 .quote::after{content:"";display:block;clear:both}
+.quote .tx+.qart{margin-top:4px}
+.qal{display:flex;align-items:center;gap:4px;color:var(--t3);font-size:.88em;font-weight:600}
+.qal svg{width:12px;height:12px}
+.qat{color:var(--t1);font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.qap{margin-top:1px;color:var(--t3);font-size:.93em;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-wrap:pretty}
 .gone{color:var(--t3);font-style:italic}
 
 /* media */

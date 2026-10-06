@@ -10,6 +10,32 @@
   if (window.__sweeterRecorder || !/^pro\.(x|twitter)\.com$/.test(location.hostname) || /^sweeter-/.test(window.name)) return;
   window.__sweeterRecorder = true;
 
+  // While Sweeter covers X Pro, nobody can click anything in X Pro, so a
+  // window X Pro opens then is one nobody asked for: it is not opened.
+  // X Pro's router opens a route it can't show in a column with
+  // window.open(url, '_blank') (verified 2026-10-05), and since X moved
+  // Bookmarks to /i/history (responsive_web_history_screen_enabled), an
+  // All Bookmarks column redirects there whenever it loads: every load of a
+  // deck with one opened x.com/i/history in the browser. Sweeter's own
+  // windows open from its content script, a world this does not touch;
+  // with Sweeter hidden (⌥X) or X Pro's composer handed over, X Pro opens
+  // windows as before.
+  const openWindow = window.open;
+  window.open = function () {
+    if (document.documentElement.classList.contains('sweeter-cover')) {
+      let where = '';
+      try {
+        const u = new URL(String(arguments[0] || ''), location.href);
+        where = u.host + u.pathname;
+      } catch (e) {
+        where = '?';
+      }
+      window.postMessage({ __sweeter: 1, op: 'BlockedWindow', body: { where: where.slice(0, 120) } }, '*');
+      return null;
+    }
+    return openWindow.apply(window, arguments);
+  };
+
   const OPS = new Set([
     'HomeLatestTimeline',
     'HomeTimeline',

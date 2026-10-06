@@ -20,6 +20,11 @@
     if (e.source !== window || !e.data || e.data.__sweeter !== 1) return;
     const m = e.data;
     if (typeof m.op !== 'string' || !m.body || typeof m.body !== 'object') return;
+    // A window X Pro tried to open under Sweeter (recorder.js): logged only.
+    if (m.op === 'BlockedWindow') {
+      if (globalThis.SweeterNative) globalThis.SweeterNative.log('blocked a window X Pro opened: ' + String(m.body.where || '?').slice(0, 120));
+      return;
+    }
     if (store) store.ingest(m);
     else queue.push(m);
   });

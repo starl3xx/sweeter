@@ -238,7 +238,7 @@
       const [a, b] = had ? selection() : [0, 0];
       el.innerHTML = html;
       if (had) select(a, b);
-      el.classList.toggle('empty', !t);
+      el.classList.toggle('ed-empty', !t);
     }
 
     // Matches the DOM to these styles, only when it differs.
@@ -246,7 +246,7 @@
       const st = styles || { bold: [], italic: [] };
       const d = domStyles();
       if (same(d.bold, st.bold) && same(d.italic, st.italic)) {
-        el.classList.toggle('empty', !text());
+        el.classList.toggle('ed-empty', !text());
         return false;
       }
       render(text(), st);
@@ -303,13 +303,14 @@
     el.renderStyles = render;
     el.syncStyles = sync;
     el.underline = underline;
-    el.classList.toggle('empty', !text());
+    // Not .empty: that is Sweeter's centered empty-column message.
+    el.classList.toggle('ed-empty', !text());
     watch();
     el.addEventListener('focus', watch);
     // An emptied box keeps no stray <br>, so its placeholder shows.
     el.addEventListener('input', () => {
       if (!text()) el.innerHTML = '';
-      el.classList.toggle('empty', !text());
+      el.classList.toggle('ed-empty', !text());
     });
     return el;
   }

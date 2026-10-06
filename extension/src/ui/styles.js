@@ -639,7 +639,7 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-ed b{font-weight:700}
 .cmp-ed i{font-style:italic}
 /* The placeholder, over an empty box (its caret stays at the start). */
-.cmp-ed.empty::before{content:attr(data-placeholder);position:absolute;left:0;top:0;color:var(--t3);pointer-events:none}
+.cmp-ed.ed-empty::before{content:attr(data-placeholder);position:absolute;left:0;top:0;color:var(--t3);pointer-events:none}
 .cmp-foot{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--div)}
 .cmp-foot .grow{flex:1}
 .cmp-count{font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums}

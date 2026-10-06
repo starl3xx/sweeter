@@ -30,7 +30,10 @@
     }
   }
   try {
-    let initialState;
+    // Injected after X Pro's script (a late injection): keep the state that
+    // is there; the switch may already have been read.
+    let initialState = window.__INITIAL_STATE__;
+    if (initialState !== undefined) switchesOff(initialState);
     Object.defineProperty(window, '__INITIAL_STATE__', {
       configurable: true,
       enumerable: true,

@@ -138,7 +138,7 @@ img{display:block}
    browser measured the max-content width of every post each time a cell
    changed (most of Sweeter's idle CPU, measured 2026-10-02). */
 .cols{flex:1 1 0;display:flex;gap:1px;overflow-x:auto;overflow-y:hidden;min-width:0;scrollbar-width:thin}
-.col{flex:1 0 var(--colw,345px);max-width:520px;display:flex;flex-direction:column;background:var(--bg);min-width:0;position:relative;contain:layout paint;contain:layout paint inline-size}
+.col{flex:1 0 var(--colw,345px);max-width:520px;display:flex;flex-direction:column;background:var(--bg);min-width:0;position:relative;contain:layout paint;contain:layout paint inline-size;container:col/inline-size}
 .col:nth-last-child(1 of .col){max-width:none}
 /* A column the person sized (drag its right edge; Sweeter only). */
 .col.sized{flex:0 0 var(--w);max-width:none}
@@ -331,6 +331,20 @@ img{display:block}
 .acts .cnt{font-variant-numeric:tabular-nums}
 .acts .vw{display:flex;align-items:center;gap:4px;padding:4px 10px 4px 8px;color:var(--act);font-size:.82em;cursor:default}
 .acts .vw svg{width:15px;height:15px}
+/* One line, always, in a column: an item with no room wraps out of sight
+   whole (the last first) rather than overflowing the post, whatever the
+   font size. The reader's bar is not in a column and keeps every item. */
+.col .acts{flex-wrap:wrap;overflow:hidden;height:max(26px,calc(.82em + 9px))}
+.col .acts button,.col .acts a,.col .acts .vw{line-height:1}
+/* Narrow columns: the bar spans the text's width with tighter buttons, as
+   X's does, so its items share what room there is. */
+@container col (max-width:31.5em){.acts{justify-content:space-between;gap:0;margin-left:-6px;margin-right:-6px}.acts button,.acts a,.acts .vw{padding:4px 6px;gap:3px}}
+/* Narrower still: Open on x.com goes first (the post's time opens the same
+   page), then the buttons tighten. */
+@container col (max-width:26.5em){.acts [data-act="open"]{display:none}.acts{margin-left:-4px;margin-right:-4px}.acts button,.acts a,.acts .vw{padding:4px}}
+@container col (max-width:22.75em){.acts svg,.acts .vw svg{width:15px;height:15px}.acts button,.acts a,.acts .vw{padding:4px 3px}}
+@container col (max-width:21.25em){.acts [data-act="copy"]{display:none}}
+@container col (max-width:20em){.acts .vw{display:none}}
 .acts button.busy{opacity:.45;pointer-events:none}
 
 /* repost menu */

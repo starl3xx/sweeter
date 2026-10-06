@@ -219,7 +219,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             geckoLogo: (n, a) => post({ type: 'geckoLogo', network: String(n || ''), address: String(a || '') }),
             linkCard: (u) => post({ type: 'linkCard', url: String(u || '') }),
             charPalette: () => post({ type: 'charPalette' }),
-            fitWidth: (w) => post({ type: 'fitWidth', width: Number(w) || 0 }),
+            fitWidth: (w, apply) => post({ type: 'fitWidth', width: Number(w) || 0, apply: !!apply }),
             notifyStatus: () => post({ type: 'notifyStatus' }),
             notifyRequest: () => post({ type: 'notifyRequest' }),
             notifySettings: () => post({ type: 'notifySettings' }),
@@ -401,8 +401,11 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             replyHandler(nil, nil)
         // The width the columns need at their own sizes (app.js reportFit),
         // for a double-click on the window's left or right edge.
+        // `apply`: a deck switch; the window fits its columns now.
         case "fitWidth":
-            (view.window as? SweeterWindow)?.fitContentWidth = CGFloat((body["width"] as? Double) ?? 0)
+            let win = view.window as? SweeterWindow
+            win?.fitContentWidth = CGFloat((body["width"] as? Double) ?? 0)
+            if (body["apply"] as? Bool) == true { win?.fitToColumns() }
             replyHandler(nil, nil)
         // A link's preview card for the compose window (LinkCard.swift): the
         // page's own title and image, never from X's hosts or the local
@@ -1191,6 +1194,14 @@ final class SweeterWindow: NSWindow {
         out.origin.y = r.origin.y
         out.size.height = r.height
         return out
+    }
+
+    /// Fits the window to its columns now (a deck switch), its left edge
+    /// kept; not in full screen.
+    func fitToColumns() {
+        guard fitContentWidth > 0, !styleMask.contains(.fullScreen), isVisible else { return }
+        let f = fittedFrame(left: false)
+        if abs(f.width - frame.width) >= 1 || abs(f.minX - frame.minX) >= 1 { setFrame(f, display: true, animate: true) }
     }
 
     /// The window fitted to its columns, the edge opposite the clicked one

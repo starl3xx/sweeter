@@ -2043,11 +2043,19 @@
 
       if (!pinned && boundary && boundary !== c.list.firstChild) {
         if (!c.marker) {
-          c.marker = document.createElement('div');
-          c.marker.className = 'marker';
-          c.marker.innerHTML = '<span>You were here</span>';
+          const mk = document.createElement('div');
+          // .fresh draws it in once; a redraw that moves it doesn’t replay.
+          mk.className = 'marker fresh';
+          mk.setAttribute('role', 'separator');
+          mk.innerHTML = '<span>You were here</span>';
+          setTimeout(() => mk.classList.remove('fresh'), 1800);
+          c.marker = mk;
         }
+        // Each redraw takes the marker out and puts it back, which would
+        // restart its animation: only its first placing draws it in.
+        if (c.marker.__placed) c.marker.classList.remove('fresh');
         c.list.insertBefore(c.marker, boundary);
+        c.marker.__placed = true;
       }
 
       if (pinned) {

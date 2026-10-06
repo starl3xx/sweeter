@@ -1,10 +1,35 @@
-<p align="center"><img src="design/icon-1024.png" width="128" height="128" alt="Sweeter icon"></p>
+<div align="center">
+  <img src="design/icon-1024.png" alt="Sweeter" width="120" />
 
-<h1 align="center">Sweeter</h1>
+  <h1>Sweeter</h1>
 
-<p align="center">A clean, customizable, keyboard-friendly face for X Pro on the Mac.</p>
+  <p><strong>A clean, customizable, keyboard-friendly face for X Pro on the Mac</strong></p>
 
-Sweeter draws X Pro (pro.x.com) as calm, dense columns you can read with the keyboard: unread markers that remember where you stopped, filters and mutes, merged columns, column groups, pop-out windows, a media viewer and a command palette. It comes as a Mac app, and the same thing works as a Safari extension.
+  <p>
+    <a href="https://github.com/starl3xx/sweeter/releases/latest"><img src="https://img.shields.io/github/v/release/starl3xx/sweeter?style=flat-square&label=release" alt="Latest release" /></a>
+    <img src="https://img.shields.io/badge/macOS-14%2B-000?style=flat-square&logo=apple&logoColor=white" alt="macOS 14 or later" />
+    <img src="https://img.shields.io/badge/X_Pro-required-000?style=flat-square&logo=x&logoColor=white" alt="X Pro required" />
+    <img src="https://img.shields.io/badge/Swift-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift" />
+    <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black" alt="JavaScript" />
+    <img src="https://img.shields.io/badge/Safari_extension-006CFF?style=flat-square&logo=safari&logoColor=white" alt="Safari extension" />
+    <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-PolyForm_Noncommercial-555?style=flat-square" alt="PolyForm Noncommercial license" /></a>
+  </p>
+
+  <p>
+    <a href="https://github.com/starl3xx/sweeter/releases/latest">Download</a> &middot;
+    <a href="https://starl3xx.fun/sweeter">Website</a> &middot;
+    <a href="#install">Install</a> &middot;
+    <a href="#report-a-problem">Report a problem</a> &middot;
+    <a href="PRIVACY.md">Privacy</a> &middot;
+    <a href="https://x.com/starl3xx">@starl3xx</a>
+  </p>
+</div>
+
+<p align="center"><img src="design/sweeter-screenshot.png" alt="Sweeter on a Mac: Bookmarks, a search column, For You, and Home side by side, with link cards, an X Article card, and view counts" width="1000" /></p>
+
+---
+
+Sweeter draws X Pro (pro.x.com) as calm, dense columns you can read with the keyboard: unread markers that remember where you stopped, filters and mutes, merged columns, column groups, pop-out windows, a media viewer, and a command palette. It comes as a Mac app, and the same thing works as a Safari extension.
 
 It is in early testing. Things will break when X changes X Pro.
 

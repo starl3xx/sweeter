@@ -628,6 +628,66 @@
 
   // Put text and media into X Pro’s open composer and press its Post (or
   // Reply) button once.
+  // ---------- real bold and italic ----------
+  // X Pro's composer has no Bold or Italic button, but its editor takes X's
+  // own shortcuts: with a word selected, ⌘B and ⌘I style it, and X Pro
+  // posts the editor's styles as richtext (verified 2026-10-06, nothing
+  // posted). So each range is selected in the editor and the shortcut sent.
+  // Ranges count UTF-16 units of the text; the editor holds one Draft block
+  // per line, joined by one newline.
+  function editorPoint(ed, at) {
+    let pos = 0;
+    const blocks = Array.from(ed.querySelectorAll('[data-block="true"]'));
+    for (let bi = 0; bi < blocks.length; bi++) {
+      for (const leaf of blocks[bi].querySelectorAll('[data-text="true"]')) {
+        const node = leaf.firstChild && leaf.firstChild.nodeType === 3 ? leaf.firstChild : null;
+        const len = node ? node.length : 0;
+        if (at <= pos + len) return node ? { node, offset: at - pos } : { node: leaf, offset: 0 };
+        pos += len;
+      }
+      if (bi < blocks.length - 1) pos += 1;
+    }
+    return null;
+  }
+
+  async function styleRange(s, e, key) {
+    const ed = editor();
+    const a = ed && editorPoint(ed, s);
+    const b = ed && editorPoint(ed, e);
+    if (!a || !b) return false;
+    ed.focus();
+    const r = document.createRange();
+    r.setStart(a.node, a.offset);
+    r.setEnd(b.node, b.offset);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    document.dispatchEvent(new Event('selectionchange'));
+    await wait(80);
+    const code = key === 'b' ? 66 : 73;
+    ed.dispatchEvent(new KeyboardEvent('keydown', { key, code: 'Key' + key.toUpperCase(), keyCode: code, which: code, metaKey: true, bubbles: true, cancelable: true }));
+    await wait(60);
+    return true;
+  }
+
+  // Applies {bold, italic} ranges, then checks the text is unchanged and
+  // that each style X Pro was asked for shows in the editor.
+  async function applyStyles(text, styles) {
+    const want = { b: styles.bold || [], i: styles.italic || [] };
+    for (const [key, list] of Object.entries(want)) {
+      for (const [s, e] of list) {
+        if (!(await styleRange(s, e, key))) return { ok: false, reason: 'nostyle' };
+      }
+    }
+    const ed = editor();
+    if (!ed || norm(ed.innerText) !== norm(text)) return { ok: false, reason: 'mismatch' };
+    const spans = Array.from(ed.querySelectorAll('span[data-offset-key][style]'));
+    const has = (re) => spans.some((sp) => re.test(sp.getAttribute('style') || ''));
+    if ((want.b.length && !has(/font-weight:\s*bold/)) || (want.i.length && !has(/font-style:\s*italic/))) return { ok: false, reason: 'nostyle' };
+    window.getSelection().removeAllRanges();
+    return { ok: true };
+  }
+
   async function fillAndPost(text, opts) {
     const o = opts || {};
     await waitFor(editor, 3000);
@@ -639,6 +699,13 @@
     if (text && text.trim() && !(await paste(text))) {
       clearEditor();
       return { ok: false, reason: 'mismatch' };
+    }
+    if (o.styles && text && text.trim()) {
+      const st = await applyStyles(text, o.styles);
+      if (!st.ok) {
+        clearEditor();
+        return st;
+      }
     }
     const rs = await setReplySetting(o.reply);
     if (!rs.ok) return rs;
@@ -792,17 +859,18 @@
     return att ? { ok: true } : { ok: false, reason: 'gifgone' };
   }
 
-  async function prefill(text, files, tool, gif) {
+  async function prefill(text, files, tool, gif, styles) {
     await waitFor(editor, 3000);
     if (files && files.length) await attach(files);
     if (gif) await attachGif(gif);
-    if (text && text.trim()) await paste(text);
+    let styled = null;
+    if (text && text.trim() && (await paste(text)) && styles) styled = (await applyStyles(text, styles)).ok;
     if (tool && TOOLS[tool]) {
       const root = composerRoot();
       const b = root && root.querySelector(TOOLS[tool]);
       if (b) b.click();
     }
-    return true;
+    return { ok: true, styled };
   }
 
   // The compose drawer closes with “Done”; a reply or quote opens X Pro’s
@@ -1676,5 +1744,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

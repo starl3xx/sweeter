@@ -202,6 +202,74 @@
     return out.sort((x, y) => x.start - y.start);
   }
 
-  Sweeter.text = { richText, plainText, draftLinks };
+  // ---------- style ranges: real bold and italic in the compose window ----------
+  // Sorted, separate [start, end) pairs counted in UTF-16 units of the text,
+  // as X counts its richtext tags and as a textarea counts its selection.
+  function normRanges(list) {
+    const out = [];
+    for (const x of (list || []).filter((r) => r && r[1] > r[0]).map((r) => [r[0], r[1]]).sort((a, b) => a[0] - b[0])) {
+      const last = out[out.length - 1];
+      if (last && x[0] <= last[1]) last[1] = Math.max(last[1], x[1]);
+      else out.push(x);
+    }
+    return out;
+  }
+
+  // Whether [a, b) lies wholly inside the ranges.
+  function rangesCover(list, a, b) {
+    let at = a;
+    for (const [s, e] of normRanges(list)) {
+      if (s > at) break;
+      if (e > at) at = e;
+      if (at >= b) return true;
+    }
+    return at >= b;
+  }
+
+  // A style on [a, b): off where it is wholly on, else on.
+  function toggleRange(list, a, b) {
+    if (b <= a) return normRanges(list);
+    if (!rangesCover(list, a, b)) return normRanges((list || []).concat([[a, b]]));
+    const out = [];
+    for (const [s, e] of normRanges(list)) {
+      if (e <= a || s >= b) out.push([s, e]);
+      else {
+        if (s < a) out.push([s, a]);
+        if (e > b) out.push([b, e]);
+      }
+    }
+    return out;
+  }
+
+  // The one edit that turns `before` into `after`: where, and how many
+  // units went and came.
+  function textEdit(before, after) {
+    const max = Math.min(before.length, after.length);
+    let p = 0;
+    while (p < max && before.charCodeAt(p) === after.charCodeAt(p)) p++;
+    let q = 0;
+    while (q < max - p && before.charCodeAt(before.length - 1 - q) === after.charCodeAt(after.length - 1 - q)) q++;
+    return { at: p, removed: before.length - p - q, inserted: after.length - p - q };
+  }
+
+  // The ranges after an edit. Text after it moves; removed text leaves its
+  // range; text typed inside a range, at its end, or over text that began
+  // in it joins it; text typed just before a range does not.
+  function shiftRanges(list, ed) {
+    const { at, removed, inserted } = ed;
+    const end = at + removed;
+    const out = [];
+    for (const [s0, e0] of normRanges(list)) {
+      let s = s0 <= at ? s0 : s0 >= end ? s0 - removed : at;
+      let e = e0 <= at ? e0 : e0 >= end ? e0 - removed : at;
+      const grows = (s0 < at && e0 >= at) || (removed > 0 && s0 <= at && e0 > at);
+      if (s > at || (s === at && !grows)) s += inserted;
+      if (e > at || (e === at && grows)) e += inserted;
+      out.push([s, e]);
+    }
+    return normRanges(out);
+  }
+
+  Sweeter.text = { richText, plainText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.text;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

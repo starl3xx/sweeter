@@ -700,6 +700,7 @@
     const cmpFile = shadow.querySelector('#cmp-file');
     const cmpHead = shadow.querySelector('.cmp-head');
     const cmpHl = shadow.querySelector('.cmp-hl');
+    const cmpField = shadow.querySelector('.cmp-field');
     const cmpGrip = shadow.querySelector('.cmp-grip');
     const cmpCard = shadow.querySelector('.cmp-card');
     const emoEl = shadow.querySelector('.emo');
@@ -5767,7 +5768,24 @@
       return n;
     }
 
+    // Real bold and italic (compose.styles: ranges in UTF-16 units) follow
+    // every change to the text, however it came: typing, paste, an emoji,
+    // undo. Each change is one edit, found by comparing with the last text.
+    function syncStyles() {
+      if (!compose || !compose.styles) return;
+      const now = cmpText.value;
+      if (compose.prev === now) return;
+      const ed = Sweeter.text.textEdit(compose.prev || '', now);
+      compose.styles = { bold: Sweeter.text.shiftRanges(compose.styles.bold, ed), italic: Sweeter.text.shiftRanges(compose.styles.italic, ed) };
+      compose.prev = now;
+    }
+    function syncedStyles() {
+      syncStyles();
+      return compose && compose.styles ? { bold: compose.styles.bold.slice(), italic: compose.styles.italic.slice() } : { bold: [], italic: [] };
+    }
+
     function updateCount() {
+      syncStyles();
       const n = weighted(cmpText.value);
       cmpCount.textContent = n > 280 ? n.toLocaleString() + ' · long post' : n + ' / 280';
       cmpCount.className = 'cmp-count' + (n > 25000 ? ' over' : n > 280 ? ' long' : '');
@@ -5823,18 +5841,33 @@
 
     // ---------- the compose window’s place and size ----------
 
-    // The links’ underlines: the same text, transparent, on a layer behind
-    // the textarea, each link in a <u>. It scrolls with the textarea.
+    // The same text on a layer behind the textarea, scrolling with it: each
+    // link in a <u> for its underline and, once the draft has bold or
+    // italic, the visible text itself (the textarea's turns transparent).
+    // Bold is a stroke and italic a slant of each word, so no glyph changes
+    // width and the caret stays on its letter; a word too long for a line
+    // stays upright, since a slanted word can't wrap.
     function paintLinks() {
       const t = cmpText.value;
+      const st = compose && compose.styles ? compose.styles : { bold: [], italic: [] };
+      cmpField.classList.toggle('styled', st.bold.length > 0 || st.italic.length > 0);
+      const links = Sweeter.text.draftLinks(t);
+      const cuts = new Set([0, t.length]);
+      for (const l of links) cuts.add(l.start).add(l.end);
+      for (const [a, b] of st.bold.concat(st.italic)) cuts.add(Math.min(a, t.length)).add(Math.min(b, t.length));
+      const pts = Array.from(cuts).sort((x, y) => x - y);
+      const inside = (list, x) => list.some(([a, b]) => x >= a && x < b);
       let html = '';
-      let at = 0;
-      for (const l of Sweeter.text.draftLinks(t)) {
-        html += h(t.slice(at, l.start)) + '<u>' + h(t.slice(l.start, l.end)) + '</u>';
-        at = l.end;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i];
+        const seg = t.slice(a, pts[i + 1]);
+        let part = inside(st.italic, a) ? seg.split(/(\s+)/).map((w) => (!w || /^\s+$/.test(w) || w.length > 40 ? h(w) : '<i>' + h(w) + '</i>')).join('') : h(seg);
+        if (inside(st.bold, a)) part = '<b>' + part + '</b>';
+        if (links.some((l) => a >= l.start && a < l.end)) part = '<u>' + part + '</u>';
+        html += part;
       }
       // The zero-width space gives a last, empty line its height.
-      cmpHl.innerHTML = html + h(t.slice(at)) + '\u200b';
+      cmpHl.innerHTML = html + '\u200b';
       cmpHl.style.width = cmpText.clientWidth + 'px';
       cmpHl.style.transform = cmpText.scrollTop ? 'translateY(' + -cmpText.scrollTop + 'px)' : '';
     }
@@ -6006,27 +6039,6 @@
     // X has no text formatting of its own; like most X apps, Sweeter swaps in
     // Unicode’s mathematical sans-serif letters. Screen readers may spell
     // them out, so use them sparingly.
-    const STYLE = {
-      bold: { A: 0x1d5d4, a: 0x1d5ee, d: 0x1d7ec },
-      italic: { A: 0x1d608, a: 0x1d622, d: null },
-    };
-
-    function plainChar(ch) {
-      const c = ch.codePointAt(0);
-      for (const m of Object.values(STYLE)) {
-        if (c >= m.A && c < m.A + 26) return String.fromCharCode(65 + c - m.A);
-        if (c >= m.a && c < m.a + 26) return String.fromCharCode(97 + c - m.a);
-        if (m.d && c >= m.d && c < m.d + 10) return String.fromCharCode(48 + c - m.d);
-      }
-      return ch;
-    }
-
-    function styled(ch, style) {
-      const c = ch.codePointAt(0);
-      const m = STYLE[style];
-      return (c >= m.A && c < m.A + 26) || (c >= m.a && c < m.a + 26) || (m.d && c >= m.d && c < m.d + 10);
-    }
-
     function applyStyle(style) {
       const a = cmpText.selectionStart;
       const b = cmpText.selectionEnd;
@@ -6034,23 +6046,14 @@
         toast('Select some text first.', 'info');
         return;
       }
-      const m = STYLE[style];
-      const chars = Array.from(cmpText.value.slice(a, b));
-      const undo = chars.some((ch) => styled(ch, style)) && !chars.some((ch) => /[A-Za-z0-9]/.test(ch));
-      const out = chars
-        .map((ch) => {
-          const p = plainChar(ch);
-          if (undo) return p;
-          const c = p.charCodeAt(0);
-          if (c >= 65 && c <= 90) return String.fromCodePoint(m.A + c - 65);
-          if (c >= 97 && c <= 122) return String.fromCodePoint(m.a + c - 97);
-          if (m.d && c >= 48 && c <= 57) return String.fromCodePoint(m.d + c - 48);
-          return p;
-        })
-        .join('');
-      cmpText.setRangeText(out, a, b, 'select');
+      // X's real formatting: the range goes to X Pro's editor at posting
+      // (xpro.js applyStyles), and the post carries it as richtext.
+      syncStyles();
+      compose.styles[style] = Sweeter.text.toggleRange(compose.styles[style], a, b);
       cmpText.focus();
+      cmpText.setSelectionRange(a, b);
       updateCount();
+      paintLinks();
     }
 
     function insertText(t) {
@@ -6071,7 +6074,7 @@
       const p = id ? findPost(id) : null;
       if (id && (!p || p.unavailable)) return;
       // A compose window already open keeps its text as a draft.
-      if (compose && !cmpBack.hidden && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value });
+      if (compose && !cmpBack.hidden && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value, styles: syncedStyles() });
       compose = { kind, id: id || null, key: key || null, files: [] };
       cmpTitle.textContent = kind === 'reply' ? 'Reply' : kind === 'quote' ? 'Quote post' : 'New post';
       cmpPost.textContent = kind === 'reply' ? 'Reply' : 'Post';
@@ -6080,6 +6083,8 @@
       cmpText.placeholder = kind === 'reply' ? 'Post your reply' : kind === 'quote' ? 'Add a comment' : 'What’s happening?';
       const draft = drafts.get(draftKey(compose)) || { text: '', files: [], reply: 'Everyone' };
       cmpText.value = draft.text;
+      compose.styles = { bold: (draft.styles && draft.styles.bold) || [], italic: (draft.styles && draft.styles.italic) || [] };
+      compose.prev = draft.text;
       compose.files = draft.files.slice();
       compose.gif = draft.gif || null;
       cmpReply.value = draft.reply;
@@ -6098,7 +6103,7 @@
 
     function closeCompose(keepDraft) {
       if (compose) {
-        if (keepDraft && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value });
+        if (keepDraft && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value, styles: syncedStyles() });
         else {
           drafts.delete(draftKey(compose));
           dropFiles(compose.files);
@@ -6117,6 +6122,7 @@
       nobutton: 'X Pro’s compose button isn’t there. Your text is still here.',
       nomenu: 'X Pro’s quote option didn’t open. Your text is still here.',
       mismatch: 'X Pro’s composer didn’t take the text. Nothing was posted.',
+      nostyle: 'X Pro’s composer didn’t take the bold or italic. Nothing was posted; your text is still here.',
       disabled: 'X Pro didn’t enable its Post button. Nothing was posted.',
       unsent: 'X Pro didn’t confirm the post. Check X Pro before trying again.',
       xerror: 'X didn’t accept the post. Nothing was posted; your text is still here.',
@@ -6130,6 +6136,9 @@
     async function submitCompose() {
       if (!compose || posting) return;
       const text = cmpText.value;
+      // The styles as they are now, with the text: typing while X Pro
+      // opens would move them against a text that is no longer the one sent.
+      const styles = syncedStyles();
       const c = compose;
       const problem = !text.trim() && !c.files.length && !c.gif ? 'Write something or add a photo or GIF first.' : weighted(text) > 25000 ? 'This post is over 25,000 characters.' : null;
       if (problem) {
@@ -6144,7 +6153,7 @@
       await gifWork;
       cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : c.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
-      if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, reply: c.kind === 'reply' ? null : cmpReply.value });
+      if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, reply: c.kind === 'reply' ? null : cmpReply.value, styles: styles.bold.length || styles.italic.length ? styles : null });
       posting = false;
       if (r.ok) {
         closeCompose(false);
@@ -6170,7 +6179,7 @@
 
     // “Open in X Pro”: Sweeter steps aside and shows X Pro’s own composer with
     // the text already in it, then comes back when that composer closes.
-    async function handoff(kind, id, key, text, files, tool, gif) {
+    async function handoff(kind, id, key, text, files, tool, gif, styles) {
       closePop();
       passthrough = true;
       closePalette();
@@ -6182,7 +6191,13 @@
         toast(COMPOSE_FAIL[r.reason] || 'X Pro’s composer didn’t open.', 'warn');
         return;
       }
-      await xpro.prefill(text, files, tool, gif);
+      const pf = await xpro.prefill(text, files, tool, gif, styles);
+      if (pf && pf.styled === false) {
+        const msg = 'X Pro’s composer didn’t take the bold or italic, so that text went to X Pro without it.';
+        // Sweeter may already be back (⌥X): then now, not after a later hand-off.
+        if (passthrough) afterPassthrough = msg;
+        else toast(msg, 'warn');
+      }
       const timer = setInterval(() => {
         if (!passthrough) return clearInterval(timer);
         if (!xpro.composerOpen()) {
@@ -6715,10 +6730,17 @@
       if (!gifEl.hidden && !e.target.closest('[data-cmd="cmp-gif"]')) closeGifs(false);
     });
 
+    // A word for when Sweeter shows again: while X Pro has the screen,
+    // Sweeter and its toasts are hidden.
+    let afterPassthrough = null;
     function endPassthrough() {
       passthrough = false;
       applySettings();
       if (settings.visible) app.focus({ preventScroll: true });
+      if (afterPassthrough) {
+        toast(afterPassthrough, 'warn');
+        afterPassthrough = null;
+      }
     }
 
     function selectedPost() {
@@ -6827,6 +6849,7 @@
         case 'cmp-grok': {
           const c = compose;
           const text = cmpText.value;
+          const styles = c ? syncedStyles() : null;
           const files = c ? c.files.slice() : [];
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
           const gif = c ? c.gif : null;
@@ -6835,7 +6858,7 @@
           compose = null;
           queueCard();
           cmpBack.hidden = true;
-          if (c) handoff(c.kind, c.id, c.key, text, files, tool, gif);
+          if (c) handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null);
           break;
         }
         case 'cmp-photo':

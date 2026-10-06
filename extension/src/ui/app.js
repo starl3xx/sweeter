@@ -3424,10 +3424,13 @@
     // One article load at a time: each opens and pops a level of an X Pro
     // stack, so two at once could close each other’s conversation.
     let rdLoads = Promise.resolve();
-    // Articles whose conversation was opened for them this session: an
-    // embedded post that never arrives (deleted, withheld) is not asked
-    // for again on every open.
+    // Articles whose conversation X Pro opened and drew for them this
+    // session: an embedded post that still never arrived (deleted,
+    // withheld) is not asked for again on every open. A load that failed
+    // is not counted.
     const rdTried = new Set();
+    // Reader-bar actions waiting for an article load, by action: one each.
+    const rdQueued = new Set();
 
     // The post as its conversation (or X Pro’s lookup by id) carries it,
     // with the article’s body.
@@ -3473,10 +3476,10 @@
         if (now && embedsLoaded(now)) return rd.state === 'ready' ? renderReader(false) : readerDetail(post.id);
         const hold = 'article:' + token;
         holds.add(hold);
-        rdTried.add(post.id);
         try {
           const r = await xpro.loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id), settled: () => embedsLoaded(articleOf(post.id)) });
-          if (!r.ok) readerFailed(token, r.reason);
+          if (r.ok) rdTried.add(post.id);
+          else readerFailed(token, r.reason);
         } catch (e) {
           readerFailed(token, 'error');
         } finally {
@@ -7189,8 +7192,21 @@
               openUrl(cell.dataset.url);
           }
         };
-        if (inReader && act.dataset.act !== 'copy' && act.dataset.act !== 'open') rdLoads.then(runAct);
-        else runAct();
+        const name = act.dataset.act;
+        if (inReader && name !== 'copy' && name !== 'open') {
+          // Once that load is done, and only while this reader is open; a
+          // redrawn bar acts through its current button.
+          if (rdQueued.has(name)) return;
+          rdQueued.add(name);
+          const tok = rd && rd.token;
+          rdLoads.then(() => {
+            rdQueued.delete(name);
+            if (!rd || rd.token !== tok) return;
+            if (act.isConnected) return runAct();
+            const fresh = rdFoot.querySelector('[data-act="' + name + '"]');
+            if (fresh) fresh.click();
+          });
+        } else runAct();
         return;
       }
       const mediaBox = t.closest('.media');

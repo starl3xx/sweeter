@@ -859,17 +859,18 @@
     return att ? { ok: true } : { ok: false, reason: 'gifgone' };
   }
 
-  async function prefill(text, files, tool, gif) {
+  async function prefill(text, files, tool, gif, styles) {
     await waitFor(editor, 3000);
     if (files && files.length) await attach(files);
     if (gif) await attachGif(gif);
-    if (text && text.trim()) await paste(text);
+    let styled = null;
+    if (text && text.trim() && (await paste(text)) && styles) styled = (await applyStyles(text, styles)).ok;
     if (tool && TOOLS[tool]) {
       const root = composerRoot();
       const b = root && root.querySelector(TOOLS[tool]);
       if (b) b.click();
     }
-    return true;
+    return { ok: true, styled };
   }
 
   // The compose drawer closes with “Done”; a reply or quote opens X Pro’s

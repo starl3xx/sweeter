@@ -6092,6 +6092,9 @@
     async function submitCompose() {
       if (!compose || posting) return;
       const text = cmpText.value;
+      // The styles as they are now, with the text: typing while X Pro
+      // opens would move them against a text that is no longer the one sent.
+      const styles = syncedStyles();
       const c = compose;
       const problem = !text.trim() && !c.files.length && !c.gif ? 'Write something or add a photo or GIF first.' : weighted(text) > 25000 ? 'This post is over 25,000 characters.' : null;
       if (problem) {
@@ -6106,7 +6109,6 @@
       await gifWork;
       cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : c.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
-      const styles = syncedStyles();
       if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, reply: c.kind === 'reply' ? null : cmpReply.value, styles: styles.bold.length || styles.italic.length ? styles : null });
       posting = false;
       if (r.ok) {
@@ -6133,7 +6135,7 @@
 
     // “Open in X Pro”: Sweeter steps aside and shows X Pro’s own composer with
     // the text already in it, then comes back when that composer closes.
-    async function handoff(kind, id, key, text, files, tool, gif) {
+    async function handoff(kind, id, key, text, files, tool, gif, styles) {
       closePop();
       passthrough = true;
       closePalette();
@@ -6145,7 +6147,8 @@
         toast(COMPOSE_FAIL[r.reason] || 'X Pro’s composer didn’t open.', 'warn');
         return;
       }
-      await xpro.prefill(text, files, tool, gif);
+      const pf = await xpro.prefill(text, files, tool, gif, styles);
+      if (pf && pf.styled === false) toast('X Pro’s composer didn’t take the bold or italic. Your text is there without it.', 'warn');
       const timer = setInterval(() => {
         if (!passthrough) return clearInterval(timer);
         if (!xpro.composerOpen()) {
@@ -6790,6 +6793,7 @@
         case 'cmp-grok': {
           const c = compose;
           const text = cmpText.value;
+          const styles = c ? syncedStyles() : null;
           const files = c ? c.files.slice() : [];
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
           const gif = c ? c.gif : null;
@@ -6798,7 +6802,7 @@
           compose = null;
           queueCard();
           cmpBack.hidden = true;
-          if (c) handoff(c.kind, c.id, c.key, text, files, tool, gif);
+          if (c) handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null);
           break;
         }
         case 'cmp-photo':

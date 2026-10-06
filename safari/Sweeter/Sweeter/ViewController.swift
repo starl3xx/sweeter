@@ -1226,6 +1226,7 @@ final class SweeterWindow: NSWindow {
     /// The sidebar and the columns at their own widths, in points (0: not
     /// reported yet).
     var fitContentWidth: CGFloat = 0
+    private var fittingNow = false
 
     /// The double-click itself, before AppKit stretches the edge: a window
     /// already as wide as the screen gets no frame change from AppKit at
@@ -1262,9 +1263,11 @@ final class SweeterWindow: NSWindow {
     /// The frame for a width change that comes from a double-click on the
     /// left or right edge; any other frame as it is.
     private func fitted(_ r: NSRect) -> NSRect {
-        guard fitContentWidth > 0, !inLiveResize, !styleMask.contains(.fullScreen),
-              let e = NSApp.currentEvent, e.window === self, e.clickCount == 2,
-              e.type == .leftMouseDown || e.type == .leftMouseUp,
+        // The type first: clickCount on any other event (a key, an
+        // app-defined event) throws, which crashed a deck switch's fit.
+        guard !fittingNow, fitContentWidth > 0, !inLiveResize, !styleMask.contains(.fullScreen),
+              let e = NSApp.currentEvent, e.type == .leftMouseDown || e.type == .leftMouseUp,
+              e.window === self, e.clickCount == 2,
               abs(r.height - frame.height) < 1, abs(r.width - frame.width) >= 1 else { return r }
         let x = e.locationInWindow.x
         let left = x <= 6
@@ -1280,7 +1283,11 @@ final class SweeterWindow: NSWindow {
     func fitToColumns() {
         guard fitContentWidth > 0, !styleMask.contains(.fullScreen), isVisible else { return }
         let f = fittedFrame(left: false)
-        if abs(f.width - frame.width) >= 1 || abs(f.minX - frame.minX) >= 1 { setFrame(f, display: true, animate: true) }
+        guard abs(f.width - frame.width) >= 1 || abs(f.minX - frame.minX) >= 1 else { return }
+        // Already the frame wanted: setFrame's double-click handling stays out.
+        fittingNow = true
+        defer { fittingNow = false }
+        setFrame(f, display: true, animate: true)
     }
 
     /// The window fitted to its columns, the edge opposite the clicked one

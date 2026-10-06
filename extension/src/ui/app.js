@@ -6148,7 +6148,7 @@
         return;
       }
       const pf = await xpro.prefill(text, files, tool, gif, styles);
-      if (pf && pf.styled === false) toast('X Pro’s composer didn’t take the bold or italic. Your text is there without it.', 'warn');
+      if (pf && pf.styled === false) afterPassthrough = 'X Pro’s composer didn’t take the bold or italic, so that text went to X Pro without it.';
       const timer = setInterval(() => {
         if (!passthrough) return clearInterval(timer);
         if (!xpro.composerOpen()) {
@@ -6681,10 +6681,17 @@
       if (!gifEl.hidden && !e.target.closest('[data-cmd="cmp-gif"]')) closeGifs(false);
     });
 
+    // A word for when Sweeter shows again: while X Pro has the screen,
+    // Sweeter and its toasts are hidden.
+    let afterPassthrough = null;
     function endPassthrough() {
       passthrough = false;
       applySettings();
       if (settings.visible) app.focus({ preventScroll: true });
+      if (afterPassthrough) {
+        toast(afterPassthrough, 'warn');
+        afterPassthrough = null;
+      }
     }
 
     function selectedPost() {

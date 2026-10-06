@@ -145,7 +145,10 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.tabbingMode = .disallowed
-        window.minSize = NSSize(width: 640, height: 420)
+        // Narrow enough for a deck of one column (the sidebar and a column
+        // of about 280 points). X Pro keeps its layout at this width
+        // (checked 2026-10-06 down to 360), so Sweeter's actions still work.
+        window.minSize = NSSize(width: 360, height: 420)
         if !window.setFrameUsingName("SweeterMain") {
             window.setContentSize(NSSize(width: 1440, height: 900))
             window.center()

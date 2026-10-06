@@ -947,6 +947,9 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .col.paused .ch .live{display:block;background:#C8650F}
 .cell.seen{opacity:.5}
 .cell.seen:hover,.cell.seen.sel{opacity:1}
+/* A single column on show (a deck or group of one) shrinks with the window
+   instead of scrolling sideways. Hidden columns stay in the DOM. */
+.app[data-fit="fill"] .cols:not(:has(> .col:not(.hiddencol) ~ .col:not(.hiddencol))) > .col{flex-shrink:1}
 .app[data-fit="fixed"] .col:not(.sized){flex:0 0 var(--colw,345px);max-width:none}
 .app[data-fit="equal"] .col{flex:1 1 0;max-width:none;min-width:240px}
 .app[data-fit="equal"] .col.sized{flex:0 0 var(--w)}

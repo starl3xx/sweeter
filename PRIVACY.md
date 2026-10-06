@@ -1,6 +1,6 @@
 # Sweeter Privacy Policy
 
-Last updated: October 5, 2026
+Last updated: October 6, 2026
 
 Sweeter is a Mac app and a Safari extension that gives X Pro a different interface. Starl3xx Labs LLC (“we”, “us”) makes it. Sweeter runs on your Mac, inside the X Pro page you are signed in to. We run no server for Sweeter and have no accounts, so we never see who you are.
 
@@ -20,7 +20,7 @@ Sweeter is a Mac app and a Safari extension that gives X Pro a different interfa
 
 ## Usage counts (Mac app only)
 
-The Mac app sends anonymous usage counts to [TelemetryDeck](https://telemetrydeck.com), an analytics service built for privacy. They tell us how many people use Sweeter, which features and themes they pick, and what goes wrong.
+The Mac app sends anonymous usage counts to [TelemetryDeck](https://telemetrydeck.com), an analytics service built for privacy, run by TelemetryDeck GmbH, Von-der-Tann-Str. 54, 86159 Augsburg, Germany. They tell us how many people use Sweeter, which features and themes they pick, and what goes wrong.
 
 What is sent:
 
@@ -30,7 +30,7 @@ What is sent:
 
 What is never sent: anything from X (posts, profiles, handles, or your account), and anything you type.
 
-TelemetryDeck receives each request over the internet, as any server does. How it handles that connection data is set out in [TelemetryDeck’s privacy policy](https://telemetrydeck.com/privacy/).
+TelemetryDeck receives each request over the internet, as any server does. TelemetryDeck says it stores no IP addresses, in its logs or its database, uses no cookies or other tracking, keeps no identifier that can be traced back to a person, and rounds the time of each event to the hour. Its software is open source [on GitHub](https://github.com/TelemetryDeck), and [TelemetryDeck’s privacy policy](https://telemetrydeck.com/privacy/) and [privacy FAQ](https://telemetrydeck.com/docs/guides/privacy-faq/) give the details.
 
 **To turn it off:** Settings ▸ General ▸ Usage data. It stops at once, and nothing more is sent.
 

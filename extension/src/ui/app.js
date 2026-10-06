@@ -3424,6 +3424,10 @@
     // One article load at a time: each opens and pops a level of an X Pro
     // stack, so two at once could close each other’s conversation.
     let rdLoads = Promise.resolve();
+    // Articles whose conversation was opened for them this session: an
+    // embedded post that never arrives (deleted, withheld) is not asked
+    // for again on every open.
+    const rdTried = new Set();
 
     // The post as its conversation (or X Pro’s lookup by id) carries it,
     // with the article’s body.
@@ -3461,6 +3465,7 @@
       // unless Sweeter shows it now. That stack is the conversation pane’s,
       // and a level opened and closed over it would close the pane’s too.
       if (full && Array.from(cols.values()).some((c) => c.detail && c.detail.id === post.id)) return;
+      if (full && rdTried.has(post.id)) return;
       rdLoads = rdLoads.then(async () => {
         // Closed, or another article, while it waited; or all there now.
         if (!rd || rd.token !== token) return;
@@ -3468,6 +3473,7 @@
         if (now && embedsLoaded(now)) return rd.state === 'ready' ? renderReader(false) : readerDetail(post.id);
         const hold = 'article:' + token;
         holds.add(hold);
+        rdTried.add(post.id);
         try {
           const r = await xpro.loadArticle({ id: post.id, handle: post.author.handle, mapping: target(key).m, hint: hintFor(post.id, key), ready: () => !!articleOf(post.id), settled: () => embedsLoaded(articleOf(post.id)) });
           if (!r.ok) readerFailed(token, r.reason);
@@ -7150,35 +7156,41 @@
         const inReader = cell.classList.contains('rd-cell');
         const key = colEl ? colEl.dataset.vid : inReader ? cell.dataset.vid || null : null;
         if (!inReader) selectCell(cell, false);
-        switch (act.dataset.act) {
-          case 'like':
-            doLike(cell.dataset.id, key);
-            break;
-          case 'bookmark':
-            doBookmark(cell.dataset.id, key);
-            break;
-          case 'repost':
-            showRepostMenu(act, cell.dataset.id, key);
-            break;
-          case 'reply':
-            openCompose('reply', cell.dataset.id, key);
-            break;
-          case 'copy':
-            copyText(cell.dataset.url, 'Link copied');
-            break;
-          case 'more-text': {
-            const id = cell.dataset.id;
-            const open = !expanded.has(id);
-            if (open) expanded.add(id);
-            else expanded.delete(id);
-            const tx = act.previousElementSibling;
-            if (tx) tx.classList.toggle('open', open);
-            act.textContent = open ? 'Show less' : 'Show more';
-            break;
+        // The reader’s bar acts after an article load in progress: both
+        // open and close levels of an X Pro stack.
+        const runAct = () => {
+          switch (act.dataset.act) {
+            case 'like':
+              doLike(cell.dataset.id, key);
+              break;
+            case 'bookmark':
+              doBookmark(cell.dataset.id, key);
+              break;
+            case 'repost':
+              showRepostMenu(act, cell.dataset.id, key);
+              break;
+            case 'reply':
+              openCompose('reply', cell.dataset.id, key);
+              break;
+            case 'copy':
+              copyText(cell.dataset.url, 'Link copied');
+              break;
+            case 'more-text': {
+              const id = cell.dataset.id;
+              const open = !expanded.has(id);
+              if (open) expanded.add(id);
+              else expanded.delete(id);
+              const tx = act.previousElementSibling;
+              if (tx) tx.classList.toggle('open', open);
+              act.textContent = open ? 'Show less' : 'Show more';
+              break;
+            }
+            default:
+              openUrl(cell.dataset.url);
           }
-          default:
-            openUrl(cell.dataset.url);
-        }
+        };
+        if (inReader && act.dataset.act !== 'copy' && act.dataset.act !== 'open') rdLoads.then(runAct);
+        else runAct();
         return;
       }
       const mediaBox = t.closest('.media');

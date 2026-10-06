@@ -768,6 +768,7 @@
       app.style.setProperty('--fs', settings.fontSize + 'px');
       app.style.setProperty('--colw', settings.colWidth + 'px');
       app.dataset.fit = settings.fit;
+      reportFit();
       if (settings.snap) app.dataset.snap = '';
       else delete app.dataset.snap;
       requestAnimationFrame(fitWidth);
@@ -1145,6 +1146,7 @@
     // ---------- columns ----------
 
     function makeCol(e) {
+      reportFit();
       const key = e.key;
       const el = document.createElement('section');
       el.className = 'col' + (e.view ? ' isview' : '') + (e.merge ? ' ismerge' : '');
@@ -2483,6 +2485,7 @@
       for (const [k, c] of cols) {
         if (!layout.some((e) => e.vid === k)) {
           c.el.remove();
+          reportFit();
           cols.delete(k);
           redrawPopFor(k);
         }
@@ -3929,6 +3932,7 @@
     ]; // X Pro’s own base widths, as Sweeter-only choices
 
     function applyWidth(c) {
+      reportFit();
       const w = (settings.colWidths || {})[c.vid];
       c.el.classList.toggle('sized', !!w);
       if (w) c.el.style.setProperty('--w', w + 'px');
@@ -4876,9 +4880,39 @@
       }
     }
 
+    // ---------- the window's natural width (Mac app) ----------
+    // What the window needs to show its columns at their own widths: the
+    // sidebar, each column on show (collapsed, a custom width, or the
+    // column width setting; Fill only stretches them past it), and the
+    // 1 px gaps. The Mac app fits the window to it when its left or right
+    // edge is double-clicked.
+    let fitSent = 0;
+    let fitTimer = 0;
+    function reportFit() {
+      if (!native || !native.fitWidth) return;
+      clearTimeout(fitTimer);
+      fitTimer = setTimeout(() => {
+        const side = shadow.querySelector('.side');
+        let w = side ? side.getBoundingClientRect().width : 76;
+        let n = 0;
+        for (const el of colsEl.children) {
+          if (!el.classList.contains('col') || el.classList.contains('hiddencol')) continue;
+          const basis = parseFloat(getComputedStyle(el).flexBasis);
+          w += isFinite(basis) && basis > 0 ? basis : settings.colWidth;
+          n++;
+        }
+        if (!n) w += settings.colWidth;
+        w = Math.ceil(w + Math.max(0, n - 1));
+        if (w === fitSent) return;
+        fitSent = w;
+        native.fitWidth(w);
+      }, 250);
+    }
+
     // ---------- the local layer: looks, modes, titles and views ----------
 
     function applyLook(c) {
+      reportFit();
       const mode = modeOf(c.vid);
       c.el.classList.toggle('collapsed', mode === 'collapsed');
       c.el.classList.toggle('hiddencol', mode === 'hidden' || !inGroup(c.vid));

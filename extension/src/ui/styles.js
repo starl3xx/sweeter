@@ -331,10 +331,11 @@ img{display:block}
 .acts .cnt{font-variant-numeric:tabular-nums}
 .acts .vw{display:flex;align-items:center;gap:4px;padding:4px 10px 4px 8px;color:var(--act);font-size:.82em;cursor:default}
 .acts .vw svg{width:15px;height:15px}
-/* One line, always: an item with no room wraps out of sight whole (the
-   last first) rather than overflowing the post, whatever the font size. */
-.acts{flex-wrap:wrap;overflow:hidden;height:max(26px,calc(.82em + 9px))}
-.acts button,.acts a,.acts .vw{line-height:1}
+/* One line, always, in a column: an item with no room wraps out of sight
+   whole (the last first) rather than overflowing the post, whatever the
+   font size. The reader's bar is not in a column and keeps every item. */
+.col .acts{flex-wrap:wrap;overflow:hidden;height:max(26px,calc(.82em + 9px))}
+.col .acts button,.col .acts a,.col .acts .vw{line-height:1}
 /* Narrow columns: the bar spans the text's width with tighter buttons, as
    X's does, so its items share what room there is. */
 @container col (max-width:31.5em){.acts{justify-content:space-between;gap:0;margin-left:-6px;margin-right:-6px}.acts button,.acts a,.acts .vw{padding:4px 6px;gap:3px}}

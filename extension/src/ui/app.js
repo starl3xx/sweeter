@@ -6148,7 +6148,12 @@
         return;
       }
       const pf = await xpro.prefill(text, files, tool, gif, styles);
-      if (pf && pf.styled === false) afterPassthrough = 'X Pro’s composer didn’t take the bold or italic, so that text went to X Pro without it.';
+      if (pf && pf.styled === false) {
+        const msg = 'X Pro’s composer didn’t take the bold or italic, so that text went to X Pro without it.';
+        // Sweeter may already be back (⌥X): then now, not after a later hand-off.
+        if (passthrough) afterPassthrough = msg;
+        else toast(msg, 'warn');
+      }
       const timer = setInterval(() => {
         if (!passthrough) return clearInterval(timer);
         if (!xpro.composerOpen()) {

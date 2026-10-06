@@ -3429,7 +3429,8 @@
     // withheld) is not asked for again on every open. A load that failed
     // is not counted.
     const rdTried = new Set();
-    // Reader-bar actions waiting for an article load, by action: one each.
+    // Reader-bar actions waiting for an article load, by reader and action:
+    // one each.
     const rdQueued = new Set();
 
     // The post as its conversation (or X Pro’s lookup by id) carries it,
@@ -7196,11 +7197,12 @@
         if (inReader && name !== 'copy' && name !== 'open') {
           // Once that load is done, and only while this reader is open; a
           // redrawn bar acts through its current button.
-          if (rdQueued.has(name)) return;
-          rdQueued.add(name);
           const tok = rd && rd.token;
+          const slot = tok + ':' + name; // per reader: a closed one blocks nothing
+          if (rdQueued.has(slot)) return;
+          rdQueued.add(slot);
           rdLoads.then(() => {
-            rdQueued.delete(name);
+            rdQueued.delete(slot);
             if (!rd || rd.token !== tok) return;
             if (act.isConnected) return runAct();
             const fresh = rdFoot.querySelector('[data-act="' + name + '"]');

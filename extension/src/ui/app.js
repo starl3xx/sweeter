@@ -3685,9 +3685,40 @@
     function renderReader(first) {
       if (!rd) return;
       const ctx = { settings, now: Date.now(), viewer, expanded };
-      rdPage.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: embedded });
+      // A detached element of this document, not a template: a template's
+      // content is another document, and moving a loading picture there
+      // and back could restart it.
+      const fresh = rdPage.ownerDocument.createElement('div');
+      fresh.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: embedded });
+      keepMedia(rdPage, fresh);
+      rdPage.replaceChildren(...fresh.childNodes);
       if (first) rdScroll.scrollTop = 0;
       renderReaderBar();
+    }
+
+    // A redraw keeps the pictures and videos already there. A new <img>
+    // for the same address could drop the one still loading, and X sends
+    // progressive JPEGs, which show a blocky first pass until a load
+    // finishes: the reader redraws when the body and the embedded posts
+    // arrive, so a cover kept restarting and looked blocky (Jake,
+    // 2026-10-07). Each new element takes the place of the old one with the
+    // same address, which gets the new element's other attributes.
+    function keepMedia(from, into) {
+      const old = new Map();
+      for (const el of from.querySelectorAll('img[src], video[src]')) {
+        const k = el.tagName + ' ' + el.getAttribute('src');
+        if (!old.has(k)) old.set(k, []);
+        old.get(k).push(el);
+      }
+      for (const el of into.querySelectorAll('img[src], video[src]')) {
+        const list = old.get(el.tagName + ' ' + el.getAttribute('src'));
+        const keep = list && list.shift();
+        if (!keep) continue;
+        // Never src itself: setting it again can start the load over.
+        for (const a of Array.from(keep.attributes)) if (a.name !== 'src' && !el.hasAttribute(a.name)) keep.removeAttribute(a.name);
+        for (const a of Array.from(el.attributes)) if (a.name !== 'src' && keep.getAttribute(a.name) !== a.value) keep.setAttribute(a.name, a.value);
+        el.replaceWith(keep);
+      }
     }
 
     // The post’s action bar, always shown. It is a cell, so the buttons, the

@@ -42,6 +42,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     private var webTopBelowTitle: NSLayoutConstraint!
     private var xProShown = false
     private var offXPro = false
+    private let titleFill = NSView()
     /// Whether the page can let the translucent sidebar show through.
     private var translucentSidebar = false
     /// Last state the page reported (theme, font size, column titles), for menus.
@@ -98,6 +99,19 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         sidebar.appearance = NSAppearance(named: .darkAqua)
         sidebar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(sidebar, positioned: .below, relativeTo: webView)
+        // The title bar's strip while X Pro's page shows below it: the
+        // page's own background color, so it reads as the page's title bar
+        // (not the window's background with the sidebar showing through).
+        titleFill.wantsLayer = true
+        titleFill.isHidden = true
+        titleFill.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(titleFill, positioned: .above, relativeTo: sidebar)
+        NSLayoutConstraint.activate([
+            titleFill.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            titleFill.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            titleFill.topAnchor.constraint(equalTo: view.topAnchor),
+            titleFill.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+        ])
         NSLayoutConstraint.activate([
             sidebar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             sidebar.topAnchor.constraint(equalTo: view.topAnchor),
@@ -634,9 +648,31 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
 
     private func placeWebView() {
         let below = xProShown || offXPro
+        titleFill.isHidden = !below
+        if below { fillTitleBar() }
         guard webTopBelowTitle.isActive != below else { return }
         NSLayoutConstraint.deactivate([below ? webTopFull : webTopBelowTitle])
         NSLayoutConstraint.activate([below ? webTopBelowTitle : webTopFull])
+    }
+
+    /// Colors the title bar's strip like the page under it: its body's (or
+    /// html's) background, as the page draws it; the window's own color when
+    /// neither has one.
+    private func fillTitleBar() {
+        let js = "(() => { for (const el of [document.body, document.documentElement]) { if (!el) continue; const c = getComputedStyle(el).backgroundColor; if (c && c !== 'transparent' && !/^rgba\\(.*,\\s*0\\)$/.test(c)) return c; } return ''; })()"
+        webView.evaluateJavaScript(js, in: nil, in: world) { [weak self] result in
+            guard let self else { return }
+            let css = (try? result.get()) as? String ?? ""
+            self.titleFill.layer?.backgroundColor = (Self.cssColor(css) ?? NSColor.windowBackgroundColor).cgColor
+        }
+    }
+
+    /// "rgb(r, g, b)" or "rgba(r, g, b, a)", as getComputedStyle gives it.
+    static func cssColor(_ css: String) -> NSColor? {
+        guard css.hasPrefix("rgb") else { return nil }
+        let n = css.split(whereSeparator: { !"0123456789.".contains($0) }).compactMap { Double($0) }
+        guard n.count >= 3 else { return nil }
+        return NSColor(srgbRed: n[0] / 255, green: n[1] / 255, blue: n[2] / 255, alpha: n.count > 3 ? n[3] : 1)
     }
 
     func dismissCover() {
@@ -1015,6 +1051,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         Log.write("loaded \(webView.url?.host ?? "?")\(webView.url?.path ?? "")")
         // X’s sign-in pages have no Sweeter to wait for.
         if webView.url?.host != "pro.x.com" { dismissCover() }
+        if !titleFill.isHidden { fillTitleBar() }
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

@@ -4547,7 +4547,10 @@
       if (paintedDeck && act.id !== paintedDeck) {
         // A switch before the last one settled still compares with the
         // deck it started from.
-        if (!fitApplyPending) fitFromCount = fitCount;
+        if (!fitApplyPending) {
+          fitFromCount = fitCount;
+          fitSwitchFit = false;
+        }
         fitDeckUntil = Date.now() + 5000;
         reportFit();
       }
@@ -5038,6 +5041,10 @@
     // size (Jake, 2026-10-07: only another number of columns resizes it).
     let fitCount = -1;
     let fitFromCount = -1;
+    // Once a switch has resized the window (a passing count, as when a
+    // group's hidden columns show for a moment), every later settle in it
+    // applies too, so the window ends at the deck's own width, not there.
+    let fitSwitchFit = false;
     function reportFit() {
       if (!native || !native.fitWidth) return;
       clearTimeout(fitTimer);
@@ -5066,7 +5073,10 @@
         if (apply) {
           fitApplyTimer = setTimeout(() => {
             fitApplyPending = false;
-            if (n !== fitFromCount) native.fitWidth(w, true);
+            if (n !== fitFromCount || fitSwitchFit) {
+              native.fitWidth(w, true);
+              fitSwitchFit = true;
+            }
             fitCount = n;
           }, 500);
         } else fitCount = n;

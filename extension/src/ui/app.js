@@ -2136,6 +2136,21 @@
       const st = c.scroll.scrollTop;
       if (!follows(c)) c.pinned = false;
       const pinned = !modeOf(c.vid) && follows(c) && (c.pinned || (settings.pinToTop && st <= PIN_SLOP));
+      // Not following: the first tile on screen stays put, as in the list
+      // (the grid is drawn anew each time, new tiles first).
+      const tileKey = (t) => {
+        const g = t.querySelector('[data-i]');
+        return t.dataset.id + ':' + (g ? g.dataset.i : '');
+      };
+      let anchor = null;
+      if (!pinned) {
+        for (const t of c.list.children) {
+          if (t.offsetTop + t.offsetHeight > st) {
+            anchor = { key: tileKey(t), delta: t.offsetTop - st };
+            break;
+          }
+        }
+      }
       let html = '';
       let n = 0;
       c.visSorts = [];
@@ -2156,10 +2171,12 @@
       }
       c.list.innerHTML = html;
       c.foot.textContent = n ? '' : 'No media here yet.';
+      const at = anchor && Array.from(c.list.children).find((t) => tileKey(t) === anchor.key);
       if (pinned) {
         c.pinned = true;
         c.scroll.scrollTop = 0;
-      } else c.scroll.scrollTop = st;
+      } else if (at) c.scroll.scrollTop = at.offsetTop - anchor.delta;
+      else c.scroll.scrollTop = st;
       c.el.classList.toggle('pinned', !!c.pinned);
       c.rendered = true;
       reselect(c);
@@ -8040,8 +8057,9 @@
       } else delete rec.col.dataset.tint;
       rec.col.dataset.media = colSettings(c).media;
       rec.w.document.title = titleOf(c.vid) + ' · Sweeter';
-      // Keep the reader’s place: the first block on screen stays put.
-      const top = rec.scroll.scrollTop <= PIN_SLOP;
+      // Keep the reader’s place: the first block on screen stays put. At
+      // the top the pop-out follows the newest post, except For You.
+      const top = follows(c) && rec.scroll.scrollTop <= PIN_SLOP;
       let anchor = null;
       let delta = 0;
       if (!top) {

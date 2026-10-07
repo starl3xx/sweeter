@@ -2143,8 +2143,11 @@
         const g = t.querySelector('[data-i]');
         return t.dataset.id + ':' + (g ? g.dataset.i : '');
       };
-      // A reveal (the header's click, or the grid's first draw) starts at
-      // the top with every tile.
+      // A reveal (the header's click, a new view, the grid's first draw)
+      // starts at the top with every tile. A grid with no tiles on screen
+      // has nothing to hold still (after Clear, or a filter that matches
+      // nothing), so it shows what arrives.
+      if (!c.list.querySelector('.cell.gt')) c.gridCut = null;
       const reveal = c.gridCut == null;
       let anchor = null;
       if (!pinned && !reveal) {
@@ -2158,9 +2161,11 @@
       // Not following: newer tiles wait. A wrapping grid can't hold still
       // while tiles are added before the others (each one moves the rest a
       // place sideways), so they stay out, the count shows them, and a
-      // click on the column header (pinTop) brings them in.
+      // click on the column header (pinTop) brings them in. The cut is the
+      // column's newest post when it was drawn, whatever Find and the
+      // filters show, so only posts that arrive later wait.
       const blocks = visibleBlocks(s, c);
-      if (pinned || c.gridCut == null) c.gridCut = blocks.length ? blocks[0].b.sortIndex : null;
+      if (pinned || c.gridCut == null) c.gridCut = s.sorted.length ? s.sorted[0].sortIndex : null;
       let html = '';
       let n = 0;
       c.visSorts = [];

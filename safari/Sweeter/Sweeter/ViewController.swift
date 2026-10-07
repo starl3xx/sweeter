@@ -42,7 +42,8 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     private var webTopBelowTitle: NSLayoutConstraint!
     private var xProShown = false
     private var offXPro = false
-    private let titleFill = NSView()
+    /// A drag strip: the title bar still moves and zooms the window.
+    private let titleFill = DragStrip()
     /// Whether the page can let the translucent sidebar show through.
     private var translucentSidebar = false
     /// Last state the page reported (theme, font size, column titles), for menus.

@@ -84,6 +84,11 @@
 
   // Within this many pixels of the top, a column counts as “at the top”.
   const PIN_SLOP = 8;
+  // For You never follows its newest post. X keeps adding to it, out of
+  // time order, so a For You column pinned to the top never held still
+  // (reported 2026-10-07: a new post every half second pushed the rest
+  // down). New posts wait above, and the count shows how many.
+  const follows = (c) => c.key !== 'home-foryou';
   const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
   const KIND_ICON = { merged: 'decks', home: 'home', notifications: 'bell', list: 'list', search: 'search', user: 'profile', likes: 'like', bookmarks: 'bookmark', conversation: 'reply', placeholder: 'open' };
@@ -381,7 +386,7 @@
       { k: 'check', key: 'telemetry', label: 'Usage data', text: 'Send anonymous usage counts', note: 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, tips turned off, and the warnings Sweeter shows (without names or links), with the Sweeter version, the theme and appearance you use, and facts about the Mac such as its macOS version, model, and language. Never anything from X.', lbl: true, app: true },
       { k: 'check', key: 'badges', label: 'Checkmarks', text: 'Show verified checkmarks and organization badges' },
       { k: 'check', key: 'counts', label: 'Counts', text: 'Show reply, repost and like counts' },
-      { k: 'check', key: 'pinToTop', label: 'Timeline', text: 'Pin timeline to top when at top', note: 'Clicking a column header also jumps to the newest post and keeps it pinned.' },
+      { k: 'check', key: 'pinToTop', label: 'Timeline', text: 'Pin timeline to top when at top', note: 'Clicking a column header also jumps to the newest post and keeps it pinned. For You never pins: X adds to it all the time.' },
       { k: 'check', key: 'pauseOnHover', label: '', text: 'Hold a pinned column still under the pointer', note: 'New posts wait above; the count shows how many.' },
       { k: 'select', key: 'dedupe', label: 'Seen elsewhere', opts: [['off', 'Show every post as usual'], ['dim', 'Dim posts you saw earlier in another column'], ['hide', 'Hide them']], note: 'A post counts as seen after a second on screen. Two copies on screen together are never dimmed.' },
       { k: 'head', label: 'Action bar' },
@@ -763,6 +768,7 @@
     // operation finishing never unfreezes another’s.
     const holds = new Set();
 
+    let lastCovered = true; // the app starts with X Pro covered
     function applySettings() {
       app.dataset.skin = settings.skin;
       // A palette theme (styles.js PALETTES), or Classic: no attribute.
@@ -796,6 +802,11 @@
       app.hidden = !settings.visible || passthrough;
       fab.hidden = settings.visible || passthrough;
       document.documentElement.classList.toggle('sweeter-cover', settings.visible && !passthrough);
+      // The Mac app moves X Pro's page below the window's title bar while
+      // it shows, so the window's buttons don't sit on X Pro's own.
+      const covered = !!settings.visible && !passthrough;
+      if (native && native.covered && covered !== lastCovered) native.covered(covered);
+      lastCovered = covered;
       if (native) reportState();
     }
 
@@ -1202,7 +1213,7 @@
         lastOlder: 0,
         ticking: false,
         full: true,
-        pinned: settings.pinToTop,
+        pinned: settings.pinToTop && key !== 'home-foryou',
       };
       c.scroll.style.position = 'relative';
       c.scroll.addEventListener('scroll', () => onScroll(c), { passive: true });
@@ -1980,6 +1991,7 @@
       const vis = visibleBlocks(s, c);
 
       const st = c.scroll.scrollTop;
+      if (!follows(c)) c.pinned = false;
       // Pinned: the column follows the newest post, a constant stream.
       // Pause on hover: a pinned column keeps still under the pointer (up to
       // three minutes); new posts wait above and the pill counts them.
@@ -1988,7 +2000,7 @@
       // Collapsed or hidden: nothing is on screen to scroll or pin, so the
       // posts are drawn and the scroll state is left as it is.
       const frozen = !!modeOf(c.vid);
-      const pinned = !frozen && !paused && (c.pinned || (settings.pinToTop && st <= PIN_SLOP));
+      const pinned = !frozen && !paused && follows(c) && (c.pinned || (settings.pinToTop && st <= PIN_SLOP));
       const anchor = pinned || frozen ? null : firstVisible(c);
       const delta = anchor ? anchor.offsetTop - st : 0;
 
@@ -2119,14 +2131,49 @@
         c.nodes.clear();
         c.marker = null;
         c.wasGrid = true;
+        c.gridCut = null;
       }
       if (dataChanged) notifyNew(c, s);
       const st = c.scroll.scrollTop;
-      const pinned = !modeOf(c.vid) && (c.pinned || (settings.pinToTop && st <= PIN_SLOP));
+      if (!follows(c)) c.pinned = false;
+      const pinned = !modeOf(c.vid) && follows(c) && (c.pinned || (settings.pinToTop && st <= PIN_SLOP));
+      // Not following: the first tile on screen stays put, as in the list
+      // (the grid is drawn anew each time, new tiles first).
+      const tileKey = (t) => {
+        const g = t.querySelector('[data-i]');
+        return t.dataset.id + ':' + (g ? g.dataset.i : '');
+      };
+      // A reveal (the header's click, a new view, the grid's first draw)
+      // starts at the top with every tile. A grid with no tiles on screen
+      // has nothing to hold still (after Clear, or a filter that matches
+      // nothing), so it shows what arrives.
+      if (!c.list.querySelector('.cell.gt')) c.gridCut = null;
+      const reveal = c.gridCut == null;
+      let anchor = null;
+      if (!pinned && !reveal) {
+        for (const t of c.list.children) {
+          if (t.offsetTop + t.offsetHeight > st) {
+            anchor = { key: tileKey(t), delta: t.offsetTop - st };
+            break;
+          }
+        }
+      }
+      // Not following: newer tiles wait. A wrapping grid can't hold still
+      // while tiles are added before the others (each one moves the rest a
+      // place sideways), so they stay out, the count shows them, and a
+      // click on the column header (pinTop) brings them in. The cut is the
+      // column's newest post when it was drawn, whatever Find and the
+      // filters show, so only posts that arrive later wait.
+      const blocks = visibleBlocks(s, c);
+      if (pinned || c.gridCut == null) c.gridCut = s.sorted.length ? s.sorted[0].sortIndex : null;
       let html = '';
       let n = 0;
       c.visSorts = [];
-      for (const { b, posts } of visibleBlocks(s, c)) {
+      for (const { b, posts } of blocks) {
+        if (!pinned && c.gridCut != null && compareSort(b.sortIndex, c.gridCut) > 0) {
+          c.visSorts.push(b.sortIndex);
+          continue;
+        }
         const ps = b.kind === 'post' ? [b.post] : b.kind === 'thread' ? posts || b.posts : [];
         for (const p of ps) {
           if (!p || p.unavailable) continue;
@@ -2143,10 +2190,12 @@
       }
       c.list.innerHTML = html;
       c.foot.textContent = n ? '' : 'No media here yet.';
+      const at = anchor && Array.from(c.list.children).find((t) => tileKey(t) === anchor.key);
       if (pinned) {
         c.pinned = true;
         c.scroll.scrollTop = 0;
-      } else c.scroll.scrollTop = st;
+      } else if (at) c.scroll.scrollTop = at.offsetTop - anchor.delta;
+      else c.scroll.scrollTop = st;
       c.el.classList.toggle('pinned', !!c.pinned);
       c.rendered = true;
       reselect(c);
@@ -2372,7 +2421,7 @@
         const top = c.scroll.scrollTop <= PIN_SLOP;
         const was = c.pinned;
         const prog = c.paused && c.progTop != null && Math.abs(c.scroll.scrollTop - c.progTop) < 2;
-        if (!prog) c.pinned = top && (c.pinned || settings.pinToTop);
+        if (!prog) c.pinned = top && follows(c) && (c.pinned || settings.pinToTop);
         if (was !== c.pinned) c.el.classList.toggle('pinned', !!c.pinned);
         checkRead(c);
         // Back at the top: the window shrinks again at the next redraw
@@ -2482,6 +2531,7 @@
           c.list.textContent = '';
           c.marker = null;
           c.markerSort = null;
+          c.gridCut = null;
           c.notifiedSort = null;
           c.lastUnread = 0;
           c.selId = null;
@@ -3202,7 +3252,8 @@
     // A click on the column header: go to the newest post and stay there.
     function pinTop(c) {
       if (!c) return;
-      c.pinned = true;
+      c.pinned = follows(c);
+      c.gridCut = null;
       c.scroll.scrollTop = 0;
       store.markAllRead(c.key);
       const s = store.get(c.key);
@@ -3277,7 +3328,8 @@
       paintFilterUI(c);
       redrawPopFor(c.vid);
       // A new view of the column starts at its top.
-      c.pinned = settings.pinToTop;
+      c.pinned = settings.pinToTop && follows(c);
+      c.gridCut = null; // a new view: every tile
       c.scroll.scrollTop = 0;
       renderColumn(c, false);
       reportState();
@@ -3370,7 +3422,8 @@
       c.findTerms = XF.terms(q);
       clearTimeout(c.findTimer);
       const draw = () => {
-        c.pinned = settings.pinToTop;
+        c.pinned = settings.pinToTop && follows(c);
+        c.gridCut = null; // a new view: every tile
         c.scroll.scrollTop = 0;
         renderColumn(c, false);
         if (!c.findPred) {
@@ -4561,7 +4614,8 @@
       settings.colCleared = next;
       persist();
       c.full = true;
-      c.pinned = settings.pinToTop;
+      c.pinned = settings.pinToTop && follows(c);
+      c.gridCut = null; // a new view: every tile
       c.scroll.scrollTop = 0;
       renderColumn(c, false);
       redrawPopFor(c.vid);
@@ -8027,8 +8081,9 @@
       } else delete rec.col.dataset.tint;
       rec.col.dataset.media = colSettings(c).media;
       rec.w.document.title = titleOf(c.vid) + ' · Sweeter';
-      // Keep the reader’s place: the first block on screen stays put.
-      const top = rec.scroll.scrollTop <= PIN_SLOP;
+      // Keep the reader’s place: the first block on screen stays put. At
+      // the top the pop-out follows the newest post, except For You.
+      const top = follows(c) && rec.scroll.scrollTop <= PIN_SLOP;
       let anchor = null;
       let delta = 0;
       if (!top) {

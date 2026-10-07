@@ -24,6 +24,9 @@ final class Purchase: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
     private var polling: Task<Void, Never>?
+    /// Asking the store for a checkout: a second Unlock waits, so two
+    /// sessions (two charges) can't open for one purchase.
+    private var starting = false
     /// No cookies, no cache: the store sees a new visitor each time.
     private let session = URLSession(configuration: .ephemeral)
 
@@ -31,11 +34,14 @@ final class Purchase: NSObject, NSWindowDelegate {
 
     func start() {
         if let w = window { return w.makeKeyAndOrderFront(nil) }
+        guard !starting else { return }
+        starting = true
         // A checkout from an earlier launch may still be paid for: keep its
         // nonce, so its key can still be claimed.
         let nonce = Licensing.Keychain.get(Licensing.Keychain.pending) ?? Self.newNonce()
         Licensing.Keychain.set(Licensing.Keychain.pending, nonce)
         Task {
+            defer { starting = false }
             do {
                 let url = try await checkoutURL(claim: Self.claim(nonce))
                 show(url)

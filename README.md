@@ -70,7 +70,7 @@ The Sweeter app needs none of this.
 ## Using it
 
 - The first time it opens, Sweeter shows a short welcome; after that, a tip when it opens (at most every few hours). Turn tips off in the tip itself or in Settings. **Help ▸ Welcome to Sweeter** shows the welcome again (in Safari: the command palette).
-- **⌥X** shows or hides Sweeter over X Pro. Anything Sweeter doesn’t do yet is one key away in X Pro itself.
+- **⌥X** shows or hides Sweeter over X Pro. Anything Sweeter doesn’t do yet is one key away in X Pro itself. The Mac app always opens in Sweeter’s view; signing in to X happens on X’s own pages, before Sweeter appears.
 - **j / k** move through posts, **1–9** jump to a column, **n** writes a post, **/** finds in a column, **,** opens Settings.
 - **⇧⌘P** opens the command palette: every command, found by typing.
 - **The compose window** (**n**): in the Mac app, a window of its own that floats above Sweeter and keeps the size and place you give it (Settings ▸ Media ▸ Compose turns that off); in Safari, drag it by its title to put it where you like, and it grows as you write. In both, links are underlined (in the Mac app, with a preview card), the emoji button searches every emoji, in your skin tone (Return inserts one), and the GIF button searches X Pro’s own GIFs (from GIPHY) right there, and **B** and **I** (⌘B, ⌘I) make real bold and italic, the formatting X shows, not look-alike letters. Polls, scheduling, location, and Grok images open X Pro’s own composer with your text.

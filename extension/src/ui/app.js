@@ -3685,10 +3685,13 @@
     function renderReader(first) {
       if (!rd) return;
       const ctx = { settings, now: Date.now(), viewer, expanded };
-      const t = document.createElement('template');
-      t.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: embedded });
-      keepMedia(rdPage, t.content);
-      rdPage.replaceChildren(t.content);
+      // A detached element of this document, not a template: a template's
+      // content is another document, and moving a loading picture there
+      // and back could restart it.
+      const fresh = rdPage.ownerDocument.createElement('div');
+      fresh.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: embedded });
+      keepMedia(rdPage, fresh);
+      rdPage.replaceChildren(...fresh.childNodes);
       if (first) rdScroll.scrollTop = 0;
       renderReaderBar();
     }

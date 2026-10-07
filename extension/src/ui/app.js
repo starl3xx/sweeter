@@ -2131,6 +2131,7 @@
         c.nodes.clear();
         c.marker = null;
         c.wasGrid = true;
+        c.gridCut = null;
       }
       if (dataChanged) notifyNew(c, s);
       const st = c.scroll.scrollTop;
@@ -2142,8 +2143,11 @@
         const g = t.querySelector('[data-i]');
         return t.dataset.id + ':' + (g ? g.dataset.i : '');
       };
+      // A reveal (the header's click, or the grid's first draw) starts at
+      // the top with every tile.
+      const reveal = c.gridCut == null;
       let anchor = null;
-      if (!pinned) {
+      if (!pinned && !reveal) {
         for (const t of c.list.children) {
           if (t.offsetTop + t.offsetHeight > st) {
             anchor = { key: tileKey(t), delta: t.offsetTop - st };
@@ -2151,10 +2155,20 @@
           }
         }
       }
+      // Not following: newer tiles wait. A wrapping grid can't hold still
+      // while tiles are added before the others (each one moves the rest a
+      // place sideways), so they stay out, the count shows them, and a
+      // click on the column header (pinTop) brings them in.
+      const blocks = visibleBlocks(s, c);
+      if (pinned || c.gridCut == null) c.gridCut = blocks.length ? blocks[0].b.sortIndex : null;
       let html = '';
       let n = 0;
       c.visSorts = [];
-      for (const { b, posts } of visibleBlocks(s, c)) {
+      for (const { b, posts } of blocks) {
+        if (!pinned && c.gridCut != null && compareSort(b.sortIndex, c.gridCut) > 0) {
+          c.visSorts.push(b.sortIndex);
+          continue;
+        }
         const ps = b.kind === 'post' ? [b.post] : b.kind === 'thread' ? posts || b.posts : [];
         for (const p of ps) {
           if (!p || p.unavailable) continue;
@@ -3233,6 +3247,7 @@
     function pinTop(c) {
       if (!c) return;
       c.pinned = follows(c);
+      c.gridCut = null;
       c.scroll.scrollTop = 0;
       store.markAllRead(c.key);
       const s = store.get(c.key);

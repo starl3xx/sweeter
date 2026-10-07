@@ -93,6 +93,7 @@ Needs Xcode 26 or later and Node.js.
 
 ```sh
 node tests/run.js            # the tests
+node license/test.mjs        # the license server (license/README.md)
 scripts/build-safari.sh      # builds and installs /Applications/Sweeter.app
 ```
 

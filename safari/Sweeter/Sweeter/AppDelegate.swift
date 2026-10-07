@@ -46,6 +46,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Permission is asked for when alerts are turned on (the page calls
         // notifyRequest), not here: a prompt at launch has no context.
         UNUserNotificationCenter.current().delegate = self
+        // A checkout paid for after Sweeter quit (inert while free).
+        Purchase.shared.resume()
         // A post's alert: Like (in the background) and Reply (opens Sweeter).
         UNUserNotificationCenter.current().setNotificationCategories([
             UNNotificationCategory(identifier: "post", actions: [
@@ -153,6 +155,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             about.action = #selector(showAbout)
             about.target = self
             menu.insertItem(menuItem("Check for Updates…", "checkUpdates", "", [], "arrow.down.circle"), at: menu.index(of: about) + 1)
+            // A paid Sweeter: buying and entering a key (Licensing.swift).
+            // Not shown while Sweeter is free.
+            if Licensing.enforced {
+                let at = menu.index(of: about) + 2
+                let buy = NSMenuItem(title: "Unlock Sweeter…", action: #selector(unlockSweeter), keyEquivalent: "")
+                buy.target = self
+                let key = NSMenuItem(title: "Enter License Key…", action: #selector(enterLicenseKey), keyEquivalent: "")
+                key.target = self
+                menu.insertItem(buy, at: at)
+                menu.insertItem(key, at: at + 1)
+            }
         }
         // Settings… (⌘,) and Services, where every Mac app has them: the
         // template's app menu has neither.
@@ -378,6 +391,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return true
         }
     }
+
+    @objc func unlockSweeter() { Purchase.shared.start() }
+    @objc func enterLicenseKey() { Purchase.shared.enterKey() }
 
     private func menuItem(_ title: String, _ command: String, _ key: String, _ mods: NSEvent.ModifierFlags, _ symbol: String?) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: #selector(runCommand(_:)), keyEquivalent: key)

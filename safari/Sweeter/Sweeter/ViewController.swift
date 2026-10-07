@@ -34,6 +34,14 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     let world = WKContentWorld.world(name: "Sweeter")
     let storage = NativeStorage()
     private var cover: LaunchCover?
+    /// The web view's top: the window's top edge while Sweeter covers X Pro
+    /// (its sidebar leaves the window buttons room), or below the title bar
+    /// while X Pro's own page shows (⌥X, a hand-off, X's sign-in pages), so
+    /// the buttons don't sit on X Pro's.
+    private var webTopFull: NSLayoutConstraint!
+    private var webTopBelowTitle: NSLayoutConstraint!
+    private var xProShown = false
+    private var offXPro = false
     /// Whether the page can let the translucent sidebar show through.
     private var translucentSidebar = false
     /// Last state the page reported (theme, font size, column titles), for menus.
@@ -69,10 +77,12 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         // The template storyboard gives the web view a fixed frame; pin it to
         // every edge so it follows the window.
         webView.translatesAutoresizingMaskIntoConstraints = false
+        webTopFull = webView.topAnchor.constraint(equalTo: view.topAnchor)
+        webTopBelowTitle = webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
         NSLayoutConstraint.activate([
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            webView.topAnchor.constraint(equalTo: view.topAnchor),
+            webTopFull,
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
         // No title bar: the page runs to the top edge and the window buttons
@@ -213,6 +223,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             save: (f) => { post({ type: 'save', name: String(f.name || 'Sweeter.json'), text: String(f.text || '') }); },
             allowPopup: (kind) => post({ type: 'allowPopup', kind: String(kind || '') }),
             composeFront: () => post({ type: 'composeFront' }),
+            covered: (on) => post({ type: 'covered', on: !!on }),
             show: () => post({ type: 'show' }),
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
             latestRelease: () => post({ type: 'latestRelease' }),
@@ -482,6 +493,10 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         case "composeFront":
             composePanel?.makeKeyAndOrderFront(nil)
             replyHandler(nil, nil)
+        case "covered":
+            xProShown = !(body["on"] as? Bool ?? true)
+            placeWebView()
+            replyHandler(nil, nil)
         case "show":
             showWindow()
             replyHandler(true, nil)
@@ -615,6 +630,13 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     func command(_ name: String) {
         let arg = (try? JSONSerialization.data(withJSONObject: [name])).flatMap { String(data: $0, encoding: .utf8) } ?? "[\"\"]"
         run("Sweeter.native && Sweeter.native.cmd(\(arg)[0])")
+    }
+
+    private func placeWebView() {
+        let below = xProShown || offXPro
+        guard webTopBelowTitle.isActive != below else { return }
+        NSLayoutConstraint.deactivate([below ? webTopFull : webTopBelowTitle])
+        NSLayoutConstraint.activate([below ? webTopBelowTitle : webTopFull])
     }
 
     func dismissCover() {
@@ -890,7 +912,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             let popup = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: configuration)
             popup.uiDelegate = self
             popup.navigationDelegate = popoutNav
-            let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+            let window = QuietWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
             window.contentView = popup
             window.title = "Sweeter"
@@ -919,7 +941,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         let popup = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: configuration)
         popup.uiDelegate = self
         popup.navigationDelegate = popoutNav
-        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        let panel = QuietPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = true
@@ -979,6 +1001,14 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         panel.beginSheetModal(for: window) { response in
             completionHandler(response == .OK ? panel.urls : nil)
         }
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        // A new page: X's sign-in pages show as they are; pro.x.com starts
+        // covered, and Sweeter's page reports when X Pro shows.
+        offXPro = webView.url?.host != "pro.x.com"
+        xProShown = false
+        placeWebView()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -1222,11 +1252,39 @@ final class NativeStorage {
 /// right edge by stretching that edge to the screen; here it fits the
 /// window to its columns instead (the width the page reports), keeping
 /// the other edge where it is.
+/// A key the page didn't handle (no shortcut, no text field, or Delete in
+/// an empty box) comes back from the web view and ends at the window, which
+/// beeps for an unhandled keyDown. Safari doesn't beep for keys a page
+/// ignores, and Sweeter's windows don't either (a user's report,
+/// 2026-10-07: "it randomly beeps when I type").
+private func quietNoResponder(_ selector: Selector) -> Bool {
+    selector == #selector(NSResponder.keyDown(with:))
+}
+
+final class QuietWindow: NSWindow {
+    override func noResponder(for eventSelector: Selector) {
+        if quietNoResponder(eventSelector) { return }
+        super.noResponder(for: eventSelector)
+    }
+}
+
+final class QuietPanel: NSPanel {
+    override func noResponder(for eventSelector: Selector) {
+        if quietNoResponder(eventSelector) { return }
+        super.noResponder(for: eventSelector)
+    }
+}
+
 final class SweeterWindow: NSWindow {
     /// The sidebar and the columns at their own widths, in points (0: not
     /// reported yet).
     var fitContentWidth: CGFloat = 0
     private var fittingNow = false
+
+    override func noResponder(for eventSelector: Selector) {
+        if quietNoResponder(eventSelector) { return }
+        super.noResponder(for: eventSelector)
+    }
 
     /// The double-click itself, before AppKit stretches the edge: a window
     /// already as wide as the screen gets no frame change from AppKit at

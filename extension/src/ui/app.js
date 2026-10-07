@@ -2526,6 +2526,7 @@
           c.list.textContent = '';
           c.marker = null;
           c.markerSort = null;
+          c.gridCut = null;
           c.notifiedSort = null;
           c.lastUnread = 0;
           c.selId = null;
@@ -3323,6 +3324,7 @@
       redrawPopFor(c.vid);
       // A new view of the column starts at its top.
       c.pinned = settings.pinToTop && follows(c);
+      c.gridCut = null; // a new view: every tile
       c.scroll.scrollTop = 0;
       renderColumn(c, false);
       reportState();
@@ -3416,6 +3418,7 @@
       clearTimeout(c.findTimer);
       const draw = () => {
         c.pinned = settings.pinToTop && follows(c);
+        c.gridCut = null; // a new view: every tile
         c.scroll.scrollTop = 0;
         renderColumn(c, false);
         if (!c.findPred) {
@@ -4607,6 +4610,7 @@
       persist();
       c.full = true;
       c.pinned = settings.pinToTop && follows(c);
+      c.gridCut = null; // a new view: every tile
       c.scroll.scrollTop = 0;
       renderColumn(c, false);
       redrawPopFor(c.vid);

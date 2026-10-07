@@ -4543,8 +4543,14 @@
       deckEl.hidden = !act;
       if (!act) return;
       // Another deck than the last one painted (not the first): fit the
-      // window to it (Mac app).
+      // window to it (Mac app), if it shows another number of columns.
       if (paintedDeck && act.id !== paintedDeck) {
+        // A switch before the last one settled still compares with the
+        // deck it started from.
+        if (!fitApplyPending) {
+          fitFromCount = fitCount;
+          fitSwitchFit = false;
+        }
         fitDeckUntil = Date.now() + 5000;
         reportFit();
       }
@@ -5030,6 +5036,15 @@
     let fitDeckUntil = 0;
     let fitApplyTimer = 0;
     let fitApplyPending = false;
+    // Columns on show, as last measured outside a deck switch, and as the
+    // switch found them: a deck with as many columns keeps the window's
+    // size (Jake, 2026-10-07: only another number of columns resizes it).
+    let fitCount = -1;
+    let fitFromCount = -1;
+    // Once a switch has resized the window (a passing count, as when a
+    // group's hidden columns show for a moment), every later settle in it
+    // applies too, so the window ends at the deck's own width, not there.
+    let fitSwitchFit = false;
     function reportFit() {
       if (!native || !native.fitWidth) return;
       clearTimeout(fitTimer);
@@ -5058,9 +5073,13 @@
         if (apply) {
           fitApplyTimer = setTimeout(() => {
             fitApplyPending = false;
-            native.fitWidth(w, true);
+            if (n !== fitFromCount || fitSwitchFit) {
+              native.fitWidth(w, true);
+              fitSwitchFit = true;
+            }
+            fitCount = n;
           }, 500);
-        }
+        } else fitCount = n;
         if (w === fitSent) return;
         fitSent = w;
         native.fitWidth(w);

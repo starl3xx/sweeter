@@ -499,6 +499,12 @@
     const version = opts.version || '';
     // Present only inside the native Sweeter app (a bridge to Swift).
     const native = opts.native || null;
+    // The Mac app starts in Sweeter's view at every launch: X Pro shown with
+    // ⌥X is for the moment, not for good. (Signed out, pro.x.com sends the
+    // page to x.com/login, where Sweeter doesn't run, so signing in never
+    // needs X Pro shown.) Someone left in X Pro by an old ⌥X saw only X Pro
+    // at every launch (a user's report, 2026-10-07).
+    if (native) settings.visible = true;
     let rules = (opts.mutes || []).filter((r) => !r.expires || r.expires > Date.now());
     let match = Sweeter.mutes.compile(rules);
     let noteMatch = Sweeter.mutes.compileNote ? Sweeter.mutes.compileNote(rules) : null;

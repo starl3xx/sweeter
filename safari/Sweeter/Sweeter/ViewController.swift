@@ -42,6 +42,10 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     private var webTopBelowTitle: NSLayoutConstraint!
     private var xProShown = false
     private var offXPro = false
+    private var scriptsInstalled = false
+    /// A paid build past its trial, without a license: X Pro alone.
+    private var locked = false
+    private var unlockBar: NSView?
     /// A drag strip: the title bar still moves and zooms the window.
     private let titleFill = DragStrip()
     /// Whether the page can let the translucent sidebar show through.
@@ -153,8 +157,14 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         webView.uiDelegate = self
         webView.customUserAgent = Self.safariUserAgent()
         webView.allowsBackForwardNavigationGestures = false
-        if #available(macOS 13.3, *) { webView.isInspectable = true }
-        installScripts()
+        if #available(macOS 13.3, *) { webView.isInspectable = Licensing.inspectable }
+        // Sweeter's view, or, in a paid build past its trial without a
+        // license, X Pro alone: Sweeter's scripts aren't even installed, so
+        // nothing in the page can turn them on (Licensing.swift).
+        if Licensing.entitlement().unlocked { installScripts() } else { lock() }
+        NotificationCenter.default.addObserver(forName: .sweeterLicense, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.licenseChanged() }
+        }
         webView.load(URLRequest(url: xProURL))
     }
 
@@ -190,6 +200,8 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     // MARK: - Scripts
 
     func installScripts() {
+        guard !scriptsInstalled else { return }
+        scriptsInstalled = true
         let controller = webView.configuration.userContentController
         guard let resources = Bundle.main.builtInPlugInsURL?.appendingPathComponent("Sweeter Extension.appex/Contents/Resources"),
               let data = try? Data(contentsOf: resources.appendingPathComponent("manifest.json")),
@@ -648,7 +660,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     }
 
     private func placeWebView() {
-        let below = xProShown || offXPro
+        let below = xProShown || offXPro || locked
         titleFill.isHidden = !below
         if below { fillTitleBar() }
         guard webTopBelowTitle.isActive != below else { return }
@@ -674,6 +686,49 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         let n = css.split(whereSeparator: { !"0123456789.".contains($0) }).compactMap { Double($0) }
         guard n.count >= 3 else { return nil }
         return NSColor(srgbRed: n[0] / 255, green: n[1] / 255, blue: n[2] / 255, alpha: n.count > 3 ? n[3] : 1)
+    }
+
+    // MARK: - Licensing (inert while Sweeter is free)
+
+    /// X Pro alone, below the title bar, which offers the way back.
+    private func lock() {
+        locked = true
+        Log.write("locked: trial over, no license")
+        DispatchQueue.main.async { [weak self] in self?.dismissCover() }
+        let text = NSTextField(labelWithString: "Your Sweeter trial has ended. X Pro works as before.")
+        text.font = .systemFont(ofSize: 12)
+        text.textColor = .secondaryLabelColor
+        let buy = NSButton(title: "Unlock Sweeter…", target: self, action: #selector(unlockSweeter))
+        buy.bezelStyle = .push
+        buy.controlSize = .small
+        buy.keyEquivalent = ""
+        let key = NSButton(title: "Enter Key…", target: self, action: #selector(enterLicenseKey))
+        key.bezelStyle = .push
+        key.controlSize = .small
+        let bar = NSStackView(views: [text, buy, key])
+        bar.spacing = 8
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        titleFill.addSubview(bar)
+        NSLayoutConstraint.activate([
+            bar.trailingAnchor.constraint(equalTo: titleFill.trailingAnchor, constant: -10),
+            bar.centerYAnchor.constraint(equalTo: titleFill.centerYAnchor),
+        ])
+        unlockBar = bar
+        placeWebView()
+    }
+
+    @objc func unlockSweeter() { Purchase.shared.start() }
+    @objc func enterLicenseKey() { Purchase.shared.enterKey() }
+
+    /// A key was activated: Sweeter's view comes back at once.
+    private func licenseChanged() {
+        guard locked, Licensing.entitlement().unlocked else { return }
+        locked = false
+        unlockBar?.removeFromSuperview()
+        unlockBar = nil
+        installScripts()
+        placeWebView()
+        webView.reload()
     }
 
     func dismissCover() {

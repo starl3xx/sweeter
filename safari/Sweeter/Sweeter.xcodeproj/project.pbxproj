@@ -26,6 +26,8 @@
 		4A5B8F66306AC8D80046AF31 /* Intents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F65306AC8D80046AF31 /* Intents.swift */; };
 		4A5B8F68306AC8D80046AF31 /* AboutWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F67306AC8D80046AF31 /* AboutWindow.swift */; };
 		4A5B8F6A306AC8D80046AF31 /* LinkCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F69306AC8D80046AF31 /* LinkCard.swift */; };
+		730F3E0A3A4710E106A5C047 /* Licensing.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA9797A338B563819A35E5D /* Licensing.swift */; };
+		10349C06A2EBC05BA26C07DE /* Purchase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70288C1A5E133E16798CA447 /* Purchase.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +74,8 @@
 		4A5B8F65306AC8D80046AF31 /* Intents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Intents.swift; sourceTree = "<group>"; };
 		4A5B8F67306AC8D80046AF31 /* AboutWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindow.swift; sourceTree = "<group>"; };
 		4A5B8F69306AC8D80046AF31 /* LinkCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkCard.swift; sourceTree = "<group>"; };
+		CCA9797A338B563819A35E5D /* Licensing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Licensing.swift; sourceTree = "<group>"; };
+		70288C1A5E133E16798CA447 /* Purchase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Purchase.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -116,6 +120,8 @@
 				4A5B8F65306AC8D80046AF31 /* Intents.swift */,
 				4A5B8F67306AC8D80046AF31 /* AboutWindow.swift */,
 				4A5B8F69306AC8D80046AF31 /* LinkCard.swift */,
+				CCA9797A338B563819A35E5D /* Licensing.swift */,
+				70288C1A5E133E16798CA447 /* Purchase.swift */,
 				4A5B8F3D306AC8D60046AF31 /* Main.storyboard */,
 				4A5B8F40306AC8D70046AF31 /* Assets.xcassets */,
 				4A5B8F42306AC8D70046AF31 /* Info.plist */,
@@ -271,6 +277,8 @@
 				4A5B8F66306AC8D80046AF31 /* Intents.swift in Sources */,
 				4A5B8F68306AC8D80046AF31 /* AboutWindow.swift in Sources */,
 				4A5B8F6A306AC8D80046AF31 /* LinkCard.swift in Sources */,
+				730F3E0A3A4710E106A5C047 /* Licensing.swift in Sources */,
+				10349C06A2EBC05BA26C07DE /* Purchase.swift in Sources */,
 			);
 		};
 		4A5B8F43306AC8D80046AF31 /* Sources */ = {

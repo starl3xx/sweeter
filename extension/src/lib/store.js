@@ -13,6 +13,7 @@
     const sources = new Map(); // key -> column state
     const listNames = new Map(); // listId -> name
     const details = new Map(); // focal post id -> { blocks (X’s order), updated }
+    let lastPosted = null; // the last post the reader made: shown or why not
     // Single posts X Pro looked up by id, by id: TweetResultByRestId, and
     // TweetResultsByRestIds, which brings the posts an X Article embeds
     // (verified 2026-10-06). The newest POSTS_MAX are kept.
@@ -95,18 +96,31 @@
       // the conversation again (asked for in a user's report, 2026-10-07).
       if (msg.op === 'CreateTweet' || msg.op === 'CreateNoteTweet') {
         const raw = msg.body && msg.body.post;
-        const p = raw ? N.post(raw, 0) : null;
-        if (!p || p.unavailable || !p.id || !p.replyToId) return null;
+        if (!raw) {
+          lastPosted = { shown: false, why: msg.body && msg.body.id ? 'no post in X’s answer' : 'X didn’t take the post', shape: 'none' };
+          emit('posted');
+          return null;
+        }
+        const p = N.post(typed(raw), 0);
         let hit = null;
-        for (const [fid, d] of details) {
-          if (!addReply(d, fid, p)) continue;
-          hit = 'detail:' + fid;
-          emit(hit);
-          if (sources.has('conv:' + fid)) {
-            fillConv(sources.get('conv:' + fid), d);
-            emit('conv:' + fid);
+        if (p && !p.unavailable && p.id && p.replyToId) {
+          for (const [fid, d] of details) {
+            if (!addReply(d, fid, p)) continue;
+            hit = 'detail:' + fid;
+            emit(hit);
+            if (sources.has('conv:' + fid)) {
+              fillConv(sources.get('conv:' + fid), d);
+              emit('conv:' + fid);
+            }
           }
         }
+        // For the app's log: why a reply didn't show, by field names only.
+        lastPosted = {
+          shown: !!hit,
+          why: hit ? '' : !p ? 'unreadable' : p.unavailable ? 'unavailable' : !p.replyToId ? 'not a reply' : 'no open conversation has its post',
+          shape: shapeOf(raw),
+        };
+        emit('posted');
         return hit;
       }
       if (msg.op === 'TweetResultsByRestIds' || msg.op === 'TweetResultByRestId') {
@@ -292,6 +306,21 @@
 
     // X numbers a conversation in the order it shows it, so newest
     // sortIndex first is X’s own order.
+    // X's answer to a new post can leave out the __typename its timelines
+    // carry (the post's, and its author's); normalize needs them.
+    function typed(raw) {
+      const t = Object.assign({ __typename: 'Tweet' }, raw);
+      const u = t.core && t.core.user_results && t.core.user_results.result;
+      if (u && !u.__typename) t.core = Object.assign({}, t.core, { user_results: Object.assign({}, t.core.user_results, { result: Object.assign({ __typename: 'User' }, u) }) });
+      return t;
+    }
+
+    function shapeOf(raw) {
+      const keys = (o) => (o && typeof o === 'object' ? Object.keys(o).sort().join(',') : String(typeof o));
+      const u = raw && raw.core && raw.core.user_results && raw.core.user_results.result;
+      return 'post[' + keys(raw) + '] typename=' + (raw && raw.__typename) + ' user[' + keys(u) + '] usertype=' + (u && u.__typename) + ' usercore[' + keys(u && u.core) + '] reply=' + !!(raw && raw.legacy && raw.legacy.in_reply_to_status_id_str);
+    }
+
     function postsOf(b) {
       return b.kind === 'thread' ? b.posts || [] : b.kind === 'post' && b.post ? [b.post] : [];
     }
@@ -374,6 +403,7 @@
       },
       get: (key) => sources.get(key),
       detail: (id) => details.get(String(id)) || null,
+      lastPosted: () => lastPosted,
       post: (id) => posts.get(String(id)) || null,
       profile: (handle) => profiles.get(String(handle).toLowerCase()) || null,
       // Route this person’s timelines to the profile, by id or (when only

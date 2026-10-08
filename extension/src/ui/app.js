@@ -2718,6 +2718,13 @@
     }
 
     store.subscribe((key) => {
+      // A post the reader made: the app's log says whether its reply
+      // showed in an open conversation, and if not, why (field names only).
+      if (key === 'posted') {
+        const lp = store.lastPosted();
+        if (native && lp) native.log('posted: ' + (lp.shown ? 'reply shown' : 'not shown, ' + lp.why) + '; ' + lp.shape);
+        return;
+      }
       if (key && popouts.size) {
         // With the main window hidden its frames stop; merged columns are fed here then.
         if (document.hidden) for (const e of layout) if (e.merge && e.merge.srcs.includes(key)) feedMerge(e.merge);

@@ -245,7 +245,8 @@ test('a reply the reader posts shows in the open conversation of the post it ans
   const a = mine('mine to focal', focal);
   eq(s.ingest(posted(a)), 'detail:' + focal.rest_id);
   eq(text(), ['focal', 'mine to focal', 'reply one+reply one, part two', 'reply two', 'reply three']);
-  eq(seen, ['detail:' + focal.rest_id, 'conv:' + focal.rest_id]);
+  eq(seen, ['detail:' + focal.rest_id, 'conv:' + focal.rest_id, 'posted']);
+  eq(s.lastPosted().shown, true);
   // The conversation column (sorted) puts it in the same place.
   eq(s.get('conv:' + focal.rest_id).sorted.map((b) => (b.kind === 'post' ? b.post.html : b.posts[0].html)), ['focal', 'mine to focal', 'reply one', 'reply two', 'reply three']);
 
@@ -274,4 +275,24 @@ test('a reply the reader posts shows in the open conversation of the post it ans
   const r4 = F.tweet({ text: 'reply four' });
   s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id, cursor: 'd' }, body: body([F.conversation([r4], '97')]) });
   eq(s.get('conv:' + focal.rest_id).sorted.slice(0, 3).map((b) => (b.kind === 'post' ? b.post.html : b.posts[0].html)), ['focal', 'mine to focal', 'reply four']);
+});
+
+test('a posted reply without the __typename fields X’s answer may leave out still shows', () => {
+  const s = createStore();
+  const focal = F.tweet({ text: 'focal' });
+  const body = (entries) => ({ data: { threaded_conversation_with_injections_v2: { instructions: [{ type: 'TimelineAddEntries', entries }] } } });
+  s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id }, body: body([F.tweetEntry(focal, '100')]) });
+  const t = F.tweet({ text: 'mine', user: F.user('starl3xx', 'starl3xx') });
+  t.legacy.in_reply_to_status_id_str = focal.rest_id;
+  delete t.__typename;
+  delete t.core.user_results.result.__typename;
+  eq(s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 200, id: t.rest_id, post: t, error: null } }), 'detail:' + focal.rest_id);
+  eq(s.detail(focal.rest_id).blocks[1].posts[0].author.handle, 'starl3xx');
+  ok(/typename=undefined/.test(s.lastPosted().shape) && /usertype=undefined/.test(s.lastPosted().shape), s.lastPosted().shape);
+  // A reply to a post no open conversation holds: the log says so, by field names only.
+  const u = F.tweet({ text: 'secret words', user: F.user('starl3xx', 'starl3xx') });
+  u.legacy.in_reply_to_status_id_str = '1';
+  eq(s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 200, id: u.rest_id, post: u, error: null } }), null);
+  eq(s.lastPosted().why, 'no open conversation has its post');
+  ok(!/secret|starl3xx/.test(s.lastPosted().shape), 'no content in the log line');
 });

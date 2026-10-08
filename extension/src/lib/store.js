@@ -312,14 +312,12 @@
         if (b.kind === 'thread' && at === posts.length - 1) {
           d.blocks[i] = Object.assign({}, b, { posts: posts.concat(p) });
         } else {
-          // Its sortIndex falls between its neighbors', so a conversation
-          // column (sorted) puts it in the same place.
-          const next = d.blocks[i + 1];
+          // Its sortIndex is one below the post it answers, so a
+          // conversation column (sorted) puts it right under it, whatever
+          // X Pro's later pages bring: nothing falls between the two.
           let si = b.sortIndex;
           try {
-            const hi = BigInt(b.sortIndex);
-            const lo = next ? BigInt(next.sortIndex) : hi - 10n;
-            if (hi - lo > 1n) si = String((hi + lo) / 2n);
+            si = String(BigInt(b.sortIndex) - 1n);
           } catch (e) {}
           d.blocks.splice(i + 1, 0, { key, sortIndex: si, kind: 'thread', posts: [p] });
         }

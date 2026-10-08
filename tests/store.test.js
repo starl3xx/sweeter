@@ -268,4 +268,10 @@ test('a reply the reader posts shows in the open conversation of the post it ans
   // X Pro's next page of the conversation, with the reply in a block of its own: not shown twice.
   s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id, cursor: 'c' }, body: body([F.conversation([a], '95'), F.conversation([r3], '70')]) });
   eq(JSON.stringify(text()), before);
+
+  // A later page whose block sorts between the focal post and the first reply
+  // that was loaded: the reply still sorts right under the focal post.
+  const r4 = F.tweet({ text: 'reply four' });
+  s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id, cursor: 'd' }, body: body([F.conversation([r4], '97')]) });
+  eq(s.get('conv:' + focal.rest_id).sorted.slice(0, 3).map((b) => (b.kind === 'post' ? b.post.html : b.posts[0].html)), ['focal', 'mine to focal', 'reply four']);
 });

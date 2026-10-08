@@ -96,7 +96,11 @@
       // the conversation again (asked for in a user's report, 2026-10-07).
       if (msg.op === 'CreateTweet' || msg.op === 'CreateNoteTweet') {
         const raw = msg.body && msg.body.post;
-        if (!raw) return null;
+        if (!raw) {
+          lastPosted = { shown: false, why: msg.body && msg.body.id ? 'no post in X’s answer' : 'X didn’t take the post', shape: 'none' };
+          emit('posted');
+          return null;
+        }
         const p = N.post(typed(raw), 0);
         let hit = null;
         if (p && !p.unavailable && p.id && p.replyToId) {

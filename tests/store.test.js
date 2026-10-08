@@ -294,5 +294,10 @@ test('a posted reply without the __typename fields X’s answer may leave out st
   u.legacy.in_reply_to_status_id_str = '1';
   eq(s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 200, id: u.rest_id, post: u, error: null } }), null);
   eq(s.lastPosted().why, 'no open conversation has its post');
+  // An answer without the post: logged too.
+  s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 200, id: '9', error: null } });
+  eq(s.lastPosted().why, 'no post in X’s answer');
+  s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 403, id: null, error: { code: 226, message: 'x' } } });
+  eq(s.lastPosted().why, 'X didn’t take the post');
   ok(!/secret|starl3xx/.test(s.lastPosted().shape), 'no content in the log line');
 });

@@ -1,6 +1,6 @@
 # Sweeter download stats
 
-Updated 2026-10-07 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
+Updated 2026-10-08 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
 
 ## Issues
 
@@ -8,11 +8,13 @@ Updated 2026-10-07 by `.github/workflows/stats.yml` on main. The CSV files here 
 
 ## Downloads
 
-**19** in total (every file of every release, as GitHub counts them, bots and repeats included).
+**24** in total (every file of every release, as GitHub counts them, bots and repeats included).
 
 | Release | File | Downloads |
 |---|---|---:|
-| v0.23.0 | Sweeter-0.23.0.zip | 2 |
+| v0.23.2 | Sweeter-0.23.2.zip | 2 |
+| v0.23.1 | Sweeter-0.23.1.zip | 2 |
+| v0.23.0 | Sweeter-0.23.0.zip | 3 |
 | v0.22.0 | Sweeter-0.22.0.zip | 1 |
 | v0.21.0 | Sweeter-0.21.0.zip | 0 |
 | v0.20.4 | Sweeter-0.20.4.zip | 1 |
@@ -36,10 +38,10 @@ Updated 2026-10-07 by `.github/workflows/stats.yml` on main. The CSV files here 
 
 ## Repo traffic, last 14 days
 
-77 views from 15 unique visitors. History: `views.csv`, `clones.csv`, `referrers.csv`.
+79 views from 16 unique visitors. History: `views.csv`, `clones.csv`, `referrers.csv`.
 
 | Referrer | Views | Unique |
 |---|---:|---:|
-| github.com | 9 | 1 |
+| github.com | 10 | 2 |
 | starl3xx.fun | 8 | 1 |
 | t.co | 4 | 4 |

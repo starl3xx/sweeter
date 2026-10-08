@@ -89,6 +89,26 @@
         if (decks.ingest(msg)) emit('decks');
         return 'decks';
       }
+      // X Pro's answer when the reader posts (CreateTweet, or CreateNoteTweet
+      // for a long post). A reply shows at once in an open conversation of
+      // the post it answers, under that post, as on X: X Pro doesn't ask for
+      // the conversation again (asked for in a user's report, 2026-10-07).
+      if (msg.op === 'CreateTweet' || msg.op === 'CreateNoteTweet') {
+        const raw = msg.body && msg.body.post;
+        const p = raw ? N.post(raw, 0) : null;
+        if (!p || p.unavailable || !p.id || !p.replyToId) return null;
+        let hit = null;
+        for (const [fid, d] of details) {
+          if (!addReply(d, fid, p)) continue;
+          hit = 'detail:' + fid;
+          emit(hit);
+          if (sources.has('conv:' + fid)) {
+            fillConv(sources.get('conv:' + fid), d);
+            emit('conv:' + fid);
+          }
+        }
+        return hit;
+      }
       if (msg.op === 'TweetResultsByRestIds' || msg.op === 'TweetResultByRestId') {
         const d = (msg.body.data && msg.body.data.tweetResult) || [];
         let n = 0;
@@ -172,6 +192,8 @@
           if (ins.type === 'add') {
             for (const b of ins.blocks) {
               if (d.keys.has(b.key)) continue;
+              // A reply the reader just posted, already shown (addReply).
+              if (d.posted && postsOf(b).length && postsOf(b).every((x) => d.posted.has(x.id))) continue;
               d.keys.add(b.key);
               d.blocks.push(b);
             }
@@ -270,6 +292,45 @@
 
     // X numbers a conversation in the order it shows it, so newest
     // sortIndex first is X’s own order.
+    function postsOf(b) {
+      return b.kind === 'thread' ? b.posts || [] : b.kind === 'post' && b.post ? [b.post] : [];
+    }
+
+    // Puts the reader's new reply p into conversation d (focal fid): under
+    // the focal post, at the top of the replies; at the end of the thread
+    // whose last post it answers; or under another reply it answers. A
+    // reply to a post above the focal one isn't part of this view.
+    function addReply(d, fid, p) {
+      if (d.blocks.some((b) => postsOf(b).some((x) => x.id === p.id))) return false;
+      const key = 'conversationthread-' + p.id;
+      for (let i = 0; i < d.blocks.length; i++) {
+        const b = d.blocks[i];
+        const posts = postsOf(b);
+        const at = posts.findIndex((x) => x.id === p.replyToId);
+        if (at < 0) continue;
+        if (b.kind === 'post' && p.replyToId !== fid) return false;
+        if (b.kind === 'thread' && at === posts.length - 1) {
+          d.blocks[i] = Object.assign({}, b, { posts: posts.concat(p) });
+        } else {
+          // Its sortIndex falls between its neighbors', so a conversation
+          // column (sorted) puts it in the same place.
+          const next = d.blocks[i + 1];
+          let si = b.sortIndex;
+          try {
+            const hi = BigInt(b.sortIndex);
+            const lo = next ? BigInt(next.sortIndex) : hi - 10n;
+            if (hi - lo > 1n) si = String((hi + lo) / 2n);
+          } catch (e) {}
+          d.blocks.splice(i + 1, 0, { key, sortIndex: si, kind: 'thread', posts: [p] });
+        }
+        d.keys.add(key);
+        (d.posted || (d.posted = new Set())).add(p.id);
+        d.updated = Date.now();
+        return true;
+      }
+      return false;
+    }
+
     function fillConv(cs, d) {
       cs.blocks = new Map(d.blocks.map((b) => [b.key, b]));
       resort(cs);

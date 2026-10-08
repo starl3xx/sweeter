@@ -98,8 +98,9 @@
     'TweetResultsByRestIds',
     'TweetResultByRestId',
     // X Pro's answer when the reader posts (CreateTweet, or CreateNoteTweet
-    // for a long post): only the new post's id or X's error is passed on,
-    // never the text (see trim).
+    // for a long post): the new post's id or X's error, and the new post
+    // itself, as a timeline carries it, so a reply shows in its open
+    // conversation at once (see trim).
     'CreateTweet',
     'CreateNoteTweet',
     // A profile X Pro opens as a stack (verified 2026-09-28): the person,
@@ -154,7 +155,7 @@
       const r = d.create_tweet || d.notetweet_create || d.create_note_tweet || null;
       const id = r && r.tweet_results && r.tweet_results.result && r.tweet_results.result.rest_id;
       const err = json && Array.isArray(json.errors) ? json.errors[0] : null;
-      return { status: status || 0, id: id ? String(id) : null, error: err ? { code: err.code || null, message: String(err.message || '').slice(0, 300) } : !id && status !== 200 ? { code: null, message: 'HTTP ' + status } : null };
+      return { status: status || 0, id: id ? String(id) : null, post: id ? r.tweet_results.result : null, error: err ? { code: err.code || null, message: String(err.message || '').slice(0, 300) } : !id && status !== 200 ? { code: null, message: 'HTTP ' + status } : null };
     }
     if (op !== 'ViewerAccountSync') return json;
     try {

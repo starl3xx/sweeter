@@ -218,3 +218,54 @@ test('posts X Pro looks up by id are kept by id (an article’s embedded posts, 
   eq(store.ingest({ op: 'TweetResultsByRestIds', vars: {}, body: { data: { tweetResult: [] } } }), null);
   eq(store.post('404'), null);
 });
+
+test('a reply the reader posts shows in the open conversation of the post it answers', () => {
+  const s = createStore();
+  const focal = F.tweet({ text: 'focal' });
+  const r1 = F.tweet({ text: 'reply one' });
+  const r1b = F.tweet({ text: 'reply one, part two' });
+  const r2 = F.tweet({ text: 'reply two' });
+  const r3 = F.tweet({ text: 'reply three' });
+  const body = (entries) => ({ data: { threaded_conversation_with_injections_v2: { instructions: [{ type: 'TimelineAddEntries', entries }] } } });
+  const mine = (text, to) => {
+    const t = F.tweet({ text, user: F.user('starl3xx', 'starl3xx') });
+    t.legacy.in_reply_to_status_id_str = to.rest_id;
+    t.legacy.in_reply_to_screen_name = 'nadiabuilds';
+    t.legacy.conversation_id_str = focal.rest_id;
+    return t;
+  };
+  const posted = (t) => ({ op: 'CreateTweet', vars: {}, body: { status: 200, id: t.rest_id, post: t, error: null } });
+  const text = () => s.detail(focal.rest_id).blocks.map((b) => (b.kind === 'post' ? b.post.html : b.posts.map((p) => p.html).join('+')));
+  s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id }, body: body([F.tweetEntry(focal, '100'), F.conversation([r1, r1b], '90'), F.conversation([r2], '80'), F.conversation([r3], '70')]) });
+  s.declare({ key: 'conv:' + focal.rest_id, kind: 'conversation', title: 'Conversation' });
+  const seen = [];
+  s.subscribe((k) => seen.push(k));
+
+  // To the focal post: first among the replies.
+  const a = mine('mine to focal', focal);
+  eq(s.ingest(posted(a)), 'detail:' + focal.rest_id);
+  eq(text(), ['focal', 'mine to focal', 'reply one+reply one, part two', 'reply two', 'reply three']);
+  eq(seen, ['detail:' + focal.rest_id, 'conv:' + focal.rest_id]);
+  // The conversation column (sorted) puts it in the same place.
+  eq(s.get('conv:' + focal.rest_id).sorted.map((b) => (b.kind === 'post' ? b.post.html : b.posts[0].html)), ['focal', 'mine to focal', 'reply one', 'reply two', 'reply three']);
+
+  // To the last post of a thread: it continues that thread.
+  s.ingest(posted(mine('mine to part two', r1b)));
+  eq(text()[2], 'reply one+reply one, part two+mine to part two');
+
+  // To a post inside a thread: under that thread.
+  s.ingest(posted(mine('mine to reply one', r1)));
+  eq(text().slice(2, 4), ['reply one+reply one, part two+mine to part two', 'mine to reply one']);
+
+  // The same answer again, a post that isn't a reply, a reply elsewhere: no change.
+  const before = JSON.stringify(text());
+  eq(s.ingest(posted(a)), null);
+  eq(s.ingest(posted(F.tweet({ text: 'not a reply' }))), null);
+  eq(s.ingest(posted(mine('elsewhere', F.tweet({ text: 'not here' })))), null);
+  eq(s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 200, id: '1', error: null } }), null);
+  eq(JSON.stringify(text()), before);
+
+  // X Pro's next page of the conversation, with the reply in a block of its own: not shown twice.
+  s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id, cursor: 'c' }, body: body([F.conversation([a], '95'), F.conversation([r3], '70')]) });
+  eq(JSON.stringify(text()), before);
+});

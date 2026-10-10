@@ -1,6 +1,6 @@
 # Sweeter download stats
 
-Updated 2026-10-09 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
+Updated 2026-10-10 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
 
 ## Issues
 
@@ -8,7 +8,7 @@ Updated 2026-10-09 by `.github/workflows/stats.yml` on main. The CSV files here 
 
 ## Downloads
 
-**24** in total (every file of every release, as GitHub counts them, bots and repeats included).
+**25** in total (every file of every release, as GitHub counts them, bots and repeats included).
 
 | Release | File | Downloads |
 |---|---|---:|
@@ -25,7 +25,7 @@ Updated 2026-10-09 by `.github/workflows/stats.yml` on main. The CSV files here 
 | v0.19.1 | Sweeter-0.19.1.zip | 1 |
 | v0.19.0 | Sweeter-0.19.0.zip | 3 |
 | v0.18.3 | Sweeter-0.18.3.zip | 1 |
-| v0.18.2 | Sweeter-0.18.2.zip | 3 |
+| v0.18.2 | Sweeter-0.18.2.zip | 4 |
 | v0.18.1 | Sweeter-0.18.1.zip | 0 |
 | v0.18.0 | Sweeter-0.18.0.zip | 0 |
 | v0.17.6 | Sweeter-0.17.6.zip | 0 |

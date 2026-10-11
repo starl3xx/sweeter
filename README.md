@@ -1,6 +1,6 @@
 # Sweeter download stats
 
-Updated 2026-10-10 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
+Updated 2026-10-11 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
 
 ## Issues
 

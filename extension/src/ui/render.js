@@ -33,6 +33,60 @@
     return out;
   }
 
+  // An avatar's class: organizations choose a square one (X draws it as a
+  // rounded square, even where everyone else is round).
+  function avClass(base, u) {
+    return base + (u && u.square ? ' sq' : '');
+  }
+
+  // Who can reply, in X Pro's words (its bundle, module 282983).
+  const REPLY_WHO = {
+    followers: (o) => 'Accounts following or mentioned by @' + o + ' can reply',
+    community: (o) => 'Accounts @' + o + ' follows or mentioned can reply',
+    invited: (o) => 'Accounts @' + o + ' mentioned can reply',
+    subscribers: (o) => 'Accounts subscribed to or mentioned by @' + o + ' can reply',
+    verified: (o) => 'Verified accounts or accounts mentioned by @' + o + ' can reply',
+    network: (o) => 'Accounts @' + o + ' follows, who they follow, or mentioned can reply',
+  };
+
+  function replyLimitText(l) {
+    if (!l) return '';
+    const f = l.owner && REPLY_WHO[l.policy];
+    return f ? f(l.owner) : 'Only some accounts can reply.';
+  }
+
+  // Under an opened post: who can reply, as X Pro shows it there.
+  function replyLimitLine(p) {
+    const l = p.replyLimit;
+    if (!l) return '';
+    return '<div class="rlim' + (l.canReply ? '' : ' no') + '">' + icon('mention') + '<span><b>' + (l.canReply ? 'You can reply' : 'Who can reply?') + '</b> ' + h(replyLimitText(l)) + '</span></div>';
+  }
+
+  // A community note under the post, as X shows it: the heading, the note,
+  // and the heading opens the note's page on x.com.
+  function noteBox(n) {
+    if (!n) return '';
+    const head = '<span class="bw-h">' + icon('people') + '<b>' + h(n.title) + '</b></span>';
+    return '<div class="bw' + (n.tentative ? ' tentative' : '') + '">' +
+      (n.url ? '<a class="bw-top" href="' + h(safeUrl(n.url)) + '" target="_blank" rel="noopener noreferrer" title="Open this note on x.com">' + head + '</a>' : '<div class="bw-top">' + head + '</div>') +
+      (n.html ? '<div class="bw-tx">' + n.html + '</div>' : '') + '</div>';
+  }
+
+  // An edited post: a pencil after the time; an old version also says a
+  // newer one exists, linked as X does.
+  function editMark(p) {
+    const e = p.edit;
+    if (!e) return '';
+    const first = e.firstMs ? ' · first posted ' + Sweeter.util.fullTime(e.firstMs) : '';
+    return '<span class="edt" title="' + h((e.stale ? 'An earlier version of this post' : 'Edited') + first) + '">' + icon('pencil') + '</span>';
+  }
+
+  function staleNote(p) {
+    const e = p.edit;
+    if (!e || !e.stale) return '';
+    return '<a class="stale" href="https://x.com/i/status/' + h(e.latest) + '" target="_blank" rel="noopener noreferrer">There’s a new version of this post. <b>See the latest post</b></a>';
+  }
+
   function mediaUrl(url, size) {
     const u = safeUrl(url);
     if (u === '#') return u;
@@ -158,7 +212,7 @@
     const head =
       (a.image && ctx.settings.cards !== 'none' ? '<div class="rd-cover"' + (a.w && a.h ? ' style="--r:' + (a.w / a.h).toFixed(4) + '"' : '') + '><img src="' + h(mediaUrl(a.image, 'large')) + '" alt="" decoding="async"></div>' : '') +
       '<h1 class="rd-title">' + h(a.title) + '</h1>' +
-      '<div class="rd-by"><a class="avl" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" aria-label="' + h(p.author.name) + ' on X"><img class="av" src="' + h(avatar(p.author.avatar, false)) + '" alt="" decoding="async"></a>' +
+      '<div class="rd-by"><a class="avl" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" aria-label="' + h(p.author.name) + ' on X"><img class="' + avClass('av', p.author) + '" src="' + h(avatar(p.author.avatar, false)) + '" alt="" decoding="async"></a>' +
       '<div><div class="rd-who"><a class="nm" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer">' + h(p.author.name) + '</a>' + badges(p.author, ctx) + '<a class="hd" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer">@' + h(p.author.handle) + '</a></div>' +
       '<div class="rd-meta">' + time(p.createdMs, p.url, ctx) + (body ? '<span>' + readingMinutes(body) + ' min read</span>' : '') + '</div></div></div>';
     if (!body) {
@@ -239,7 +293,7 @@
     const a = q.article;
     const thumb = q.media.length ? { url: q.media[0].url, alt: q.media[0].alt } : a && a.image ? { url: a.image, alt: '' } : null;
     const tx = q.html || (q.media.length ? '<span class="gone">Media</span>' : '');
-    return '<div class="quote" data-url="' + h(safeUrl(q.url)) + '"><div class="meta"><img class="qav" src="' + h(avatar(q.author.avatar, true)) + '" alt="" loading="lazy" decoding="async">' +
+    return '<div class="quote" data-url="' + h(safeUrl(q.url)) + '"><div class="meta"><img class="' + avClass('qav', q.author) + '" src="' + h(avatar(q.author.avatar, true)) + '" alt="" loading="lazy" decoding="async">' +
       '<span class="nm">' + h(q.author.name) + '</span>' + badges(q.author, ctx) + '<span class="hd">@' + h(q.author.handle) + '</span><span class="tm">' + h(timeLabel(q.createdMs, ctx)) + '</span></div>' +
       (ctx.settings.quoteMedia && thumb && ctx.settings.media !== 'none'
         ? '<img class="qm" src="' + h(mediaUrl(thumb.url, 'small')) + '" alt="' + h(thumb.alt) + '" loading="lazy" decoding="async">'
@@ -262,7 +316,7 @@
   // What sits between the name line and the buttons. With small thumbnails
   // the text and the thumbnail share one row, side by side.
   function body(p, ctx, bare, reply, context) {
-    const rest = articleCard(p.article, ctx) + (p.article ? '' : card(p.card, ctx)) + quote(p.quote, ctx) + context;
+    const rest = articleCard(p.article, ctx) + (p.article ? '' : card(p.card, ctx)) + quote(p.quote, ctx) + noteBox(p.note) + staleNote(p) + context;
     const pics = media(p.media, p.sensitive, ctx, p.author.handle, bare);
     const tk = tickerCards(p.tickers);
     if (ctx.settings.media === 'small' && pics && !bare) return '<div class="sm"><div class="smt">' + reply + text(p, ctx) + tk + rest + '</div>' + pics + '</div>';
@@ -293,9 +347,13 @@
     const s = ctx.settings;
     const on = (k) => s[k] !== false;
     const views = p.counts.views;
+    // X refuses a reply here: the button stays (counts still show), dimmed,
+    // and says who can reply. app.js openCompose shows the same words.
+    const noReply = p.replyLimit && !p.replyLimit.canReply;
+    const replyTitle = noReply ? 'Who can reply? ' + replyLimitText(p.replyLimit) : 'Reply (r)';
     return (
       '<div class="acts">' +
-      (on('barReply') ? '<button type="button" data-act="reply" title="Reply (r)" aria-label="Reply" tabindex="-1">' + icon('reply') + count(p.counts.reply, ctx) + '</button>' : '') +
+      (on('barReply') ? '<button type="button" data-act="reply"' + (noReply ? ' class="off" aria-disabled="true"' : '') + ' title="' + h(replyTitle) + '" aria-label="Reply" tabindex="-1">' + icon('reply') + count(p.counts.reply, ctx) + '</button>' : '') +
       (on('barRepost') ? '<button type="button" data-act="repost" class="' + (p.state.reposted ? 'on-rt' : '') + '" title="' + (p.state.reposted ? 'Undo repost or quote (t)' : 'Repost or quote (t)') + '" aria-label="' + (p.state.reposted ? 'Reposted. Undo repost or quote' : 'Repost or quote') + '" aria-pressed="' + !!p.state.reposted + '" tabindex="-1">' + icon(p.state.reposted ? 'repostOn' : 'repost') + count(p.counts.repost, ctx) + '</button>' : '') +
       (on('barLike') ? '<button type="button" data-act="like" class="' + (p.state.liked ? 'on-like' : '') + '" title="' + (p.state.liked ? 'Unlike (l)' : 'Like (l)') + '" aria-label="Like" aria-pressed="' + !!p.state.liked + '" tabindex="-1">' + icon(p.state.liked ? 'likeOn' : 'like') + count(p.counts.like, ctx) + '</button>' : '') +
       (on('barViews') && s.counts && views ? '<span class="vw" title="' + h(views.toLocaleString('en-US')) + (views === 1 ? ' view' : ' views') + '">' + icon('chartbar') + count(views, ctx) + '</span>' : '') +
@@ -327,12 +385,12 @@
     }
     return '<article class="' + cls + '" data-id="' + h(p.id) + '" data-url="' + h(safeUrl(p.url)) + '">' +
       top +
-      '<a class="avl" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" aria-label="' + h(p.author.name) + ' on X"><img class="av" src="' + h(avatar(p.author.avatar, avatarSmall(ctx.settings))) + '" alt="" loading="lazy" decoding="async"></a>' +
+      '<a class="avl" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" aria-label="' + h(p.author.name) + ' on X"><img class="' + avClass('av', p.author) + '" src="' + h(avatar(p.author.avatar, avatarSmall(ctx.settings))) + '" alt="" loading="lazy" decoding="async"></a>' +
       '<div class="main">' +
       '<div class="meta"><a class="nm" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" title="' + h(p.author.name) + '">' + h(p.author.name) + '</a>' + badges(p.author, ctx) + (p.author.protected ? icon('lock', 'lock') : '') +
-      '<a class="hd" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" title="@' + h(p.author.handle) + '">@' + h(p.author.handle) + '</a>' + time(p.createdMs, p.url, ctx) + '</div>' +
+      '<a class="hd" href="' + profile(p.author.handle) + '" target="_blank" rel="noopener noreferrer" title="@' + h(p.author.handle) + '">@' + h(p.author.handle) + '</a>' + time(p.createdMs, p.url, ctx) + editMark(p) + '</div>' +
       body(p, ctx, bare, reply, context) +
-      (ctx.focal ? focalMeta(p) : '') +
+      (ctx.focal ? focalMeta(p) + replyLimitLine(p) : '') +
       (ctx.focal || ctx.settings.actions === 'always' ? acts(p, ctx) : '<div class="acts" data-lazy></div>') +
       '</div></article>';
   }
@@ -356,7 +414,7 @@
 
   function notification(n, ctx) {
     const minis = n.users.length
-      ? '<div class="minis">' + n.users.slice(0, 8).map((u) => '<a href="' + profile(u.handle) + '" target="_blank" rel="noopener noreferrer" title="' + h(u.name) + '" aria-label="' + h(u.name) + ' on X"><img src="' + h(avatar(u.avatar, true)) + '" alt="" loading="lazy" decoding="async"></a>').join('') + '</div>'
+      ? '<div class="minis">' + n.users.slice(0, 8).map((u) => '<a href="' + profile(u.handle) + '" target="_blank" rel="noopener noreferrer" title="' + h(u.name) + '" aria-label="' + h(u.name) + ' on X"><img' + (u.square ? ' class="sq"' : '') + ' src="' + h(avatar(u.avatar, true)) + '" alt="" loading="lazy" decoding="async"></a>').join('') + '</div>'
       : '';
     const target = n.target && !n.target.unavailable ? '<div class="snip" data-url="' + h(safeUrl(n.target.url)) + '">' + h(n.target.plain) + '</div>' : '';
     return '<article class="cell act" data-note="' + h(n.id) + '" data-url="' + h(safeUrl(n.target && n.target.url ? n.target.url : n.url)) + '">' +
@@ -375,5 +433,5 @@
     return post(b.post, Object.assign({}, ctx, { context: b.context }));
   }
 
-  Sweeter.render = { block, post, notification, timeLabel, avatar, badges, avatarSmall, acts, articlePage, articleMediaList };
+  Sweeter.render = { block, post, notification, timeLabel, avatar, badges, avatarSmall, acts, articlePage, articleMediaList, replyLimitText };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -66,6 +66,9 @@
       badge: vt === 'Business' ? 'gold' : vt === 'Government' ? 'gray' : u.is_blue_verified ? 'blue' : null,
       affiliate: label && label.badge && label.badge.url ? { name: label.description || '', badge: label.badge.url, url: (label.url && label.url.url) || '' } : null,
       protected: !!(u.privacy && u.privacy.protected),
+      // Organizations choose a square avatar (profile_image_shape 'Square';
+      // 165 of 600 accounts in the captures), which X draws as a rounded square.
+      square: u.profile_image_shape === 'Square',
       // How the signed-in account relates to this one (for the Mutuals filter).
       following: !!((u.relationship_perspectives && u.relationship_perspectives.following) || legacy.following),
       followedBy: !!((u.relationship_perspectives && u.relationship_perspectives.followed_by) || legacy.followed_by),
@@ -340,6 +343,77 @@
     return out.slice(0, 4);
   }
 
+  // ---------- what X says about a post besides its text ----------
+  // Read the way X Pro's own tweet model reads them (its bundle, module
+  // 336715, read 2026-10-13).
+
+  // Edited posts. edit_control lists every version's id, oldest first; on
+  // an edited post the list sits in edit_control.edit_control_initial
+  // (verified in the captures). A post with more than one version is
+  // edited, and it is an old version when its own id is not the last.
+  function editInfo(r, id) {
+    const ec = r.edit_control;
+    if (!ec) return null;
+    const ids = (ec.edit_control_initial && ec.edit_control_initial.edit_tweet_ids) || ec.edit_tweet_ids;
+    if (!Array.isArray(ids) || !ids.length) return null;
+    if (ids.length < 2 && ids.map(String).includes(String(id))) return null;
+    const latest = String(ids[ids.length - 1]);
+    const first = snowflakeMs(ids[0]);
+    return { latest, stale: latest !== String(id), firstMs: isFinite(first) ? first : null };
+  }
+
+  // Who can reply: conversation_control's policy, and whether the signed-in
+  // account may. X marks a reply it would refuse with the limited action
+  // "Reply", on the post or on its TweetWithVisibilityResults wrapper.
+  const REPLY_POLICIES = { Followers: 'followers', Community: 'community', ByInvitation: 'invited', Subscribers: 'subscribers', Verified: 'verified', MyNetwork: 'network' };
+
+  function replyLimit(wrapper, r) {
+    const cc = r.legacy && r.legacy.conversation_control;
+    if (!cc) return null;
+    const owner = cc.conversation_owner_results && cc.conversation_owner_results.result && cc.conversation_owner_results.result.core;
+    const refuses = (l) => !!(l && Array.isArray(l.limited_actions) && l.limited_actions.some((a) => a && a.action === 'Reply'));
+    return {
+      policy: REPLY_POLICIES[cc.policy] || 'other',
+      owner: (owner && owner.screen_name) || '',
+      canReply: !(refuses(wrapper && wrapper.limitedActionResults) || refuses(r.limitedActionResults)),
+    };
+  }
+
+  // URT rich text ({text, entities: [{fromIndex, toIndex, ref}]}), ranges in
+  // code points as in notifications: the text with its web links.
+  function urtText(text, entities) {
+    const cps = Array.from(String(text || ''));
+    const links = (entities || [])
+      .filter((e) => e && e.ref && /^https?:\/\//i.test(e.ref.url || '') && e.toIndex > e.fromIndex)
+      .sort((a, b) => a.fromIndex - b.fromIndex);
+    let html = '';
+    let at = 0;
+    for (const e of links) {
+      if (e.fromIndex < at) continue;
+      html += escapeHtml(cps.slice(at, e.fromIndex).join(''));
+      html += '<a class="u" href="' + escapeHtml(e.ref.url) + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(e.ref.url) + '">' + escapeHtml(cps.slice(e.fromIndex, e.toIndex).join('')) + '</a>';
+      at = e.toIndex;
+    }
+    return (html + escapeHtml(cps.slice(at).join(''))).replace(/\n/g, '<br>');
+  }
+
+  // A community note (birdwatch_pivot): X's short heading ("Readers added
+  // context…"), the note with its links, and the note's page. A
+  // "Tentative" note is one X shows only to Community Notes contributors.
+  function communityNote(r) {
+    const b = r.birdwatch_pivot;
+    if (!b) return null;
+    const sub = b.subtitle || {};
+    if (!sub.text && !b.title) return null;
+    const dest = String(b.destinationUrl || '');
+    return {
+      title: String(b.shorttitle || b.title || 'Readers added context'),
+      html: urtText(sub.text, sub.entities),
+      url: /^https?:\/\//i.test(dest) ? dest : dest.startsWith('/') ? 'https://x.com' + dest : '',
+      tentative: b.visualStyle === 'Tentative',
+    };
+  }
+
   function post(result, depth) {
     const r = unwrap(result);
     if (!r) return null;
@@ -412,6 +486,9 @@
       tickers: tickers(r, entities),
       article: art,
       quote: quoted,
+      edit: editInfo(r, id),
+      replyLimit: replyLimit(result !== r ? result : null, r),
+      note: communityNote(r),
       repostedBy: null,
       repostId: null,
     };

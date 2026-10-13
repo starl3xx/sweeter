@@ -483,9 +483,11 @@
         for (const [uid, byOp] of timelines) {
           let changed = false;
           for (const t of byOp.values()) {
-            if (!prune(t.blocks) && !(t.pinned && !without(t.pinned))) continue;
+            const pin = t.pinned ? without(t.pinned) : null;
+            const pinChanged = !!t.pinned && pin !== t.pinned;
+            if (!prune(t.blocks) && !pinChanged) continue;
             changed = true;
-            if (t.pinned && !without(t.pinned)) t.pinned = null;
+            if (pinChanged) t.pinned = pin;
             t.sorted = Array.from(t.blocks.values()).sort((a, b) => compareSort(b.sortIndex, a.sortIndex));
             if (t.pinned) t.sorted = [t.pinned].concat(t.sorted.filter((b) => b.key !== t.pinned.key));
           }

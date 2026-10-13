@@ -8055,8 +8055,13 @@
         if (!r.ok) return toast(XPOST_FAIL[r.reason] || 'X Pro didn’t do that. Try again in X Pro (⌥X).', 'warn');
         // X Pro asked something Sweeter didn't, or opened a dialog: show it there.
         if (r.step !== 'done') return xproHandoff(async () => ({ ok: true }), still);
-        // Gone for this person: out of every column now.
-        if (match === 'Delete' || match === 'Not interested in this post') store.forget(p.id);
+        // Gone for this person: out of every column now, and a conversation
+        // or article open on it closes.
+        if (match === 'Delete' || match === 'Not interested in this post') {
+          store.forget(p.id);
+          for (const c of cols.values()) if (c.detail && c.detail.post && c.detail.post.id === p.id) closeDetail(c);
+          if (rd && rd.post && rd.post.id === p.id) closeReader();
+        }
         toast(say(rule[3]) || 'Done: ' + (typeof match === 'string' ? match : 'X Pro'));
       };
       if (how !== 'ask') return go(false);

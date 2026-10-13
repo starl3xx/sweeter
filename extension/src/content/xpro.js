@@ -718,11 +718,52 @@
     if (o.dryRun) return { ok: true, dry: true };
     const t0 = Date.now();
     btn.click();
-    // Sent: X Pro's own answer names the new post (or X's error), or, if
-    // that never arrives, the composer closes or resets to empty.
+    return sent(t0);
+  }
+
+  // X Pro's reminder to describe images, shown at Post when the person
+  // turned it on in X's settings and an image has no description (module
+  // 89438, _renderAltTextPrompt): a confirmation sheet (608923) whose
+  // confirm, “Add description(s)”, opens X Pro's media editor on its alt
+  // text tab; whose cancel, “Not this time”, posts anyway; and whose mask
+  // (259528, testID "mask") goes back to the composer with nothing sent.
+  function altPrompt() {
+    const sheet = document.querySelector('[data-testid="confirmationSheetDialog"]');
+    const ok = sheet && sheet.querySelector('[data-testid="confirmationSheetConfirm"]');
+    return ok && /^\s*Add descriptions?\s*$/.test(ok.textContent || '') ? sheet : null;
+  }
+
+  // The person's answer, from Sweeter: 'post' (X Pro's “Not this time”),
+  // 'add' (X Pro's media editor, which Sweeter then shows), or 'back'.
+  async function answerAltPrompt(choice) {
+    const sheet = altPrompt();
+    if (!sheet) return { ok: false, reason: 'nosheet' };
+    if (choice === 'post') {
+      const no = sheet.querySelector('[data-testid="confirmationSheetCancel"]');
+      if (!no) return { ok: false, reason: 'nosheet' };
+      const t0 = Date.now();
+      no.click();
+      return sent(t0);
+    }
+    if (choice === 'add') {
+      sheet.querySelector('[data-testid="confirmationSheetConfirm"]').click();
+      return { ok: !!(await waitFor(() => !altPrompt(), 2500)) };
+    }
+    let box = sheet.parentElement;
+    while (box && !box.querySelector('[data-testid="mask"]')) box = box.parentElement;
+    const mask = box && box.querySelector('[data-testid="mask"]');
+    if (mask) mask.click();
+    return { ok: !!(await waitFor(() => !altPrompt(), 2500)) };
+  }
+
+  // After a press of Post: X Pro's own answer names the new post (or X's
+  // error), or, if that never arrives, the composer closes or resets to
+  // empty. X Pro's image description reminder stops it first.
+  async function sent(t0) {
     const answer = () => (lastPostResult && lastPostResult.at >= t0 ? lastPostResult : null);
     const closed = () => !composerOpen() || (norm(editor().innerText) === '' && !postEnabled());
-    const done = await waitFor(() => answer() || closed(), 45000);
+    const done = await waitFor(() => answer() || closed() || altPrompt(), 45000);
+    if (!answer() && altPrompt()) return { ok: false, reason: 'alttext' };
     // X's answer decides. The composer emptying is ambiguous (a photo-only
     // post starts empty), so when it comes first the answer gets a moment
     // more before the fallback counts it as sent.
@@ -1831,5 +1872,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

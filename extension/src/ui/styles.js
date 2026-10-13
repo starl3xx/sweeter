@@ -708,6 +708,11 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-status{flex:1 1 0;min-width:0;font-size:12px;line-height:1.3;color:var(--t3)}
 .cmp-foot .grow{display:none}
 .cmp-xpro,.cmp-count,.cmp-post{flex:0 0 auto;white-space:nowrap}
+/* X Pro's image description reminder, asked above the footer. */
+.cmp-ask{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;padding:9px 12px;border-top:1px solid var(--div)}
+.cmp-ask[hidden]{display:none}
+.cmp-ask-t{flex:1 1 200px;min-width:0;font-size:12px;line-height:1.35;color:var(--t2)}
+.cmp-ask button{flex:0 0 auto;white-space:nowrap}
 .cmp{position:relative}
 .cmp-tools{display:flex;align-items:center;gap:1px;padding:0 12px 8px 60px;flex-wrap:wrap}
 .cmp-tools .tb{width:32px;height:32px;border:0;border-radius:50%;background:none;color:var(--accent-solid);display:grid;place-items:center;cursor:pointer}

@@ -5596,6 +5596,9 @@
           row('foryou', 'spark', 'For you', hasCol('home-foryou') ? took : hasCol('home') ? 'X’s recommended posts' : 'Needs a Home column first', hasCol('home-foryou') || !hasCol('home')) +
           row('notifications', 'bell', 'Notifications', hasCol('notifications:all') ? took : 'Likes, reposts, follows and mentions', hasCol('notifications:all')) +
           row('mentions', 'mention', 'Mentions', hasCol('mentions') ? took : hasCol('notifications:all') ? 'Only posts that mention you' : 'Needs a Notifications column first', hasCol('mentions') || !hasCol('notifications:all')) +
+          // X Pro's other notification tabs, made columns the way Mentions is.
+          row('verified', 'verified', 'Verified notifications', hasCol('notifications:verified') ? took : hasCol('notifications:all') ? 'Only from verified accounts' : 'Needs a Notifications column first', hasCol('notifications:verified') || !hasCol('notifications:all')) +
+          row('priority', 'star', 'Priority notifications', hasCol('notifications:priority') ? took : hasCol('notifications:all') ? 'The ones X ranks first (X shows this tab to larger accounts)' : 'Needs a Notifications column first', hasCol('notifications:priority') || !hasCol('notifications:all')) +
           row('list', 'list', 'List…', 'One of your lists', false) +
           row('search', 'search', 'Search…', 'Words, a #hashtag, or from:someone', false) +
           row('bookmarks', 'bookmark', 'Bookmarks', hasCol('bookmarks') ? took : 'Every post you bookmarked', hasCol('bookmarks')) +
@@ -5700,6 +5703,8 @@
         notifications: () => xpro.addColumn('notifications'),
         foryou: () => xpro.addFromTab(mappingFor('home'), 'For you'),
         mentions: () => xpro.addFromTab(mappingFor('notifications:all'), 'Mentions'),
+        verified: () => xpro.addFromTab(mappingFor('notifications:all'), 'Verified'),
+        priority: () => xpro.addFromTab(mappingFor('notifications:all'), 'Priority'),
         bookmarks: () => xpro.addBookmarks(),
       }[v];
       if (fn) doAdd(fn);

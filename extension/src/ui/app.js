@@ -6015,9 +6015,10 @@
       save({ drafts: out });
     }
     // The open compose window's posts become its draft (or, emptied, drop it).
-    function keepDraft(c) {
+    // stash false: the text box is not to be trusted (pagehide).
+    function keepDraft(c, stash) {
       const key = draftKey(c);
-      if (c === compose) stashPost();
+      if (c === compose && stash !== false) stashPost();
       const t = c.thread;
       if (t.some(postFilled)) {
         const old = drafts.get(key);
@@ -6131,8 +6132,12 @@
     // The last keystrokes, when the page goes (a reload, a closed tab).
     // Never a deletion here: on a quit, the Mac app's compose window can go
     // first and leave its text box empty, which is not the person clearing it.
+    // An empty text box leaves the open post as last stashed, and the rest
+    // of a thread is still kept.
     window.addEventListener('pagehide', () => {
-      if (compose && !cmpBack.hidden && cmpText.value.trim()) keepDraft(compose);
+      if (!compose || cmpBack.hidden) return;
+      if (cmpText.value.trim()) keepDraft(compose);
+      else if (compose.thread.some((p, i) => i !== compose.at && postFilled(p))) keepDraft(compose, false);
     });
 
     // X’s weighted length: links (draftLinks: with https:// or a bare
@@ -6845,7 +6850,7 @@
 
     // “Open in X Pro”: Sweeter steps aside and shows X Pro’s own composer with
     // the text already in it, then comes back when that composer closes.
-    async function handoff(kind, id, key, text, files, tool, gif, styles, poll, more) {
+    async function handoff(kind, id, key, text, files, tool, gif, styles, poll, more, reply) {
       closePop();
       passthrough = true;
       closePalette();
@@ -6868,7 +6873,7 @@
       if (pf && pf.of > pf.posts && more && more.length) {
         const rest = more.slice(pf.posts - 1);
         const one = (p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: p.poll ? draftPoll(p.poll) : null, files: p.files || [] });
-        drafts.set(draftKey({ kind, id }), Object.assign(one(rest[0]), { reply: 'Everyone', more: rest.slice(1).map(one), at: Date.now() }));
+        drafts.set(draftKey({ kind, id }), Object.assign(one(rest[0]), { reply: reply || 'Everyone', more: rest.slice(1).map(one), at: Date.now() }));
         storeDrafts();
         say('X Pro’s composer took ' + pf.posts + ' of ' + pf.of + ' posts. The rest are your draft in Sweeter.');
       }
@@ -7586,7 +7591,8 @@
           queueCard();
           cmpBack.hidden = true;
           releaseComposeWindow();
-          const go = () => c && handoff(c.kind, c.id, c.key, text, files, tool, gif, styles, poll, more);
+          const reply = cmpReply.value;
+          const go = () => c && handoff(c.kind, c.id, c.key, text, files, tool, gif, styles, poll, more, reply);
           // An open image description reminder goes back to X Pro's
           // composer first, so the hand-off starts from a clean one.
           if (altAsk) answerAltText('back').then(go);

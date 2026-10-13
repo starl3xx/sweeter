@@ -602,6 +602,17 @@
     input.files = dt.files;
     input.dispatchEvent(new Event('change', { bubbles: true }));
     const video = files.some((f) => /^video\//.test(f.type));
+    // A later post of a thread: Post is already enabled by the posts before
+    // it, so first wait for this post's own previews (one group each in
+    // its attachments). X Pro keeps Post disabled while media is still
+    // being added or a video uploads (89438: hasPendingMedia, is_uploading).
+    if (item > 0) {
+      const shown = () => {
+        const r = composerRoot();
+        return r && r.querySelectorAll('[data-testid="attachments"] [role="group"]').length >= files.length;
+      };
+      if (!(await waitFor(shown, video ? 120000 : 45000))) return { ok: false, reason: 'upload' };
+    }
     const ready = await waitFor(postEnabled, video ? 120000 : 45000);
     return ready ? { ok: true } : { ok: false, reason: 'upload' };
   }
@@ -872,7 +883,10 @@
       const a = answers();
       return a.find((r) => !r.id) || (a.length >= count ? a[count - 1] : null);
     };
-    const closed = () => !composerOpen() || (norm(editor().innerText) === '' && !postEnabled());
+    // An emptied first box means a single post went; a thread's first box
+    // can be empty all along (a photo-only post), so a thread counts only
+    // X Pro's composer closing.
+    const closed = () => !composerOpen() || (count === 1 && norm(editor().innerText) === '' && !postEnabled());
     const stop = () => watchAlt !== false && altPrompt();
     const done = await waitFor(() => answer() || closed() || stop(), 45000 + 15000 * (count - 1));
     if (!answer() && stop()) return { ok: false, reason: 'alttext' };

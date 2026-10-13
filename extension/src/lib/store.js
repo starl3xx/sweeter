@@ -172,7 +172,8 @@
         return 'profile:' + hl;
       }
       const uid = msg.vars && msg.vars.userId != null ? String(msg.vars.userId) : null;
-      if (uid && watched.has(uid) && msg.op !== 'Likes') {
+      // (A person's followers or following is a column of its own, never a profile tab.)
+      if (uid && watched.has(uid) && msg.op !== 'Likes' && !N.PEOPLE_OPS.includes(msg.op)) {
         let byOp = timelines.get(uid);
         if (!byOp) timelines.set(uid, (byOp = new Map()));
         let t = byOp.get(msg.op);

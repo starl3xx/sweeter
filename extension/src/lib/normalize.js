@@ -11,6 +11,8 @@
 
   // ---------- sources (one per X Pro column) ----------
 
+  const PEOPLE = { Followers: ['followers:', 'Followers'], BlueVerifiedFollowers: ['verifiedfollowers:', 'Verified followers'], Following: ['following:', 'Following'] };
+
   function sourceFor(op, vars) {
     const v = vars || {};
     switch (op) {
@@ -52,6 +54,11 @@
         return v.userId ? { key: 'likes:' + v.userId, kind: 'likes', title: 'Likes' } : null;
       case 'Bookmarks':
         return { key: 'bookmarks', kind: 'bookmarks', title: 'Bookmarks' };
+      // A person's followers or following, as a column of people.
+      case 'Followers':
+      case 'BlueVerifiedFollowers':
+      case 'Following':
+        return v.userId ? { key: PEOPLE[op][0] + v.userId, kind: 'people', title: PEOPLE[op][1] } : null;
       default:
         return null;
     }
@@ -591,6 +598,13 @@
       if (ic.itemType === 'TimelineNotification') {
         return Object.assign(base, { kind: 'notification', n: notification(ic) });
       }
+      // A person: People search, Followers, Following (the same User a
+      // profile carries; verified in a capture 2026-10-13). Home's "Who to
+      // follow" people come in a module, which stays out.
+      if (ic.itemType === 'TimelineUser') {
+        const u = profileOf(ic.user_results && ic.user_results.result);
+        return u ? Object.assign(base, { kind: 'person', person: u }) : null;
+      }
       return null;
     }
     if (c.entryType === 'TimelineTimelineModule' && c.displayType === 'VerticalConversation') {
@@ -660,7 +674,11 @@
   // UserByScreenName (verified 2026-09-28): no `legacy` block; each part
   // has its own object (profile_bio, relationship_counts, banner, website).
   function profile(body) {
-    const r = body && body.data && body.data.user && body.data.user.result;
+    return profileOf(body && body.data && body.data.user && body.data.user.result);
+  }
+
+  // One User, as a profile: also what a person row shows.
+  function profileOf(r) {
     const u = user(r);
     if (!u) return null;
     const bio = r.profile_bio || {};
@@ -693,6 +711,6 @@
     });
   }
 
-  Sweeter.normalize = { sourceFor, user, post, notification, timeline, listInfo, profile };
+  Sweeter.normalize = { sourceFor, user, post, notification, timeline, listInfo, profile, profileOf, PEOPLE_OPS: Object.keys(PEOPLE) };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.normalize;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

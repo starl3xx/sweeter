@@ -92,10 +92,10 @@
   const follows = (c) => c.key !== 'home-foryou';
   const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
-  const KIND_ICON = { merged: 'decks', home: 'home', notifications: 'bell', list: 'list', search: 'search', user: 'profile', likes: 'like', bookmarks: 'bookmark', conversation: 'reply', community: 'people', placeholder: 'open' };
+  const KIND_ICON = { merged: 'decks', home: 'home', notifications: 'bell', list: 'list', search: 'search', user: 'profile', likes: 'like', bookmarks: 'bookmark', conversation: 'reply', community: 'people', people: 'people', placeholder: 'open' };
   // A source whose title is a stand-in ('List', 'Community', a folder): the
   // column's own title in X Pro's page says it better.
-  const standIn = (s) => (s.kind === 'list' && s.title === 'List') || s.kind === 'user' || s.kind === 'conversation' || (s.kind === 'community' && s.key !== 'communities') || /^folder:/.test(s.key);
+  const standIn = (s) => (s.kind === 'list' && s.title === 'List') || s.kind === 'user' || s.kind === 'conversation' || (s.kind === 'community' && s.key !== 'communities') || /^folder:/.test(s.key) || s.kind === 'people';
   // X Pro column types Sweeter shows only as a placeholder: [title, icon].
   // The key is x:<type>, or x:<type>:<path> (decks.js keyFor).
   const PLACEHOLDERS = {
@@ -1834,6 +1834,9 @@
       if (k.startsWith('folder:')) return 'Bookmark folder';
       if (k === 'communities') return 'Communities';
       if (k.startsWith('community:')) return 'Community';
+      if (k.startsWith('verifiedfollowers:')) return 'Verified followers';
+      if (k.startsWith('followers:')) return 'Followers';
+      if (k.startsWith('following:')) return 'Following';
       if (k.startsWith('conv:')) return 'Conversation';
       if (k.startsWith('x:')) return placeholderOf(k)[0];
       const s = store.get(k);
@@ -1896,7 +1899,8 @@
     // show from what is left. Notifications take Find but no filters.
     function visibleBlocks(s, c) {
       const out = [];
-      const filter = s.kind !== 'notifications';
+      // Post filters fit posts: notifications and people have their own Find.
+      const filter = s.kind !== 'notifications' && s.kind !== 'people';
       const pred = filter && c ? c.pred : null;
       const fp = c ? c.findPred : null;
       const hideSeen = c && settings.dedupe === 'hide' && filter ? (p) => seenElsewhere(p, c) : null;
@@ -1924,10 +1928,17 @@
           if (ps.length) out.push({ b, posts: ps });
         } else {
           if (c && c.findNote && b.kind === 'notification' && !c.findNote(b.n)) continue;
+          if (c && c.findTerms && c.findTerms.length && b.kind === 'person' && !findPerson(b.person, c.findTerms)) continue;
           out.push({ b, posts: null });
         }
       }
       return out;
+    }
+
+    // Find in a people column: name, handle and bio.
+    function findPerson(u, terms) {
+      const hay = (u.name + ' @' + u.handle + ' \n ' + (u.bioPlain || '')).toLowerCase();
+      return terms.every((t) => hay.includes(t));
     }
 
     // Autoplaying videos play only while at least half visible.
@@ -2147,7 +2158,7 @@
       observeVideos(c.list);
       if (c.findPred) {
         c.fnum.hidden = false;
-        c.fnum.textContent = String(c.list.querySelectorAll('.cell[data-id], .cell[data-note]').length);
+        c.fnum.textContent = String(c.list.querySelectorAll('.cell[data-id], .cell[data-note], .cell[data-person]').length);
         highlightFinds();
       }
     }
@@ -2808,6 +2819,8 @@
     function blockHas(b, id) {
       if (!b || !id) return false;
       if (b.key === id || (b.post && b.post.id === id) || (b.n && b.n.id === id)) return true;
+      // A person row's selection is '@' and the handle (selectCell).
+      if (b.person && id === '@' + b.person.handle) return true;
       return !!(b.posts && b.posts.some((x) => x && x.id === id));
     }
     // A post's action bar, built when the pointer or the selection reaches
@@ -2838,7 +2851,7 @@
     }
 
     function cellsOf(c) {
-      return Array.from(rootOf(c).querySelectorAll('.cell[data-id], .cell[data-note]'));
+      return Array.from(rootOf(c).querySelectorAll('.cell[data-id], .cell[data-note], .cell[data-person]'));
     }
 
     function selectCell(cell, scroll) {
@@ -2856,7 +2869,7 @@
       if (col) {
         const c = cols.get(col.dataset.vid);
         if (c.detail && cell.closest('.dpane')) c.detail.selId = cell.dataset.id;
-        else c.selId = cell.dataset.id || cell.dataset.note;
+        else c.selId = cell.dataset.id || cell.dataset.note || (cell.dataset.person ? '@' + cell.dataset.person : null);
         setFocus(col.dataset.vid);
       }
       if (scroll) cell.scrollIntoView({ block: 'nearest' });
@@ -2864,7 +2877,7 @@
 
     function reselect(c) {
       if (!c.selId) return;
-      const cell = c.list.querySelector('.cell[data-id="' + CSS.escape(c.selId) + '"], .cell[data-note="' + CSS.escape(c.selId) + '"]');
+      const cell = c.selId.startsWith('@') ? c.list.querySelector('.cell[data-person="' + CSS.escape(c.selId.slice(1)) + '"]') : c.list.querySelector('.cell[data-id="' + CSS.escape(c.selId) + '"], .cell[data-note="' + CSS.escape(c.selId) + '"]');
       if (cell) {
         cell.classList.add('sel');
         fillActs(cell);
@@ -2930,6 +2943,7 @@
       const c = focusCol();
       const cell = c && rootOf(c).querySelector('.cell.sel');
       if (!cell) return;
+      if (cell.dataset.person) return openProfile(cell.dataset.person, { key: c.key });
       const p = cell.dataset.id ? findPost(cell.dataset.id) : null;
       if (p && p.media.length) return openLightbox(p, 0);
       const a = cell.querySelector('.tx a.u, .card[href]');
@@ -4282,12 +4296,12 @@
       const items = [
         { id: 'read', title: 'Mark All as Read', symbol: 'checkmark.circle' },
         { id: 'find', title: 'Find in Column…', symbol: 'magnifyingglass' },
-        s ? { id: 'filters', title: 'Filters', symbol: 'line.3.horizontal.decrease.circle', children: filterList(c).map((f) => ({ id: 'f:' + f.id, title: f.name, checked: on.includes(f.id) })).concat([{ separator: true }, { id: 'fclear', title: 'Clear Filters', enabled: on.length > 0 }]) } : null,
+        s && s.kind !== 'people' ? { id: 'filters', title: 'Filters', symbol: 'line.3.horizontal.decrease.circle', children: filterList(c).map((f) => ({ id: 'f:' + f.id, title: f.name, checked: on.includes(f.id) })).concat([{ separator: true }, { id: 'fclear', title: 'Clear Filters', enabled: on.length > 0 }]) } : null,
         { separator: true },
         { id: 'width', title: 'Width', symbol: 'arrow.left.and.right', children: WIDTHS.map(([n, label]) => ({ id: 'w:' + n, title: label, checked: w === n })).concat([{ separator: true }, { id: 'w:0', title: 'Default Width', checked: !w }, { id: 'equal', title: 'Make All Columns Equal', checked: settings.fit === 'equal' && !Object.keys(settings.colWidths || {}).length }]) },
         { id: 'look', title: 'Icon & Color…', symbol: 'paintpalette' },
         { id: 'media', title: 'Media', symbol: 'photo', children: [['', 'As in Settings'], ['full', 'Full Thumbnails'], ['cropped', 'Cropped Grid'], ['small', 'Small'], ['none', 'None']].map(([v, label]) => ({ id: 'm:' + v, title: label, checked: ((settings.colMedia || {})[c.vid] || '') === v })) },
-        s && s.kind !== 'notifications' ? { id: 'grid', title: (settings.colGrid || {})[c.vid] ? 'Show as Posts' : 'Show as Media Grid', symbol: 'square.grid.3x3' } : null,
+        s && s.kind !== 'notifications' && s.kind !== 'people' ? { id: 'grid', title: (settings.colGrid || {})[c.vid] ? 'Show as Posts' : 'Show as Media Grid', symbol: 'square.grid.3x3' } : null,
         { id: 'rename', title: 'Rename…', symbol: 'pencil' },
         { id: 'collapse', title: collapsed ? 'Expand' : 'Collapse', symbol: collapsed ? 'arrow.up.left.and.arrow.down.right' : 'arrow.down.right.and.arrow.up.left' },
         { id: 'hide', title: 'Hide Column', symbol: 'eye.slash' },
@@ -4393,6 +4407,8 @@
       if (key.startsWith('folder:')) return { key, kind: 'bookmarks', title: 'Bookmark folder' };
       if (key === 'communities') return { key, kind: 'community', title: 'Communities' };
       if (key.startsWith('community:')) return { key, kind: 'community', title: 'Community' };
+      if (/^(verified)?followers:/.test(key)) return { key, kind: 'people', title: key.startsWith('verified') ? 'Verified followers' : 'Followers' };
+      if (key.startsWith('following:')) return { key, kind: 'people', title: 'Following' };
       if (key.startsWith('user:')) return { key, kind: 'user', title: 'Profile' };
       return null;
     }
@@ -5552,6 +5568,8 @@
       nolist: 'That list is gone from X Pro’s chooser.',
     };
     const hasCol = (key) => mapping.some((m) => m.key === key && !removing.has(m.vid));
+    // Either key: X Pro's Priority and Verified routes share one (decks.js keyFor).
+    const hasPriority = () => hasCol('notifications:priority') || hasCol('notifications:verified');
     // By the list’s own name (a column can be renamed in X Pro).
     const hasListNamed = (n) => mapping.some((m) => {
       if (!/^list(top)?:/.test(m.key) || removing.has(m.vid)) return false;
@@ -5592,6 +5610,11 @@
           row('foryou', 'spark', 'For you', hasCol('home-foryou') ? took : hasCol('home') ? 'X’s recommended posts' : 'Needs a Home column first', hasCol('home-foryou') || !hasCol('home')) +
           row('notifications', 'bell', 'Notifications', hasCol('notifications:all') ? took : 'Likes, reposts, follows and mentions', hasCol('notifications:all')) +
           row('mentions', 'mention', 'Mentions', hasCol('mentions') ? took : hasCol('notifications:all') ? 'Only posts that mention you' : 'Needs a Notifications column first', hasCol('mentions') || !hasCol('notifications:all')) +
+          // X Pro's other notification tabs, made columns the way Mentions is.
+          // X Pro's Priority tab, made a column the way Mentions is. (Its
+          // Verified tab is hidden for most accounts, and keyFor can't yet
+          // tell the two routes' columns apart, so only Priority is offered.)
+          row('priority', 'star', 'Priority notifications', hasPriority() ? took : hasCol('notifications:all') ? 'The ones X ranks first (X shows this tab to larger accounts)' : 'Needs a Notifications column first', hasPriority() || !hasCol('notifications:all')) +
           row('list', 'list', 'List…', 'One of your lists', false) +
           row('search', 'search', 'Search…', 'Words, a #hashtag, or from:someone', false) +
           row('bookmarks', 'bookmark', 'Bookmarks', hasCol('bookmarks') ? took : 'Every post you bookmarked', hasCol('bookmarks')) +
@@ -5696,6 +5719,7 @@
         notifications: () => xpro.addColumn('notifications'),
         foryou: () => xpro.addFromTab(mappingFor('home'), 'For you'),
         mentions: () => xpro.addFromTab(mappingFor('notifications:all'), 'Mentions'),
+        priority: () => xpro.addFromTab(mappingFor('notifications:all'), 'Priority'),
         bookmarks: () => xpro.addBookmarks(),
       }[v];
       if (fn) doAdd(fn);
@@ -7674,6 +7698,13 @@
         }
         return;
       }
+      // A person row, outside its links: their profile sheet too.
+      const pr = t.closest('.cell[data-person]');
+      if (pr && !t.closest('a') && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        const pcol = pr.closest('.col');
+        selectCell(pr, false);
+        return openProfile(pr.dataset.person, { key: pcol ? pcol.dataset.key : null });
+      }
       // A person (avatar, name, handle, @mention, a notification’s faces)
       // opens their profile sheet; ⌘-click still opens x.com.
       const who = t.closest('a.avl, a.nm, a.hd, .tx a.m, .minis a, a.who, .rtop a');
@@ -8118,6 +8149,8 @@
       const c = colEl ? cols.get(colEl.dataset.vid) : null;
       const key = colEl ? colEl.dataset.key : null;
       const ref = colEl ? colEl.dataset.vid : null;
+      const pcell = t.closest('.cell[data-person]');
+      if (pcell && !t.closest('a.u')) return userMenu(pcell.dataset.person, c, { key });
       const cell = t.closest('.cell[data-id]');
       const p = cell ? findPost(cell.dataset.id) : null;
       if (p && p.unavailable) return null;
@@ -8178,7 +8211,7 @@
       e.preventDefault();
       const m = menuFor(t);
       if (!m) return;
-      const cell = t.closest('.cell[data-id], .cell[data-note]');
+      const cell = t.closest('.cell[data-id], .cell[data-note], .cell[data-person]');
       if (cell) selectCell(cell, false);
       native.menu({ items: tidy(m.items) }).then((choice) => {
         if (choice && m.run[choice]) m.run[choice]();
@@ -9742,7 +9775,7 @@
               }
               if (!node) continue;
               goCol(e.vid, true);
-              const cell = node.matches('.cell') ? node : node.querySelector('.cell[data-id], .cell[data-note]');
+              const cell = node.matches('.cell') ? node : node.querySelector('.cell[data-id], .cell[data-note], .cell[data-person]');
               requestAnimationFrame(() => {
                 if (cell) selectCell(cell, true);
                 const p = sid && findPost(sid);

@@ -120,6 +120,12 @@
       const id = userId ? userId(prof[1]) : null;
       return id ? 'user:' + id : null;
     }
+    // Followers or Following: once X Pro has said who the person is.
+    const people = /^\/([A-Za-z0-9_]{1,15})\/(followers|following|verified_followers)$/.exec(path);
+    if (people && !RESERVED.has(people[1].toLowerCase())) {
+      const id = userId ? userId(people[1]) : null;
+      return id ? { followers: 'followers:', following: 'following:', verified_followers: 'verifiedfollowers:' }[people[2]] + id : null;
+    }
     if (NOT_COLUMN.test(path) || PAIRED.test(path)) return null;
     const other = OTHER.find((o) => o[0].test(path));
     return 'x:' + (other ? other[1] : 'other') + ':' + path;

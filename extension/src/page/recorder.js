@@ -90,6 +90,10 @@
     'CommunityTweetsTimeline',
     'CommunitiesMainPageTimeline',
     'BookmarkFolderTimeline',
+    // A person's followers or following, as a column of people.
+    'Followers',
+    'BlueVerifiedFollowers',
+    'Following',
     'ListByRestId',
     'SearchTimeline',
     'UserTweets',

@@ -424,10 +424,25 @@
       '<div class="main">' + minis + '<div class="meta"><span class="atx">' + noteText(n, ctx) + '</span>' + time(n.timeMs, n.target ? n.target.url : n.url, ctx) + '</div>' + target + '</div></article>';
   }
 
+  // A person (People search, Followers, Following): avatar, name, bio, and
+  // how they relate to you. A click opens their profile sheet (app.js).
+  function person(u, ctx) {
+    const rel = [u.followedBy ? 'Follows you' : '', u.following ? 'You follow them' : ''].filter(Boolean).join(' · ');
+    const stat = ctx.settings.counts && u.followers != null ? '<b>' + compactCount(u.followers) + '</b> ' + (u.followers === 1 ? 'follower' : 'followers') : '';
+    return '<article class="cell person" data-person="' + h(u.handle) + '">' +
+      '<a class="avl" href="' + profile(u.handle) + '" target="_blank" rel="noopener noreferrer" aria-label="' + h(u.name) + ' on X"><img class="' + avClass('av', u) + '" src="' + h(avatar(u.avatar, avatarSmall(ctx.settings))) + '" alt="" loading="lazy" decoding="async"></a>' +
+      '<div class="main"><div class="meta"><a class="nm" href="' + profile(u.handle) + '" target="_blank" rel="noopener noreferrer" title="' + h(u.name) + '">' + h(u.name) + '</a>' + badges(u, ctx) + (u.protected ? icon('lock', 'lock') : '') +
+      '<a class="hd" href="' + profile(u.handle) + '" target="_blank" rel="noopener noreferrer" title="@' + h(u.handle) + '">@' + h(u.handle) + '</a></div>' +
+      (u.bio ? '<div class="tx">' + u.bio + '</div>' : '') +
+      (stat || rel ? '<div class="pst">' + stat + (stat && rel ? ' · ' : '') + h(rel) + '</div>' : '') +
+      '</div></article>';
+  }
+
   // One timeline block. `visible` is the list of posts that survived the
   // mute filters (threads can lose some of theirs).
   function block(b, ctx, visible) {
     if (b.kind === 'notification') return notification(b.n, ctx);
+    if (b.kind === 'person') return person(b.person, ctx);
     if (b.kind === 'thread') {
       const c = Object.assign({}, ctx, { inThread: true });
       return '<div class="thread">' + visible.map((p) => post(p, c)).join('') + '</div>';

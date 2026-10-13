@@ -34,3 +34,11 @@ test('edited, old-version, community note and square avatar markup', () => {
   ok(html.includes('href="https://x.com/i/status/2104599248595719999"'), 'latest version link');
   ok(html.includes('<div class="bw tentative">') && html.includes('<div class="bw-tx">Context.</div>'), 'note');
 });
+
+test('a person row: name, bio, followers, and how they relate to you', () => {
+  const u = N.profileOf(F.user('acme', 'Acme', { profile_bio: { description: 'Maps.' }, relationship_counts: { followers: 12345 }, relationship_perspectives: { followed_by: true, following: true } }));
+  const html = R.block({ kind: 'person', person: u, key: 'user-1', sortIndex: '1' }, ctx());
+  ok(html.startsWith('<article class="cell person" data-person="acme">'), 'row');
+  ok(html.includes('<div class="tx">Maps.</div>'), 'bio');
+  ok(html.includes('<b>12K</b> followers · Follows you · You follow them') || html.includes('<b>12.3K</b> followers · Follows you · You follow them'), 'stats');
+});

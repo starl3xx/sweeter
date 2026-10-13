@@ -3200,15 +3200,17 @@
       const focalCtx = Object.assign({}, ctx, { focal: true });
       let html = '';
       let focalSeen = false;
+      // A post deleted (or dismissed) while open: a note in its place.
+      const gone = d.gone ? '<article class="cell gone-cell"><div></div><div class="main gone">' + h(d.gone) + '</div></article>' : '';
       for (const b of data ? data.blocks : []) {
         if (b.kind === 'post' && b.post.id === d.id) {
-          html += R.post(b.post, focalCtx);
+          html += gone || R.post(b.post, focalCtx);
           focalSeen = true;
         } else if (b.kind === 'post' && !focalSeen) {
           html += R.post(b.post, ctx, 'ancestor'); // what the post replies to
         } else html += R.block(b, ctx, b.kind === 'thread' ? b.posts : null);
       }
-      if (!focalSeen) html = (d.gone ? '<article class="cell gone-cell"><div></div><div class="main gone">' + h(d.gone) + '</div></article>' : R.post(d.post, focalCtx)) + html;
+      if (!focalSeen) html = (gone || R.post(d.post, focalCtx)) + html;
       const keep = c.dscroll.scrollTop;
       const sel = d.selId;
       c.dlist.innerHTML = html;

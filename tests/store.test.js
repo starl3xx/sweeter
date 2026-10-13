@@ -329,4 +329,8 @@ test('forget: an open conversation drops the post, and a later page keeps it out
   eq(texts(), ['focal', 'reply two']);
   s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id, cursor: 'c' }, body: body([F.conversation([r1], '1')]) });
   eq(texts(), ['focal', 'reply two']);
+  // The conversation of the deleted post itself keeps it in place (the UI
+  // draws a note there).
+  s.forget(focal.rest_id);
+  eq(texts(), ['focal', 'reply two']);
 });

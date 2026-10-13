@@ -2819,6 +2819,8 @@
     function blockHas(b, id) {
       if (!b || !id) return false;
       if (b.key === id || (b.post && b.post.id === id) || (b.n && b.n.id === id)) return true;
+      // A person row's selection is '@' and the handle (selectCell).
+      if (b.person && id === '@' + b.person.handle) return true;
       return !!(b.posts && b.posts.some((x) => x && x.id === id));
     }
     // A post's action bar, built when the pointer or the selection reaches

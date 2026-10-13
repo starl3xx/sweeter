@@ -44,6 +44,28 @@ test('column routes map to Sweeter’s source keys', () => {
   eq(D.keyFor({ pathname: '/notifications/priority' }, (x) => x === 'notifications:verified'), 'notifications:verified');
 });
 
+test('every other X Pro column type gets a placeholder of its own', () => {
+  const k = (p) => D.keyFor({ pathname: p });
+  eq(k('/i/communities/1700000000000000001'), 'x:community:/i/communities/1700000000000000001');
+  eq(k('/i/communities'), 'x:communities:/i/communities');
+  eq(k('/i/bookmarks/1800000000000000002'), 'x:folder:/i/bookmarks/1800000000000000002');
+  eq(k('/messages'), 'x:chat:/messages');
+  eq(k('/i/trends'), 'x:trends:/i/trends');
+  eq(k('/nadiabuilds/status/2104599248595714999/retweets/with_comments'), 'x:quotes:/nadiabuilds/status/2104599248595714999/retweets/with_comments');
+  eq(k('/nadiabuilds/followers'), 'x:followers:/nadiabuilds/followers');
+  eq(k('/i/account_analytics'), 'x:analytics:/i/account_analytics');
+  eq(k('/i/something_new'), 'x:other:/i/something_new');
+  // Two folders are two columns.
+  ok(k('/i/bookmarks/1') !== k('/i/bookmarks/2'));
+  // Still paired by shared post IDs, or never a column.
+  eq(k('/nadiabuilds/likes'), null);
+  eq(k('/nadiabuilds/with_replies'), null);
+  eq(k('/hashtag/buildinpublic'), null);
+  eq(k('/i/columns/picker/list'), null);
+  eq(k('/compose/post'), null);
+  eq(k('/'), null);
+});
+
 test('the sync gives decks, columns and the active deck', () => {
   const s = createStore();
   const seen = [];

@@ -92,8 +92,18 @@
   const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
   const KIND_ICON = { merged: 'decks', home: 'home', notifications: 'bell', list: 'list', search: 'search', user: 'profile', likes: 'like', bookmarks: 'bookmark', conversation: 'reply', placeholder: 'open' };
-  // X Pro column types Sweeter shows only as a placeholder.
-  const PLACEHOLDERS = { explore: 'Explore', grok: 'Grok', drafts: 'Drafts', scheduled: 'Scheduled posts' };
+  // X Pro column types Sweeter shows only as a placeholder: [title, icon].
+  // The key is x:<type>, or x:<type>:<path> (decks.js keyFor).
+  const PLACEHOLDERS = {
+    explore: ['Explore', 'search'], grok: ['Grok', 'spark'], drafts: ['Drafts', 'doc'], scheduled: ['Scheduled posts', 'schedule'],
+    communities: ['Communities', 'people'], community: ['Community', 'people'], folder: ['Bookmark folder', 'folder'], chat: ['Chat', 'chat'],
+    trends: ['Trends', 'flame'], topic: ['Topic', 'tag'], event: ['Event', 'calendar'], quotes: ['Quotes', 'quote'], hidden: ['Hidden replies', 'hide'],
+    history: ['Edit history', 'pencil'], similar: ['Related posts', 'sparkle'], following: ['Following', 'people'], followers: ['Followers', 'people'],
+    analytics: ['Account Analytics', 'chartbar'], notes: ['Community Notes', 'people'], place: ['Place', 'location'], broadcast: ['Broadcast', 'live'],
+  };
+  const placeholderOf = (key) => PLACEHOLDERS[String(key).slice(2).split(':')[0]] || ['X Pro column', 'open'];
+  // A column's icon before the person picks one: its kind's, or its placeholder type's.
+  const kindIcon = (s) => (s && s.kind === 'placeholder' ? placeholderOf(s.key)[1] : KIND_ICON[s ? s.kind : '']) || 'home';
   // A column’s own icon, chosen in the Icon & Color picker: [name, label, search words].
   const COL_ICON_GROUPS = [
     ['Columns', [
@@ -1650,7 +1660,7 @@
       const c = ipState && cols.get(ipState.vid);
       if (!c) return closePicker(true);
       const s = store.get(c.key);
-      const def = KIND_ICON[s ? s.kind : ''] || 'home';
+      const def = kindIcon(s);
       const words = ipBack.querySelector('.ip-q').value.toLowerCase().split(/\s+/).filter(Boolean);
       // Each typed word starts a word of the icon’s name or search words
       // (“bell” finds Notifications, not Fitness through “dumbbell”).
@@ -1688,7 +1698,7 @@
       for (const b of ipBack.querySelectorAll('.ipi')) b.setAttribute('aria-checked', String(b.dataset.ipi === ic));
       for (const b of ipBack.querySelectorAll('.ipsw')) b.setAttribute('aria-checked', String(b.dataset.ipt === tint));
       const s = store.get(c.key);
-      ipBack.querySelector('.ip-prev').innerHTML = '<i class="ip-pi">' + icon(ic || KIND_ICON[s ? s.kind : ''] || 'home') + '</i><b>' + h(titleOf(c.vid)) + '</b>';
+      ipBack.querySelector('.ip-prev').innerHTML = '<i class="ip-pi">' + icon(ic || kindIcon(s)) + '</i><b>' + h(titleOf(c.vid)) + '</b>';
     }
     function pickInPicker(b) {
       if (!ipState || !b) return;
@@ -1813,7 +1823,7 @@
       if (k.startsWith('search:')) return k.split(':').slice(1, -1).join(':');
       if (k === 'bookmarks') return 'Bookmarks';
       if (k.startsWith('conv:')) return 'Conversation';
-      if (k.startsWith('x:')) return PLACEHOLDERS[k.slice(2)] || 'X Pro column';
+      if (k.startsWith('x:')) return placeholderOf(k)[0];
       const s = store.get(k);
       return s ? columnTitle(k, s) : 'Column';
     }
@@ -1990,7 +2000,10 @@
       if (s.kind === 'placeholder') {
         c.list.textContent = '';
         c.nodes.clear();
-        c.foot.innerHTML = 'Sweeter can’t show X’s ' + h(s.title) + ' yet. It stays in your X Pro deck.<br><button class="more" type="button" data-cmd="xpro">Show X Pro</button>';
+        // X Pro itself sends messages to X Chat on x.com (its Messages column says so).
+        const type = s.key.slice(2).split(':')[0];
+        if (type === 'chat') c.foot.innerHTML = 'X Pro no longer shows messages. X moved them to X Chat, on x.com.<br><button class="more" type="button" data-cmd="xchat">Open X Chat</button>';
+        else c.foot.innerHTML = (type === 'other' ? 'Sweeter can’t show this kind of X Pro column yet.' : 'Sweeter can’t show X’s ' + h(s.title) + ' yet.') + ' It stays in your X Pro deck.<br><button class="more" type="button" data-cmd="xpro">Show X Pro</button>';
         c.rendered = true;
         return;
       }
@@ -2479,7 +2492,7 @@
           const tint = TINTS.find((t) => t[0] === (settings.colTints || {})[e.vid]);
           return '<button class="tab' + (e.vid === focusVid ? ' on' : '') + (hid ? ' off' : '') + (e.view ? ' isview' : '') + (e.merge ? ' ismerge' : '') + '" type="button" data-cmd="col" data-vid="' + h(e.vid) + '" data-key="' + h(e.key) + '"' +
             (tint ? ' data-tint style="--cl:' + tint[2] + ';--cd:' + tint[3] + '"' : '') + ' title="' + h(label) + '" aria-label="' + h(label) + '">' +
-            icon((settings.colIcons || {})[e.vid] || KIND_ICON[s.kind] || 'home') + '<i class="dot" hidden></i></button>';
+            icon((settings.colIcons || {})[e.vid] || kindIcon(s)) + '<i class="dot" hidden></i></button>';
         })
         .join('');
       for (const c of cols.values()) updatePill(c);
@@ -4351,7 +4364,7 @@
     // The source a model-named column will have, from its key alone.
     function declared(key) {
       if (key.startsWith('conv:')) return { key, kind: 'conversation', title: 'Conversation' };
-      if (key.startsWith('x:')) return { key, kind: 'placeholder', title: PLACEHOLDERS[key.slice(2)] || 'X Pro column' };
+      if (key.startsWith('x:')) return { key, kind: 'placeholder', title: placeholderOf(key)[0] };
       if (key === 'home') return { key, kind: 'home', title: 'Home' };
       if (key === 'home-foryou') return { key, kind: 'home', title: 'For You' };
       if (key === 'mentions') return { key, kind: 'notifications', title: 'Mentions' };
@@ -7174,6 +7187,9 @@
         case 'markread':
           markAllRead(c);
           break;
+        case 'xchat':
+          openUrl('https://x.com/i/chat');
+          break;
         case 'jump':
           jumpToMarker(c);
           break;
@@ -7981,7 +7997,7 @@
     function paletteCommands() {
       const out = [];
       const add = (id, title, group, run, more) => out.push(Object.assign({ id, title, group, run }, more || {}));
-      for (const [i, e] of shown().entries()) add('go:' + e.vid, 'Go to ' + titleOf(e.vid), 'Columns', () => goCol(e.vid, true), { keys: i < 9 ? (native ? '⌘' : '') + (i + 1) : '', icon: (settings.colIcons || {})[e.vid] || KIND_ICON[(store.get(e.key) || {}).kind] || 'home' });
+      for (const [i, e] of shown().entries()) add('go:' + e.vid, 'Go to ' + titleOf(e.vid), 'Columns', () => goCol(e.vid, true), { keys: i < 9 ? (native ? '⌘' : '') + (i + 1) : '', icon: (settings.colIcons || {})[e.vid] || kindIcon(store.get(e.key)) });
       // Each column’s own menu: the focused column’s first, as written;
       // the others with “in “Name”” so “wl hide” finds Hide in WL.
       const fc = focusCol();

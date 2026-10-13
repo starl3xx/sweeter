@@ -447,13 +447,16 @@
     ['←', 'Back from a conversation'], ['← →', 'Previous, next photo in the viewer'],
     ['Tab', 'Next column'], ['1 to 9', 'Jump to a column'],
     ['Space', 'Page down'], ['⌘ ↑  ⌘ ↓', 'Top (pins), bottom'],
-    ['⌘ K', 'Mark column as read'], [',  ⌘ ,', 'Settings'],
+    ['⌘ K', 'Mark column as read'], ['.', 'Newest posts (top of the column)'],
+    ['s', 'Copy the link to the post'], ['?', 'Keyboard shortcuts'], [',  ⌘ ,', 'Settings'],
     ['⌘ F  /', 'Find in the column'], ['⌥ 1', 'Filter 1 on or off (⌥2 to ⌥9: the others)'],
     ['⌥ 0', 'All filters off'], ['Return', 'From Find to the results'],
     ['c  n', 'Add a column (also ⌥⌘N)'], ['c  ⌫', 'Remove the column (asks first)'],
     ['c  u', 'Undo removing a column'], ['c  o', 'Column menu'],
-    ['c  1', 'Column 1 (c 0: the last one)'], [']  [', 'Next, previous column'],
-    ['g  h', 'Go to Home (g n, g r, g i, g b)'], ['⌘ [', 'Back from a conversation or profile (Mac app)'],
+    ['c  1', 'Column 1 (c 0: the last one)'], ['c  d', 'Copy the column in X Pro'], [']  [', 'Next, previous column'],
+    ['g  h', 'Go to Home (g n Notifications, g r Mentions, g i a list, g b Bookmarks, g l Likes)'],
+    ['g  e', 'Go to Explore (g f Drafts, g t Scheduled, g g Grok) when the deck has one'],
+    ['g  p', 'Your profile (g s Settings, g d Display, g m X Chat on x.com)'], ['⌘ [', 'Back from a conversation or profile (Mac app)'],
     ['⌘ J', 'Next column with unread posts (⇧⌘J: previous)'], ['⌥ ⌘ K', 'Clear every column (Sweeter only)'],
     ['⌥ ⌘ ←', 'Move the column left in X Pro (⌥⌘→: right)'], ['d  1', 'Deck 1 (d n new, d e edit, d m manage)'],
     ['⇧ ⌘ P', 'Command palette: every command, by typing'], ['⌥ ⌘ 1', 'Deck 1 (to ⌥⌘9)'], ['⌃ ⌘ 1', 'Group 1 (⌃⌘0: every column)'],
@@ -3824,7 +3827,8 @@
     }
 
     // A reader key: Esc and ⌘W close; − and + change the text size, 0 resets
-    // it; r, t, l and b press the bar’s buttons. Arrows and Space scroll.
+    // it; r, t, l and b press the bar’s buttons, s copies the link. Arrows
+    // and Space scroll.
     function readerKey(e) {
       if (e.key === 'Escape' || (e.metaKey && e.key.toLowerCase() === 'w')) {
         closeReader();
@@ -3834,6 +3838,8 @@
       if (e.key === '-' || e.key === '_') return readerSize(-1), true;
       if (e.key === '=' || e.key === '+') return readerSize(1), true;
       if (e.key === '0') return readerSize(0), true;
+      // s: the article's post link, as everywhere else (X Pro's Share post).
+      if (e.key === 's') return copyText(rd.post.url, 'Link copied'), true;
       const act = { r: 'reply', t: 'repost', l: 'like', b: 'bookmark' }[e.key];
       const btn = act && rdFoot.querySelector('[data-act="' + act + '"]');
       if (btn) {
@@ -8939,6 +8945,15 @@
           } else if (e.key === 'o') {
             const fc = focusCol();
             if (fc) showColumnMenu(fc, fc.el.querySelector('.cmenu'));
+          } else if (e.key === 'd') {
+            // X Pro's “Duplicate column”: Make a Copy in X Pro.
+            const fc = focusCol();
+            const m = fc && columnMenu(fc);
+            const it = m && m.items.find((x) => x && x.id === 'xcopy');
+            if (it && it.enabled !== false) m.run('xcopy');
+            else if (fc) toast('X Pro can’t copy this column.', 'info');
+          } else if (e.key === 'r') {
+            toast('Move a column with ⌥⌘← and ⌥⌘→, or drag it by its title.', 'info');
           } else if (/^[0-9]$/.test(e.key)) {
             const m = e.key === '0' ? list[list.length - 1] : list[Number(e.key) - 1];
             if (m) goCol(m.vid);
@@ -8949,11 +8964,32 @@
           else if (e.key === 'e') deckAction('edit');
           else if (e.key === 'm') deckAction('manage');
         } else if (pre === 'g') {
-          const want = { h: ['home'], n: ['notifications:all', 'notifications:priority', 'notifications:verified'], r: ['mentions'], b: ['bookmarks'] }[e.key];
-          // Hidden columns count here: going to one shows it.
-          const all = layout.filter((x) => !removing.has(x.vid));
-          let m = want ? all.find((x) => want.includes(x.key)) : null;
-          if (e.key === 'i') m = all.find((x) => store.get(x.key) && store.get(x.key).kind === 'list');
+          // X Pro's own g keys. Those that name a page go there; the rest
+          // go to the first such column (hidden ones count: going shows them).
+          if (e.key === 'p') {
+            paintMe();
+            if (viewer && viewer.handle) openProfile(viewer.handle);
+            else toast('X Pro hasn’t shown which account is signed in yet.', 'info');
+            return true;
+          }
+          if (e.key === 's') return openPrefs(), true;
+          if (e.key === 'd') return openPrefsTab('general'), true;
+          if (e.key === 'm') return openUrl('https://x.com/i/chat'), true;
+          const kindOf = (x) => (store.get(x.key) || {}).kind;
+          const place = (type) => (x) => x.key === 'x:' + type || x.key.startsWith('x:' + type + ':');
+          const want = {
+            h: (x) => x.key === 'home',
+            n: (x) => /^notifications:(all|priority|verified)$/.test(x.key),
+            r: (x) => x.key === 'mentions',
+            b: (x) => x.key === 'bookmarks',
+            i: (x) => kindOf(x) === 'list',
+            l: (x) => kindOf(x) === 'likes',
+            e: place('explore'),
+            f: place('drafts'),
+            t: place('scheduled'),
+            g: place('grok'),
+          }[e.key];
+          const m = want ? layout.filter((x) => !removing.has(x.vid)).find(want) : null;
           if (m) goCol(m.vid);
           else toast('No such column in this deck.', 'info');
         }
@@ -8963,7 +8999,7 @@
         chord = e.key;
         clearTimeout(chordTimer);
         chordTimer = setTimeout(() => (chord = null), 1200);
-        toast({ c: 'c: n add · ⌫ remove · u undo · o menu · 1–9 go', g: 'g: h Home · n Notifications · r Mentions · i List · b Bookmarks', d: 'd: 1–9 deck · n new · e edit · m manage' }[e.key], 'keyboard');
+        toast({ c: 'c: n add · ⌫ remove · u undo · o menu · d copy · 1–9 go', g: 'g: h Home · n Notifications · r Mentions · i List · b Bookmarks · l Likes · e Explore · f Drafts · t Scheduled · p Profile · s Settings · m Chat', d: 'd: 1–9 deck · n new · e edit · m manage' }[e.key], 'keyboard');
         return true;
       }
       if (e.metaKey && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
@@ -9087,6 +9123,24 @@
         }
         case 'n':
           openCompose('new');
+          return true;
+        // X Pro's “Share post” starts with Copy link: Sweeter copies it (a
+        // notification's own link, the one o opens, when one is selected).
+        case 's': {
+          const sp = selectedPost();
+          const p = sp && findPost(sp.id);
+          const c = focusCol();
+          const cell = !p && c ? rootOf(c).querySelector('.cell.sel[data-note]') : null;
+          const url = p ? p.url : cell && cell.dataset.url;
+          if (url) copyText(url, 'Link copied');
+          return true;
+        }
+        // X Pro's “Load new posts”: the newest posts, at the top.
+        case '.':
+          toEdge(false);
+          return true;
+        case '?':
+          openPrefsTab('keys');
           return true;
         case '/':
           openFind(focusCol());

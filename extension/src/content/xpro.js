@@ -743,7 +743,9 @@
       if (!no) return { ok: false, reason: 'nosheet' };
       const t0 = Date.now();
       no.click();
-      return sent(t0);
+      // The sheet closes as X Pro sends; it is never a new stop here.
+      await waitFor(() => !altPrompt(), 2500);
+      return sent(t0, false);
     }
     if (choice === 'add') {
       sheet.querySelector('[data-testid="confirmationSheetConfirm"]').click();
@@ -759,11 +761,12 @@
   // After a press of Post: X Pro's own answer names the new post (or X's
   // error), or, if that never arrives, the composer closes or resets to
   // empty. X Pro's image description reminder stops it first.
-  async function sent(t0) {
+  async function sent(t0, watchAlt) {
     const answer = () => (lastPostResult && lastPostResult.at >= t0 ? lastPostResult : null);
     const closed = () => !composerOpen() || (norm(editor().innerText) === '' && !postEnabled());
-    const done = await waitFor(() => answer() || closed() || altPrompt(), 45000);
-    if (!answer() && altPrompt()) return { ok: false, reason: 'alttext' };
+    const stop = () => watchAlt !== false && altPrompt();
+    const done = await waitFor(() => answer() || closed() || stop(), 45000);
+    if (!answer() && stop()) return { ok: false, reason: 'alttext' };
     // X's answer decides. The composer emptying is ambiguous (a photo-only
     // post starts empty), so when it comes first the answer gets a moment
     // more before the fallback counts it as sent.

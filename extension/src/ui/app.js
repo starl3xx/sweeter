@@ -644,7 +644,7 @@
       '<div class="cmp-drop">Drop photos or a video</div>' +
       '<input type="file" id="cmp-file" accept="' + ACCEPT.join(',') + '" multiple hidden>' +
       // X Pro's image description reminder, asked here (askAltText).
-      '<div class="cmp-ask" hidden role="group" aria-label="Image descriptions"><span class="cmp-ask-t">X Pro reminds you to describe your images for people who can’t see them.</span><button class="cmp-xpro" type="button" data-cmd="cmp-alt-back">Cancel</button><button class="cmp-xpro" type="button" data-cmd="cmp-alt-post">Not This Time</button><button class="cmp-post" type="button" data-cmd="cmp-alt-add">Describe in X Pro</button></div>' +
+      '<div class="cmp-ask" hidden role="group" aria-label="Image descriptions"><span class="cmp-ask-t">X Pro reminds you to describe your images for people who can’t see them.</span><button class="cmp-ask-b" type="button" data-cmd="cmp-alt-back">Cancel</button><button class="cmp-ask-b" type="button" data-cmd="cmp-alt-post">Not This Time</button><button class="cmp-ask-go" type="button" data-cmd="cmp-alt-add">Describe in X Pro</button></div>' +
       '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for GIFs, polls, scheduling, and more">Open in X Pro</button>' +
       '<span class="cmp-status" id="cmp-status" role="status"></span><span class="grow"></span><span class="cmp-count"></span>' +
       '<button class="cmp-post" type="button" data-cmd="cmp-post" title="Post (⌘Return)">Post</button></div>' +
@@ -6327,8 +6327,10 @@
         toast('Who can reply? ' + R.replyLimitText(p.replyLimit), 'info');
         return;
       }
-      // A compose window already open keeps its text as a draft.
+      // A compose window already open keeps its text as a draft, and an
+      // open image description reminder goes back to X Pro's composer.
       if (compose && !cmpBack.hidden) keepDraft(compose);
+      if (altAsk) answerAltText('back');
       compose = { kind, id: id || null, key: key || null, files: [] };
       cmpTitle.textContent = kind === 'reply' ? 'Reply' : kind === 'quote' ? 'Quote post' : 'New post';
       cmpPost.textContent = kind === 'reply' ? 'Reply' : 'Post';
@@ -7323,7 +7325,11 @@
           queueCard();
           cmpBack.hidden = true;
           releaseComposeWindow();
-          if (c) handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null);
+          const go = () => c && handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null);
+          // An open image description reminder goes back to X Pro's
+          // composer first, so the hand-off starts from a clean one.
+          if (altAsk) answerAltText('back').then(go);
+          else go();
           break;
         }
         case 'cmp-photo':

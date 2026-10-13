@@ -44,11 +44,18 @@ test('column routes map to Sweeter’s source keys', () => {
   eq(D.keyFor({ pathname: '/notifications/priority' }, (x) => x === 'notifications:verified'), 'notifications:verified');
 });
 
+test('Communities, bookmark folders: columns of their own', () => {
+  const k = (p) => D.keyFor({ pathname: p });
+  eq(k('/i/communities/1700000000000000001'), 'community:1700000000000000001');
+  eq(k('/i/communities'), 'communities');
+  eq(D.keyFor({ pathname: '/i/lists/42', latest: false }), 'listtop:42');
+  eq(D.keyFor({ pathname: '/i/lists/42', latest: true }), 'list:42');
+  eq(k('/i/bookmarks/1800000000000000002'), 'folder:1800000000000000002');
+});
+
 test('every other X Pro column type gets a placeholder of its own', () => {
   const k = (p) => D.keyFor({ pathname: p });
-  eq(k('/i/communities/1700000000000000001'), 'x:community:/i/communities/1700000000000000001');
-  eq(k('/i/communities'), 'x:communities:/i/communities');
-  eq(k('/i/bookmarks/1800000000000000002'), 'x:folder:/i/bookmarks/1800000000000000002');
+  eq(k('/i/communities/1700000000000000001/about'), 'x:community:/i/communities/1700000000000000001/about');
   eq(k('/messages'), 'x:chat:/messages');
   eq(k('/i/trends'), 'x:trends:/i/trends');
   eq(k('/nadiabuilds/status/2104599248595714999/retweets/with_comments'), 'x:quotes:/nadiabuilds/status/2104599248595714999/retweets/with_comments');

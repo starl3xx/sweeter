@@ -334,3 +334,16 @@ test('forget: an open conversation drops the post, and a later page keeps it out
   s.forget(focal.rest_id);
   eq(texts(), ['focal', 'reply two']);
 });
+
+test('a Community and a bookmark folder fill their columns, in X’s response shapes', () => {
+  const s = createStore();
+  const t1 = F.tweet({ text: 'in the community' });
+  const t2 = F.tweet({ text: 'in the folder' });
+  const ins = (entries) => ({ instructions: [{ type: 'TimelineAddEntries', entries }] });
+  // X Pro's parse paths (module 899844 / 426820).
+  s.ingest({ op: 'CommunityTweetsTimeline', vars: { communityId: '17', rankingMode: 'Recency' }, body: { data: { communityResults: { result: { __typename: 'Community', ranked_community_timeline: { timeline: ins([F.tweetEntry(t1, '5')]) } } } } } });
+  s.ingest({ op: 'BookmarkFolderTimeline', vars: { bookmark_collection_id: '18' }, body: { data: { bookmark_collection_timeline: { timeline: ins([F.tweetEntry(t2, '5')]) } } } });
+  eq(s.get('community:17').sorted.map((b) => b.post.plain), ['in the community']);
+  eq(s.get('folder:18').sorted.map((b) => b.post.plain), ['in the folder']);
+  eq(s.get('folder:18').kind, 'bookmarks');
+});

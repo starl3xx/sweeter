@@ -7,6 +7,10 @@ test('sources map operations to columns', () => {
   eq(N.sourceFor('NotificationsTimeline', { timeline_type: 'All' }).key, 'notifications:all');
   eq(N.sourceFor('NotificationsTimeline', { timeline_type: 'Mentions' }).key, 'mentions');
   eq(N.sourceFor('ViewerBadgeCounts', {}), null);
+  eq(N.sourceFor('ListRankedTweetsTimeline', { listId: '42' }).key, 'listtop:42');
+  eq(N.sourceFor('CommunityTweetsTimeline', { communityId: '17', rankingMode: 'Recency' }).key, 'community:17');
+  eq(N.sourceFor('CommunitiesMainPageTimeline', {}).key, 'communities');
+  eq(N.sourceFor('BookmarkFolderTimeline', { bookmark_collection_id: '18' }).key, 'folder:18');
 });
 
 test('a post keeps author, text, counts, client and time', () => {

@@ -21,7 +21,8 @@
       title: c.title || null, // unset means the route’s own default title
       width: lc(c.width),
       mediaPreview: lc(c.media_preview),
-      latest: !!c.latest,
+      // Latest or Top; null when X Pro's model doesn't say (a list is Latest then).
+      latest: c.latest == null ? null : !!c.latest,
       hideHeader: !!c.hide_header,
       cleared: !!c.show_tweets_after,
       showDrawer: !!c.show_drawer,
@@ -96,7 +97,8 @@
       return (has && alt.find(has)) || alt[0];
     }
     const list = /^\/i\/lists\/(\d+)$/.exec(path);
-    if (list) return 'list:' + list[1];
+    // A list ordered Top is its own source: ranked, not time-ordered.
+    if (list) return (col.latest === false ? 'listtop:' : 'list:') + list[1];
     if (path === '/search') {
       const q = u.searchParams.get('q');
       if (!q) return null;
@@ -105,6 +107,11 @@
       return 'search:' + q + ':' + (P[u.searchParams.get('f')] || 'Top');
     }
     if (path === '/i/bookmarks' || path === '/i/bookmarks/all') return 'bookmarks';
+    const folder = /^\/i\/bookmarks\/(\d+)$/.exec(path);
+    if (folder) return 'folder:' + folder[1];
+    const community = /^\/i\/communities\/(\d+)$/.exec(path);
+    if (community) return 'community:' + community[1];
+    if (path === '/i/communities') return 'communities';
     if (PLACEHOLDER[path]) return 'x:' + PLACEHOLDER[path];
     const conv = /^\/[A-Za-z0-9_]{1,15}\/status\/(\d+)$/.exec(path);
     if (conv) return 'conv:' + conv[1];
@@ -169,7 +176,7 @@
           if ('title' in v) c.title = v.title || null;
           if ('width' in v) c.width = lc(v.width);
           if ('mediaPreview' in v) c.mediaPreview = lc(v.mediaPreview);
-          if ('latest' in v) c.latest = !!v.latest;
+          if ('latest' in v) c.latest = v.latest == null ? null : !!v.latest;
           if (has('hideHeader')) c.hideHeader = !!v.hideHeader;
           if (has('showTweetsAfter')) c.cleared = !!v.showTweetsAfter;
           if ('showDrawer' in v) c.showDrawer = !!v.showDrawer;

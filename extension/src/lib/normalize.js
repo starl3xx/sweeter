@@ -26,6 +26,19 @@
       }
       case 'ListLatestTweetsTimeline':
         return v.listId ? { key: 'list:' + v.listId, kind: 'list', title: 'List', listId: String(v.listId) } : null;
+      // A list column ordered Top (X Pro's bundle, module 45428): ranked, so
+      // a source of its own (never merged, which needs time order).
+      case 'ListRankedTweetsTimeline':
+        return v.listId ? { key: 'listtop:' + v.listId, kind: 'list', title: 'List', listId: String(v.listId) } : null;
+      // A Community, Top or Latest (rankingMode), and the posts of all your
+      // Communities (X Pro's bundle, module 899844).
+      case 'CommunityTweetsTimeline':
+        return v.communityId ? { key: 'community:' + v.communityId, kind: 'community', title: 'Community' } : null;
+      case 'CommunitiesMainPageTimeline':
+        return { key: 'communities', kind: 'community', title: 'Communities' };
+      // A bookmark folder (module 426820: bookmark_collection_id).
+      case 'BookmarkFolderTimeline':
+        return v.bookmark_collection_id ? { key: 'folder:' + v.bookmark_collection_id, kind: 'bookmarks', title: 'Bookmark folder' } : null;
       case 'SearchTimeline':
         return v.rawQuery ? { key: 'search:' + v.rawQuery + ':' + (v.product || 'Top'), kind: 'search', title: v.rawQuery } : null;
       case 'UserTweets':

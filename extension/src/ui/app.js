@@ -5554,8 +5554,8 @@
     const hasCol = (key) => mapping.some((m) => m.key === key && !removing.has(m.vid));
     // By the list’s own name (a column can be renamed in X Pro).
     const hasListNamed = (n) => mapping.some((m) => {
-      if (!m.key.startsWith('list:') || removing.has(m.vid)) return false;
-      const own = store.listName(m.key.slice(5));
+      if (!/^list(top)?:/.test(m.key) || removing.has(m.vid)) return false;
+      const own = store.listName(m.key.slice(m.key.indexOf(':') + 1));
       return own ? own === n : !!(m.dom && m.dom.title === n);
     });
 

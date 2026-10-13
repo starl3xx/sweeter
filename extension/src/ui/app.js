@@ -3827,7 +3827,8 @@
     }
 
     // A reader key: Esc and ⌘W close; − and + change the text size, 0 resets
-    // it; r, t, l and b press the bar’s buttons. Arrows and Space scroll.
+    // it; r, t, l and b press the bar’s buttons, s copies the link. Arrows
+    // and Space scroll.
     function readerKey(e) {
       if (e.key === 'Escape' || (e.metaKey && e.key.toLowerCase() === 'w')) {
         closeReader();
@@ -3837,6 +3838,8 @@
       if (e.key === '-' || e.key === '_') return readerSize(-1), true;
       if (e.key === '=' || e.key === '+') return readerSize(1), true;
       if (e.key === '0') return readerSize(0), true;
+      // s: the article's post link, as everywhere else (X Pro's Share post).
+      if (e.key === 's') return copyText(rd.post.url, 'Link copied'), true;
       const act = { r: 'reply', t: 'repost', l: 'like', b: 'bookmark' }[e.key];
       const btn = act && rdFoot.querySelector('[data-act="' + act + '"]');
       if (btn) {
@@ -9121,11 +9124,15 @@
         case 'n':
           openCompose('new');
           return true;
-        // X Pro's “Share post” starts with Copy link: Sweeter copies it.
+        // X Pro's “Share post” starts with Copy link: Sweeter copies it (a
+        // notification's own link, the one o opens, when one is selected).
         case 's': {
           const sp = selectedPost();
           const p = sp && findPost(sp.id);
-          if (p) copyText(p.url, 'Link copied');
+          const c = focusCol();
+          const cell = !p && c ? rootOf(c).querySelector('.cell.sel[data-note]') : null;
+          const url = p ? p.url : cell && cell.dataset.url;
+          if (url) copyText(url, 'Link copied');
           return true;
         }
         // X Pro's “Load new posts”: the newest posts, at the top.

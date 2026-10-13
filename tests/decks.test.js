@@ -59,7 +59,10 @@ test('every other X Pro column type gets a placeholder of its own', () => {
   eq(k('/messages'), 'x:chat:/messages');
   eq(k('/i/trends'), 'x:trends:/i/trends');
   eq(k('/nadiabuilds/status/2104599248595714999/retweets/with_comments'), 'x:quotes:/nadiabuilds/status/2104599248595714999/retweets/with_comments');
-  eq(k('/nadiabuilds/followers'), 'x:followers:/nadiabuilds/followers');
+  eq(k('/nadiabuilds/followers'), null); // until X Pro says who it is
+  eq(D.keyFor({ pathname: '/nadiabuilds/followers' }, null, () => '12'), 'followers:12');
+  eq(D.keyFor({ pathname: '/nadiabuilds/following' }, null, () => '12'), 'following:12');
+  eq(k('/nadiabuilds/followers_you_follow'), 'x:followers:/nadiabuilds/followers_you_follow');
   eq(k('/i/account_analytics'), 'x:analytics:/i/account_analytics');
   eq(k('/i/something_new'), 'x:other:/i/something_new');
   // Two folders are two columns.

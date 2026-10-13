@@ -283,6 +283,10 @@ img{display:block}
 /* organizations' square avatars stay rounded squares, as X draws them */
 .app[data-round="true"] .av.sq{border-radius:22%}
 .app[data-round="true"] .quote .qav.sq,.app[data-round="true"] .minis img.sq{border-radius:4px}
+/* a person row (People search, Followers, Following) */
+.cell.person{cursor:pointer}
+.pst{margin-top:4px;color:var(--t3);font-size:.86em;font-variant-numeric:tabular-nums}
+.pst b{color:var(--t1);font-weight:600}
 /* edited posts, community notes, who can reply (render.js) */
 .edt{display:inline-flex;flex:0 0 auto;align-self:center;color:var(--t3)}
 .edt svg{width:.86em;height:.86em}

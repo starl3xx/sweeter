@@ -92,10 +92,10 @@
   const follows = (c) => c.key !== 'home-foryou';
   const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
-  const KIND_ICON = { merged: 'decks', home: 'home', notifications: 'bell', list: 'list', search: 'search', user: 'profile', likes: 'like', bookmarks: 'bookmark', conversation: 'reply', community: 'people', placeholder: 'open' };
+  const KIND_ICON = { merged: 'decks', home: 'home', notifications: 'bell', list: 'list', search: 'search', user: 'profile', likes: 'like', bookmarks: 'bookmark', conversation: 'reply', community: 'people', people: 'people', placeholder: 'open' };
   // A source whose title is a stand-in ('List', 'Community', a folder): the
   // column's own title in X Pro's page says it better.
-  const standIn = (s) => (s.kind === 'list' && s.title === 'List') || s.kind === 'user' || s.kind === 'conversation' || (s.kind === 'community' && s.key !== 'communities') || /^folder:/.test(s.key);
+  const standIn = (s) => (s.kind === 'list' && s.title === 'List') || s.kind === 'user' || s.kind === 'conversation' || (s.kind === 'community' && s.key !== 'communities') || /^folder:/.test(s.key) || s.kind === 'people';
   // X Pro column types Sweeter shows only as a placeholder: [title, icon].
   // The key is x:<type>, or x:<type>:<path> (decks.js keyFor).
   const PLACEHOLDERS = {
@@ -1834,6 +1834,8 @@
       if (k.startsWith('folder:')) return 'Bookmark folder';
       if (k === 'communities') return 'Communities';
       if (k.startsWith('community:')) return 'Community';
+      if (/^(verified)?followers:/.test(k)) return 'Followers';
+      if (k.startsWith('following:')) return 'Following';
       if (k.startsWith('conv:')) return 'Conversation';
       if (k.startsWith('x:')) return placeholderOf(k)[0];
       const s = store.get(k);
@@ -4393,6 +4395,8 @@
       if (key.startsWith('folder:')) return { key, kind: 'bookmarks', title: 'Bookmark folder' };
       if (key === 'communities') return { key, kind: 'community', title: 'Communities' };
       if (key.startsWith('community:')) return { key, kind: 'community', title: 'Community' };
+      if (/^(verified)?followers:/.test(key)) return { key, kind: 'people', title: key.startsWith('verified') ? 'Verified followers' : 'Followers' };
+      if (key.startsWith('following:')) return { key, kind: 'people', title: 'Following' };
       if (key.startsWith('user:')) return { key, kind: 'user', title: 'Profile' };
       return null;
     }
@@ -7673,6 +7677,12 @@
           pinTop(hc);
         }
         return;
+      }
+      // A person row, outside its links: their profile sheet too.
+      const pr = t.closest('.cell[data-person]');
+      if (pr && !t.closest('a') && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        const pcol = pr.closest('.col');
+        return openProfile(pr.dataset.person, { key: pcol ? pcol.dataset.key : null });
       }
       // A person (avatar, name, handle, @mention, a notification’s faces)
       // opens their profile sheet; ⌘-click still opens x.com.

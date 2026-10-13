@@ -322,3 +322,14 @@ test('square avatars: organizations choose them', () => {
   eq(N.user(F.user('acme', 'Acme', { profile_image_shape: 'Square' })).square, true);
   eq(N.user(F.user('ivy', 'Ivy', { profile_image_shape: 'Circle' })).square, false);
 });
+
+test('a person row: People search and Followers carry Users as timeline items', () => {
+  const u = F.user('acme', 'Acme', { profile_image_shape: 'Square', profile_bio: { description: 'Maps. https://t.co/x', entities: { description: { urls: [{ url: 'https://t.co/x', expanded_url: 'https://acme.example', display_url: 'acme.example', indices: [6, 20] }] } } }, relationship_counts: { followers: 12345, following: 10 }, relationship_perspectives: { following: false, followed_by: true } });
+  const entry = { entryId: 'user-' + u.rest_id, sortIndex: '7', content: { entryType: 'TimelineTimelineItem', itemContent: { itemType: 'TimelineUser', user_results: { result: u } } } };
+  const ins = N.timeline({ data: { search_by_raw_query: { search_timeline: { timeline: { instructions: [{ type: 'TimelineAddEntries', entries: [entry] }] } } } } });
+  const b = ins[0].blocks[0];
+  eq([b.kind, b.person.handle, b.person.square, b.person.followers, b.person.followedBy], ['person', 'acme', true, 12345, true]);
+  ok(b.person.bio.includes('acme.example'), 'bio with its real link');
+  eq(N.sourceFor('Followers', { userId: '9' }), { key: 'followers:9', kind: 'people', title: 'Followers' });
+  eq(N.sourceFor('Following', { userId: '9' }).key, 'following:9');
+});

@@ -753,6 +753,22 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .pl-len label{display:inline-flex;align-items:center;gap:6px}
 .pl-len select{font:inherit;font-size:12.5px;color:var(--t1);background:transparent;border:1px solid var(--div);border-radius:6px;padding:3px 4px}
 .cmp-tools .tb.on{background:var(--tint)}
+/* A thread's other posts, above and below the one being written. */
+.cmp-prev,.cmp-next{display:flex;flex-direction:column;gap:4px;padding:0 14px 0 64px}
+.cmp-prev{padding-top:8px}
+.cmp-next{padding-bottom:8px}
+.cmp-prev:empty,.cmp-next:empty{display:none}
+.cmp-tp{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 8px;border:1px solid var(--div);border-radius:10px;cursor:pointer;font-size:12.5px;line-height:1.3}
+.cmp-tp:hover,.cmp-tp:focus-visible{background:var(--tint);outline:none}
+.cmp-tp-n{flex:0 0 auto;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:var(--sub);color:var(--t3);font-size:11px;font-weight:600;display:grid;place-items:center}
+.cmp-tp-t{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t1)}
+.cmp-tp-t.none{color:var(--t3);font-style:italic}
+.cmp-tp-m{flex:0 0 auto;color:var(--t3);font-size:11.5px}
+.cmp-tp-x{flex:0 0 auto;width:20px;height:20px;padding:0;border:0;border-radius:50%;background:none;color:var(--t3);display:grid;place-items:center;cursor:pointer}
+.cmp-tp-x svg{width:10px;height:10px}
+.cmp-tp-x:hover{background:var(--div);color:var(--t1)}
+.cmp-tools .tb-add span{font-size:25px;line-height:1;font-weight:300;margin-top:-3px}
+.cmp-tools .tb-add[disabled]{opacity:.4;cursor:default}
 .cm{position:relative;height:96px;border-radius:10px;overflow:hidden;background:var(--sub);border:1px solid var(--div)}
 .cm img,.cm video{height:100%;width:auto;max-width:220px;object-fit:cover;display:block}
 .cm button{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;display:grid;place-items:center;cursor:pointer}

@@ -619,6 +619,8 @@
       '<div class="cmp-back" hidden><div class="cmp" role="dialog" aria-modal="true" aria-label="Compose">' +
       '<div class="cmp-head" title="Drag to move. Double-click to put it back."><span class="cmp-title">New post</span><button class="x" type="button" data-cmd="cmp-cancel" aria-label="Close and keep the draft" title="Close and keep the draft">×</button></div>' +
       '<div class="cmp-ctx"></div>' +
+      // A thread's other posts (renderThread): those before this one, then after.
+      '<div class="cmp-prev"></div>' +
       // A rich text box (editor.js): real bold and italic, links underlined.
       '<div class="cmp-body"><div class="cmp-av"></div><div class="cmp-field"><div id="cmp-text" class="cmp-ed" contenteditable="plaintext-only" role="textbox" aria-multiline="true" spellcheck="true" aria-label="Post text" aria-describedby="cmp-status" data-placeholder="What’s happening?"></div></div></div>' +
       '<div class="cmp-card" hidden></div>' +
@@ -628,6 +630,7 @@
       '<div class="pl-len"><span class="pl-l">Poll length</span>' +
       [['d', 'Days'], ['h', 'Hours'], ['m', 'Minutes']].map(([k, label]) => '<label><span>' + label + '</span><select class="pl-' + k + '" aria-label="Poll length: ' + label.toLowerCase() + '"></select></label>').join('') +
       '</div><button class="pl-rm" type="button" data-cmd="cmp-poll-remove">Remove poll</button></div>' +
+      '<div class="cmp-next"></div>' +
       // Who can reply, on its own line under the text, as X shows it.
       // A select is as wide as its longest option, so the chosen one shows as
       // text and a transparent select lies over it.
@@ -641,6 +644,7 @@
       '<button class="tb" type="button" data-cmd="cmp-bold" title="Bold (⌘B)" aria-label="Bold (⌘B)">' + icon('bold') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-italic" title="Italic (⌘I)" aria-label="Italic (⌘I)">' + icon('italic') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-poll" title="Add a poll" aria-label="Add a poll" aria-pressed="false">' + icon('poll') + '</button>' +
+      '<button class="tb tb-add" type="button" data-cmd="cmp-thread-add" title="Add a post to make a thread" aria-label="Add a post to make a thread"><span aria-hidden="true">+</span></button>' +
       '<span class="sepv"></span>' +
       '<span class="xp-l" title="These open X Pro’s own composer with your text">X Pro' + icon('open') + '</span>' +
       [['schedule', 'schedule', 'Schedule'], ['location', 'pin', 'Tag a location'], ['grok', 'spark', 'Make an image with Grok']]
@@ -746,6 +750,9 @@
     const cmpMedia = shadow.querySelector('.cmp-media');
     const cmpPoll = shadow.querySelector('.cmp-poll');
     const cmpPollBtn = shadow.querySelector('[data-cmd="cmp-poll"]');
+    const cmpPrev = shadow.querySelector('.cmp-prev');
+    const cmpNext = shadow.querySelector('.cmp-next');
+    const cmpAddPost = shadow.querySelector('[data-cmd="cmp-thread-add"]');
     const cmpReply = shadow.querySelector('#cmp-reply');
     const cmpFile = shadow.querySelector('#cmp-file');
     const cmpHead = shadow.querySelector('.cmp-head');
@@ -5973,10 +5980,11 @@
     // 30 days, the newest 50 at most.
     const DRAFT_DAYS = 30;
     const DRAFT_MAX = 50;
+    const THREAD_MAX = 25; // posts in a thread, as X Pro allows (module 89438)
     const drafts = new Map(
       Object.entries(opts.drafts || {})
         .filter(([, d]) => d && typeof d.text === 'string' && Date.now() - (d.at || 0) < DRAFT_DAYS * 864e5)
-        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), files: [], at: d.at, saved: true }]),
+        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), more: draftMore(d.more), files: [], at: d.at, saved: true }]),
     );
     const draftKey = (c) => c.kind + ':' + (c.id || '');
     // A saved poll, as far as it still makes sense: up to four choices of
@@ -5988,26 +5996,130 @@
       const L = Sweeter.text.pollLength(p);
       return { choices, days: L.days, hours: L.hours, minutes: L.minutes };
     }
+    // A thread's later posts in a saved draft (its first is the draft
+    // itself): up to 24 more, each with text, styles, a GIF, and a poll.
+    function draftMore(list) {
+      return (Array.isArray(list) ? list : [])
+        .filter((p) => p && typeof p.text === 'string')
+        .slice(0, THREAD_MAX - 1)
+        .map((p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: draftPoll(p.poll), files: [] }));
+    }
     // Written at once: typing reaches here at most every 600 ms (draftSoon),
     // and a close, a post or a hand-off must be on disk before a quit. Only
     // what can come back is written: a draft that is only attachments isn't.
     function storeDrafts() {
       const out = {};
-      const kept = Array.from(drafts.entries()).filter(([, d]) => (d.text || '').trim() || d.gif || d.poll);
-      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: d.poll || null, at: d.at || Date.now() };
+      const kept = Array.from(drafts.entries()).filter(([, d]) => [d].concat(d.more || []).some((p) => (p.text || '').trim() || p.gif || p.poll));
+      const slim = (p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: p.poll || null });
+      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = Object.assign(slim(d), { reply: d.reply || 'Everyone', more: (d.more || []).map(slim), at: d.at || Date.now() });
       save({ drafts: out });
     }
-    // The open compose window's text becomes its draft (or, emptied, drops it).
+    // The open compose window's posts become its draft (or, emptied, drop it).
     function keepDraft(c) {
       const key = draftKey(c);
-      if (cmpText.value.trim() || c.files.length || c.gif || c.poll) {
+      if (c === compose) stashPost();
+      const t = c.thread;
+      if (t.some(postFilled)) {
         const old = drafts.get(key);
-        const d = { text: cmpText.value, files: c.files, gif: c.gif, reply: cmpReply.value, styles: syncedStyles(), poll: c.poll ? draftPoll(c.poll) : null };
-        const same = old && old.text === d.text && old.gif === d.gif && old.reply === d.reply && JSON.stringify(old.styles || null) === JSON.stringify(d.styles) && JSON.stringify(old.poll || null) === JSON.stringify(d.poll);
-        if (same && old.files === d.files) return;
+        const one = (p) => ({ text: p.text, files: p.files, gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
+        const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one) });
+        const sig = (x) => JSON.stringify([x].concat(x.more || []).map((p) => [p.text, p.gif || null, p.styles || null, p.poll || null]).concat([x.reply]));
+        const same = old && sig(old) === sig(d);
+        const files = (x) => [x.files].concat((x.more || []).map((p) => p.files));
+        if (same && files(old).length === files(d).length && files(old).every((f, i) => f === files(d)[i])) return;
         drafts.set(key, Object.assign(d, { at: same ? old.at : Date.now() }));
       } else if (!drafts.delete(key)) return;
       storeDrafts();
+    }
+
+    // ---------- a thread ----------
+    // compose.thread holds every post of the window; the one at compose.at
+    // is live (its text in the text box, its media, GIF, poll and styles on
+    // compose), and stashPost copies it back before anything reads the list.
+    // X Pro takes up to THREAD_MAX posts in a thread (module 89438).
+    const emptyPost = () => ({ text: '', styles: { bold: [], italic: [] }, files: [], gif: null, poll: null });
+    const postFilled = (p) => !!(p && ((p.text || '').trim() || (p.files && p.files.length) || p.gif || p.poll));
+    function livePost() {
+      return { text: cmpText.value, styles: syncedStyles(), files: compose.files, gif: compose.gif, poll: compose.poll };
+    }
+    function stashPost() {
+      if (compose && compose.thread) compose.thread[compose.at] = livePost();
+    }
+    // Post i into the window, as openCompose does with a draft.
+    function loadPost(i) {
+      const c = compose;
+      const p = c.thread[i];
+      c.at = i;
+      cmpText.value = p.text;
+      c.styles = { bold: (p.styles && p.styles.bold) || [], italic: (p.styles && p.styles.italic) || [] };
+      c.prev = p.text;
+      c.files = p.files.slice();
+      c.gif = p.gif || null;
+      c.poll = p.poll && !(c.kind === 'quote' && i === 0) ? draftPoll(p.poll) : null;
+      cmpText.removeAttribute('aria-invalid');
+      emoEl.hidden = true;
+      closeGifs(false);
+      renderMedia();
+      renderPoll();
+      renderThread();
+      updateCount();
+      cmpText.focus();
+    }
+    // The other posts, as rows above and below the one being written: its
+    // number, the start of its text, what it carries, and a remove button.
+    function renderThread() {
+      const c = compose;
+      const t = (c && c.thread) || [];
+      const many = t.length > 1;
+      const base = c && c.kind === 'reply' ? 'Reply' : c && c.kind === 'quote' ? 'Quote post' : 'New post';
+      if (c) cmpTitle.textContent = many ? base + ' · ' + (c.at + 1) + ' of ' + t.length : base;
+      if (cmpWin && !cmpWin.closed) cmpWin.document.title = cmpTitle.textContent;
+      if (c) cmpPost.textContent = c.kind === 'reply' ? (many ? 'Reply all' : 'Reply') : many ? 'Post all' : 'Post';
+      const carries = (p) => {
+        const n = p.files.length;
+        return n ? (p.files.some((f) => /^video\//.test(f.type)) ? 'Video' : n + (n === 1 ? ' photo' : ' photos')) : p.gif ? 'GIF' : p.poll ? 'Poll' : '';
+      };
+      const row = (p, i) => {
+        const text = String(p.text || '').replace(/\s+/g, ' ').trim();
+        const what = carries(p);
+        return '<div class="cmp-tp" role="button" tabindex="0" data-cmd="cmp-thread-go" data-i="' + i + '" title="Edit post ' + (i + 1) + '"><span class="cmp-tp-n">' + (i + 1) + '</span><span class="cmp-tp-t' + (text ? '' : ' none') + '">' + h(text ? text.slice(0, 200) : 'Empty post') + '</span>' + (what ? '<span class="cmp-tp-m">' + h(what) + '</span>' : '') + '<button class="cmp-tp-x" type="button" data-cmd="cmp-thread-rm" data-i="' + i + '" title="Remove post ' + (i + 1) + '" aria-label="Remove post ' + (i + 1) + '">' + icon('x') + '</button></div>';
+      };
+      cmpPrev.innerHTML = many ? t.slice(0, c.at).map(row).join('') : '';
+      cmpNext.innerHTML = many ? t.slice(c.at + 1).map((p, j) => row(p, c.at + 1 + j)).join('') : '';
+      cmpBox.classList.toggle('thread', many);
+      cmpAddPost.disabled = t.length >= THREAD_MAX;
+      // A quote's own post takes no poll; the posts after it can.
+      if (c) cmpPollBtn.hidden = c.kind === 'quote' && c.at === 0;
+      fitCompose();
+    }
+    // A row is a button: Return or Space opens its post too.
+    for (const box of [cmpPrev, cmpNext]) {
+      box.addEventListener('keydown', (e) => {
+        if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.classList || !e.target.classList.contains('cmp-tp')) return;
+        e.preventDefault();
+        run('cmp-thread-go', e.target);
+      });
+    }
+    function addThreadPost() {
+      const c = compose;
+      if (!c) return;
+      stashPost();
+      // X Pro adds no post after an empty one.
+      if (!postFilled(c.thread[c.at])) return toast('Write this post first.', 'info');
+      if (c.thread.length >= THREAD_MAX) return toast('A thread can have up to ' + THREAD_MAX + ' posts.', 'warn');
+      c.thread.splice(c.at + 1, 0, emptyPost());
+      loadPost(c.at + 1);
+      draftSoon();
+    }
+    function removeThreadPost(i) {
+      const c = compose;
+      if (!c || !c.thread[i]) return;
+      stashPost();
+      const [gone] = c.thread.splice(i, 1);
+      dropFiles(gone.files);
+      if (!c.thread.length) c.thread.push(emptyPost());
+      loadPost(Math.min(c.thread.length - 1, i < c.at || (i === c.at && i > 0) ? c.at - 1 : c.at));
+      draftSoon();
     }
     let draftSoonTimer = 0;
     function draftSoon() {
@@ -6346,7 +6458,7 @@
       const c = compose;
       if (!c) return;
       if (c.poll) return cmpPoll.querySelector('.pl-c').focus();
-      if (c.kind === 'quote') return toast('A quote post can’t have a poll.', 'warn');
+      if (c.kind === 'quote' && c.at === 0) return toast('A quote post can’t have a poll.', 'warn');
       if (c.files.length || c.gif) return toast('A post can have a poll or media, not both.', 'warn');
       closeGifs(false);
       // X Pro's default length: one day.
@@ -6424,7 +6536,10 @@
       compose.files = draft.files.slice();
       compose.gif = draft.gif || null;
       compose.poll = kind !== 'quote' && draft.poll ? draftPoll(draft.poll) : null;
-      cmpPollBtn.hidden = kind === 'quote';
+      // A thread's later posts, as the draft kept them; this window starts on its first.
+      compose.at = 0;
+      compose.thread = [null].concat((draft.more || []).map((p) => Object.assign({}, p, { files: (p.files || []).slice() })));
+      compose.thread[0] = livePost();
       cmpReply.value = draft.reply;
       syncWho();
       cmpReply.closest('.cmp-who').hidden = kind === 'reply';
@@ -6432,6 +6547,7 @@
       closeGifs(false);
       renderMedia();
       renderPoll();
+      renderThread();
       cmpStatus.textContent = restored ? 'Your saved draft' : '';
       updateCount();
       showCompose();
@@ -6552,6 +6668,7 @@
           drafts.delete(draftKey(compose));
           storeDrafts();
           dropFiles(compose.files);
+          for (const p of compose.thread || []) if (p.files !== compose.files) dropFiles(p.files);
         }
       }
       emoEl.hidden = true;
@@ -6578,16 +6695,30 @@
       gifgone: 'X Pro’s GIF search no longer shows that GIF. Nothing was posted. Pick a GIF again.',
       noreply: 'X Pro’s reply setting didn’t open. Nothing was posted.',
       nopoll: 'X Pro’s poll didn’t open or didn’t take the choices and length. Nothing was posted.',
+      nothread: 'X Pro didn’t add the next post of the thread. Nothing was posted.',
     };
 
     async function submitCompose() {
       if (!compose || posting) return;
-      const text = cmpText.value;
-      // The styles as they are now, with the text: typing while X Pro
-      // opens would move them against a text that is no longer the one sent.
-      const styles = syncedStyles();
       const c = compose;
-      const problem = Sweeter.text.pollProblem(text, c.poll, { quote: c.kind === 'quote', media: !!(c.files.length || c.gif) }) || (!text.trim() && !c.files.length && !c.gif ? 'Write something or add a photo or GIF first.' : weighted(text) > 25000 ? 'This post is over 25,000 characters.' : null);
+      // Every post as it is now, styles with their text: typing while X Pro
+      // opens would move them against a text that is no longer the one sent.
+      // Empty posts in a thread are left out, as X Pro leaves them out.
+      stashPost();
+      const at = c.thread.map((p, i) => (postFilled(p) ? i : -1)).filter((i) => i >= 0);
+      const posts = at.map((i) => c.thread[i]);
+      const many = posts.length > 1;
+      let problem = posts.length ? null : 'Write something or add a photo or GIF first.';
+      let where = c.at;
+      for (let k = 0; k < posts.length && !problem; k++) {
+        const p = posts[k];
+        const why = Sweeter.text.pollProblem(p.text, p.poll, { quote: c.kind === 'quote' && at[k] === 0, media: !!(p.files.length || p.gif) }) || (weighted(p.text) > 25000 ? 'This post is over 25,000 characters.' : null);
+        if (why) {
+          problem = many ? 'Post ' + (at[k] + 1) + ': ' + why : why;
+          where = at[k];
+        }
+      }
+      if (problem && where !== c.at) loadPost(where);
       if (problem) {
         cmpStatus.textContent = problem;
         // A poll's choices are fixed in the poll; anything else, in the text.
@@ -6601,9 +6732,11 @@
       updateCount();
       closeGifs(false);
       await gifWork;
-      cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : c.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
+      const first = posts[0];
+      const styled = (p) => (p.styles && (p.styles.bold.length || p.styles.italic.length) ? p.styles : null);
+      cmpStatus.textContent = many ? 'Posting the thread through X Pro…' : first.files.length ? 'Uploading and posting through X Pro…' : first.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
-      if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, poll: c.poll, reply: c.kind === 'reply' ? null : cmpReply.value, styles: styles.bold.length || styles.italic.length ? styles : null });
+      if (r.ok) r = await xpro.fillAndPost(first.text, { files: first.files, gif: first.gif, poll: first.poll, reply: c.kind === 'reply' ? null : cmpReply.value, styles: styled(first), more: posts.slice(1).map((p) => ({ text: p.text, files: p.files, gif: p.gif, poll: p.poll, styles: styled(p) })) });
       if (r.reason === 'alttext') return askAltText(c);
       composeResult(c, r);
     }
@@ -6611,13 +6744,33 @@
     function composeResult(c, r) {
       posting = false;
       if (r.ok) {
+        const thread = r.ids && r.ids.length > 1;
         closeCompose(false);
-        toast(c.kind === 'reply' ? 'Reply sent' : 'Posted', 'compose');
+        toast(c.kind === 'reply' ? (thread ? 'Replies sent' : 'Reply sent') : thread ? 'Thread posted' : 'Posted', 'compose');
         return;
+      }
+      // X refused a post partway through a thread: the posts before it are
+      // live, and the rest wait in X Pro's composer, which Sweeter shows.
+      if (r.reason === 'partial') {
+        if (native) native.log('compose partial: ' + r.posted + ' of ' + r.of);
+        const msg = 'X posted ' + r.posted + ' of ' + r.of + ' posts, then stopped' + (r.detail ? ': “' + r.detail + '”.' : '.') + ' The rest are in X Pro’s composer.';
+        lastProblem = { msg: msg + ' [' + c.kind + ': partial]', at: Date.now() };
+        noteProblem(lastProblem.msg);
+        drafts.delete(draftKey(c));
+        storeDrafts();
+        if (compose === c) {
+          compose = null;
+          queueCard();
+          cmpBack.hidden = true;
+          releaseComposeWindow();
+        }
+        // Said when Sweeter comes back from X Pro (endPassthrough).
+        afterPassthrough = msg;
+        return xproHandoff(async () => ({ ok: true }), () => xpro.dialogOpen() || xpro.composerOpen());
       }
       if (r.reason !== 'unsent') {
         xpro.clearEditor();
-        xpro.closePanel();
+        xpro.closePanel(true);
       }
       if (native) native.log('compose failed: ' + c.kind + ' ' + (r.reason || 'unknown'));
       // X's own words, when it gave a reason (xerror), or X Pro's message.
@@ -6660,7 +6813,7 @@
         posting = false;
         if (!r.ok) {
           xpro.clearEditor();
-          xpro.closePanel();
+          xpro.closePanel(true);
           if (compose === c) {
             cmpStatus.textContent = 'X Pro’s media editor didn’t open. Nothing was posted; your text is still here.';
             updateCount();
@@ -6681,7 +6834,7 @@
       }
       await xpro.answerAltPrompt('back');
       xpro.clearEditor();
-      xpro.closePanel();
+      xpro.closePanel(true);
       posting = false;
       if (compose === c) {
         cmpStatus.textContent = 'Not posted. Your text is still here.';
@@ -6692,7 +6845,7 @@
 
     // “Open in X Pro”: Sweeter steps aside and shows X Pro’s own composer with
     // the text already in it, then comes back when that composer closes.
-    async function handoff(kind, id, key, text, files, tool, gif, styles, poll) {
+    async function handoff(kind, id, key, text, files, tool, gif, styles, poll, more) {
       closePop();
       passthrough = true;
       closePalette();
@@ -6704,12 +6857,20 @@
         toast(COMPOSE_FAIL[r.reason] || 'X Pro’s composer didn’t open.', 'warn');
         return;
       }
-      const pf = await xpro.prefill(text, files, tool, gif, styles, poll);
-      if (pf && pf.styled === false) {
-        const msg = 'X Pro’s composer didn’t take the bold or italic, so that text went to X Pro without it.';
+      const pf = await xpro.prefill(text, files, tool, gif, styles, poll, more);
+      const say = (msg) => {
         // Sweeter may already be back (⌥X): then now, not after a later hand-off.
-        if (passthrough) afterPassthrough = msg;
+        if (passthrough) afterPassthrough = afterPassthrough ? afterPassthrough + ' ' + msg : msg;
         else toast(msg, 'warn');
+      };
+      if (pf && pf.styled === false) say('X Pro’s composer didn’t take the bold or italic, so that text went to X Pro without it.');
+      // Posts of a thread X Pro's composer didn't take stay here, as the draft.
+      if (pf && pf.of > pf.posts && more && more.length) {
+        const rest = more.slice(pf.posts - 1);
+        const one = (p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: p.poll ? draftPoll(p.poll) : null, files: p.files || [] });
+        drafts.set(draftKey({ kind, id }), Object.assign(one(rest[0]), { reply: 'Everyone', more: rest.slice(1).map(one), at: Date.now() }));
+        storeDrafts();
+        say('X Pro’s composer took ' + pf.posts + ' of ' + pf.of + ' posts. The rest are your draft in Sweeter.');
       }
       const timer = setInterval(() => {
         if (!passthrough) return clearInterval(timer);
@@ -7394,17 +7555,28 @@
         case 'cmp-location':
         case 'cmp-grok': {
           const c = compose;
-          const text = cmpText.value;
-          const styles = c ? syncedStyles() : null;
-          const files = c ? c.files.slice() : [];
+          if (c) stashPost();
+          // The thread's filled posts (or the one post, even empty), each
+          // with what X Pro's composer takes.
+          const filled = c ? c.thread.filter(postFilled) : [];
+          const posts = filled.length ? filled : c ? [c.thread[c.at]] : [];
+          const styled = (p) => (p.styles && (p.styles.bold.length || p.styles.italic.length) ? p.styles : null);
+          const usable = (p) => (p.poll && Sweeter.text.pollChoices(p.poll).length >= 2 ? p.poll : null);
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
-          const gif = c ? c.gif : null;
-          const poll = c && c.poll && Sweeter.text.pollChoices(c.poll).length >= 2 ? c.poll : null;
-          // X Pro schedules no poll, and a Grok image is media, which a poll excludes.
-          if (c && c.poll && (tool === 'schedule' || tool === 'grok')) {
+          // X Pro schedules no poll, and a Grok image is media, which a poll
+          // excludes (it goes on the last post, where X Pro's tools open).
+          const last = posts[posts.length - 1];
+          if ((tool === 'schedule' && posts.some((p) => p.poll)) || (tool === 'grok' && last && last.poll)) {
             toast(tool === 'schedule' ? 'X Pro can’t schedule a post with a poll. Remove the poll first.' : 'A post can have a poll or media, not both.', 'warn');
             break;
           }
+          const p0 = posts[0] || emptyPost();
+          const text = p0.text;
+          const styles = styled(p0);
+          const files = p0.files.slice();
+          const gif = p0.gif;
+          const poll = usable(p0);
+          const more = posts.slice(1).map((p) => ({ text: p.text, files: p.files.slice(), gif: p.gif, poll: usable(p), styles: styled(p) }));
           closeGifs(false);
           if (c) {
             drafts.delete(draftKey(c));
@@ -7414,7 +7586,7 @@
           queueCard();
           cmpBack.hidden = true;
           releaseComposeWindow();
-          const go = () => c && handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null, poll);
+          const go = () => c && handoff(c.kind, c.id, c.key, text, files, tool, gif, styles, poll, more);
           // An open image description reminder goes back to X Pro's
           // composer first, so the hand-off starts from a clean one.
           if (altAsk) answerAltText('back').then(go);
@@ -7443,6 +7615,18 @@
           break;
         case 'cmp-poll':
           addPoll();
+          break;
+        case 'cmp-thread-add':
+          addThreadPost();
+          break;
+        case 'cmp-thread-go':
+          if (compose && Number(el.dataset.i) !== compose.at) {
+            stashPost();
+            loadPost(Number(el.dataset.i));
+          }
+          break;
+        case 'cmp-thread-rm':
+          removeThreadPost(Number(el.dataset.i));
           break;
         case 'cmp-poll-add':
           if (compose && compose.poll && compose.poll.choices.length < 4) {

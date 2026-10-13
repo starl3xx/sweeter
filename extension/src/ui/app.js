@@ -5909,15 +5909,14 @@
         .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, files: [], at: d.at, saved: true }]),
     );
     const draftKey = (c) => c.kind + ':' + (c.id || '');
-    let draftTimer = 0;
+    // Written at once: typing reaches here at most every 600 ms (draftSoon),
+    // and a close, a post or a hand-off must be on disk before a quit. Only
+    // what can come back is written: a draft that is only attachments isn't.
     function storeDrafts() {
-      clearTimeout(draftTimer);
-      draftTimer = setTimeout(() => {
-        const out = {};
-        const newest = Array.from(drafts.entries()).sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX);
-        for (const [k, d] of newest) out[k] = { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, at: d.at || Date.now() };
-        save({ drafts: out });
-      }, 800);
+      const out = {};
+      const kept = Array.from(drafts.entries()).filter(([, d]) => (d.text || '').trim() || d.gif);
+      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, at: d.at || Date.now() };
+      save({ drafts: out });
     }
     // The open compose window's text becomes its draft (or, emptied, drops it).
     function keepDraft(c) {
@@ -5938,6 +5937,10 @@
         if (compose && !cmpBack.hidden) keepDraft(compose);
       }, 600);
     }
+    // The last keystrokes, when the page goes (a reload, a closed tab).
+    window.addEventListener('pagehide', () => {
+      if (compose && !cmpBack.hidden) keepDraft(compose);
+    });
 
     // X’s weighted length: links (draftLinks: with https:// or a bare
     // domain) count 23; most characters outside Latin and common punctuation
@@ -6508,6 +6511,8 @@
       cmpBack.querySelector('.who-t').textContent = o ? o.textContent : '';
     }
     cmpReply.addEventListener('change', syncWho);
+    // Who can reply is part of the draft too.
+    cmpReply.addEventListener('change', draftSoon);
 
     cmpText.addEventListener('input', updateCount);
     // A pasted image arrives as a file; keep it out of the text.

@@ -3208,7 +3208,7 @@
           html += R.post(b.post, ctx, 'ancestor'); // what the post replies to
         } else html += R.block(b, ctx, b.kind === 'thread' ? b.posts : null);
       }
-      if (!focalSeen) html = R.post(d.post, focalCtx) + html;
+      if (!focalSeen) html = (d.gone ? '<article class="cell gone-cell"><div></div><div class="main gone">' + h(d.gone) + '</div></article>' : R.post(d.post, focalCtx)) + html;
       const keep = c.dscroll.scrollTop;
       const sel = d.selId;
       c.dlist.innerHTML = html;
@@ -8055,13 +8055,15 @@
         if (!r.ok) return toast(XPOST_FAIL[r.reason] || 'X Pro didn’t do that. Try again in X Pro (⌥X).', 'warn');
         // X Pro asked something Sweeter didn't, or opened a dialog: show it there.
         if (r.step !== 'done') return xproHandoff(async () => ({ ok: true }), still);
-        // Gone for this person: out of every column now, and a conversation
-        // or article open on it closes.
+        // Gone for this person: out of every column now. A conversation open
+        // on it stays (closing it would pop X Pro's stack, and a profile
+        // opened on top of it), with a note where the post was; an article
+        // open on it closes.
         if (match === 'Delete' || match === 'Not interested in this post') {
+          const open = Array.from(cols.values()).filter((c) => c.detail && c.detail.post && c.detail.post.id === p.id);
+          for (const c of open) c.detail.gone = match === 'Delete' ? 'You deleted this post.' : 'You said you’re not interested in this post.';
           store.forget(p.id);
-          // Not while a profile sheet is open: its X Pro stack sits on top of
-          // the conversation's, and closing the conversation pops both.
-          if (!prof) for (const c of cols.values()) if (c.detail && c.detail.post && c.detail.post.id === p.id) closeDetail(c);
+          for (const c of open) renderDetail(c, false);
           if (rd && rd.post && rd.post.id === p.id) closeReader();
         }
         toast(say(rule[3]) || 'Done: ' + (typeof match === 'string' ? match : 'X Pro'));

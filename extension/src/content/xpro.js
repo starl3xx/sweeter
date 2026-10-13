@@ -960,9 +960,13 @@
     if (gif) await attachGif(gif);
     let styled = null;
     if (text && text.trim() && (await paste(text)) && styles) styled = (await applyStyles(text, styles)).ok;
-    // A poll written in Sweeter goes over filled in, or X Pro's poll opens.
-    if (poll && (await setPoll(poll)).ok) return { ok: true, styled };
-    if (poll && !tool) tool = 'poll';
+    // A poll written in Sweeter goes over filled in. If that fails, X Pro's
+    // poll is left open (or opened) for the person to finish there.
+    if (poll && !(await setPoll(poll)).ok && !document.querySelector('input[name="Choice1"]')) {
+      const root = composerRoot();
+      const b = root && root.querySelector(TOOLS.poll);
+      if (b) b.click();
+    }
     if (tool && TOOLS[tool]) {
       const root = composerRoot();
       const b = root && root.querySelector(TOOLS[tool]);

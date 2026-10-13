@@ -7400,6 +7400,11 @@
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
           const gif = c ? c.gif : null;
           const poll = c && c.poll && Sweeter.text.pollChoices(c.poll).length >= 2 ? c.poll : null;
+          // X Pro schedules no poll, and a Grok image is media, which a poll excludes.
+          if (c && c.poll && (tool === 'schedule' || tool === 'grok')) {
+            toast(tool === 'schedule' ? 'X Pro can’t schedule a post with a poll. Remove the poll first.' : 'A post can have a poll or media, not both.', 'warn');
+            break;
+          }
           closeGifs(false);
           if (c) {
             drafts.delete(draftKey(c));

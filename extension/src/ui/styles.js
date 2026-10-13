@@ -739,6 +739,20 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-card .cc-d{color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cmp-card .cc-n{color:var(--t1);font-weight:500;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .cmp-media:empty{display:none}
+/* A poll: X Pro's choices and length, under the text. */
+.cmp-poll{margin:0 14px 10px 64px;border:1px solid var(--div);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.cmp-poll[hidden]{display:none}
+.pl-cs{display:flex;flex-direction:column;gap:6px}
+.pl-c{font:inherit;font-size:13.5px;color:var(--t1);background:transparent;border:1px solid var(--div);border-radius:6px;padding:7px 9px;min-width:0}
+.pl-c:focus{outline:none;border-color:var(--accent-solid)}
+.pl-add,.pl-rm{align-self:flex-start;background:none;border:0;padding:2px 0;font-size:12.5px;font-weight:600;cursor:pointer}
+.pl-add{color:var(--accent-solid)}
+.pl-rm{color:#E64545}
+.pl-len{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:12px;color:var(--t2)}
+.pl-len .pl-l{flex:1 0 100%;font-weight:600;color:var(--t1)}
+.pl-len label{display:inline-flex;align-items:center;gap:6px}
+.pl-len select{font:inherit;font-size:12.5px;color:var(--t1);background:transparent;border:1px solid var(--div);border-radius:6px;padding:3px 4px}
+.cmp-tools .tb.on{background:var(--tint)}
 .cm{position:relative;height:96px;border-radius:10px;overflow:hidden;background:var(--sub);border:1px solid var(--div)}
 .cm img,.cm video{height:100%;width:auto;max-width:220px;object-fit:cover;display:block}
 .cm button{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;display:grid;place-items:center;cursor:pointer}

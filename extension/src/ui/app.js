@@ -623,6 +623,11 @@
       '<div class="cmp-body"><div class="cmp-av"></div><div class="cmp-field"><div id="cmp-text" class="cmp-ed" contenteditable="plaintext-only" role="textbox" aria-multiline="true" spellcheck="true" aria-label="Post text" aria-describedby="cmp-status" data-placeholder="What’s happening?"></div></div></div>' +
       '<div class="cmp-card" hidden></div>' +
       '<div class="cmp-media"></div>' +
+      // A poll (renderPoll): X Pro's choices and length, filled in at Post.
+      '<div class="cmp-poll" hidden role="group" aria-label="Poll"><div class="pl-cs"></div>' +
+      '<div class="pl-len"><span class="pl-l">Poll length</span>' +
+      [['d', 'Days'], ['h', 'Hours'], ['m', 'Minutes']].map(([k, label]) => '<label><span>' + label + '</span><select class="pl-' + k + '" aria-label="Poll length: ' + label.toLowerCase() + '"></select></label>').join('') +
+      '</div><button class="pl-rm" type="button" data-cmd="cmp-poll-remove">Remove poll</button></div>' +
       // Who can reply, on its own line under the text, as X shows it.
       // A select is as wide as its longest option, so the chosen one shows as
       // text and a transparent select lies over it.
@@ -635,9 +640,10 @@
       '<button class="tb" type="button" data-cmd="cmp-emoji" title="Emoji" aria-label="Emoji">' + icon('emoji') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-bold" title="Bold (⌘B)" aria-label="Bold (⌘B)">' + icon('bold') + '</button>' +
       '<button class="tb" type="button" data-cmd="cmp-italic" title="Italic (⌘I)" aria-label="Italic (⌘I)">' + icon('italic') + '</button>' +
+      '<button class="tb" type="button" data-cmd="cmp-poll" title="Add a poll" aria-label="Add a poll" aria-pressed="false">' + icon('poll') + '</button>' +
       '<span class="sepv"></span>' +
       '<span class="xp-l" title="These open X Pro’s own composer with your text">X Pro' + icon('open') + '</span>' +
-      [['poll', 'poll', 'Add a poll'], ['schedule', 'schedule', 'Schedule'], ['location', 'pin', 'Tag a location'], ['grok', 'spark', 'Make an image with Grok']]
+      [['schedule', 'schedule', 'Schedule'], ['location', 'pin', 'Tag a location'], ['grok', 'spark', 'Make an image with Grok']]
         .map(([cmd, ic, label]) => '<button class="tb xp" type="button" data-cmd="cmp-' + cmd + '" title="' + label + ': opens X Pro’s composer" aria-label="' + label + ': opens X Pro’s composer">' + icon(ic) + '</button>')
         .join('') +
       '</div>' +
@@ -645,7 +651,7 @@
       '<input type="file" id="cmp-file" accept="' + ACCEPT.join(',') + '" multiple hidden>' +
       // X Pro's image description reminder, asked here (askAltText).
       '<div class="cmp-ask" hidden role="group" aria-label="Image descriptions"><span class="cmp-ask-t">X Pro reminds you to describe your images for people who can’t see them.</span><button class="cmp-ask-b" type="button" data-cmd="cmp-alt-back">Cancel</button><button class="cmp-ask-b" type="button" data-cmd="cmp-alt-post">Not This Time</button><button class="cmp-ask-go" type="button" data-cmd="cmp-alt-add">Describe in X Pro</button></div>' +
-      '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for GIFs, polls, scheduling, and more">Open in X Pro</button>' +
+      '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for scheduling, location, and more">Open in X Pro</button>' +
       '<span class="cmp-status" id="cmp-status" role="status"></span><span class="grow"></span><span class="cmp-count"></span>' +
       '<button class="cmp-post" type="button" data-cmd="cmp-post" title="Post (⌘Return)">Post</button></div>' +
       '<div class="cmp-grip" title="Drag for a taller text box. Double-click to reset." aria-hidden="true"></div>' +
@@ -738,6 +744,8 @@
     const cmpPost = shadow.querySelector('.cmp-post');
     const cmpBox = shadow.querySelector('.cmp');
     const cmpMedia = shadow.querySelector('.cmp-media');
+    const cmpPoll = shadow.querySelector('.cmp-poll');
+    const cmpPollBtn = shadow.querySelector('[data-cmd="cmp-poll"]');
     const cmpReply = shadow.querySelector('#cmp-reply');
     const cmpFile = shadow.querySelector('#cmp-file');
     const cmpHead = shadow.querySelector('.cmp-head');
@@ -5968,25 +5976,34 @@
     const drafts = new Map(
       Object.entries(opts.drafts || {})
         .filter(([, d]) => d && typeof d.text === 'string' && Date.now() - (d.at || 0) < DRAFT_DAYS * 864e5)
-        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, files: [], at: d.at, saved: true }]),
+        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), files: [], at: d.at, saved: true }]),
     );
     const draftKey = (c) => c.kind + ':' + (c.id || '');
+    // A saved poll, as far as it still makes sense: up to four choices of
+    // text, and a length inside X Pro's rules.
+    function draftPoll(p) {
+      if (!p || !Array.isArray(p.choices)) return null;
+      const choices = p.choices.slice(0, 4).map((c) => String(c || '').slice(0, Sweeter.text.POLL_CHOICE_MAX));
+      while (choices.length < 2) choices.push('');
+      const L = Sweeter.text.pollLength(p);
+      return { choices, days: L.days, hours: L.hours, minutes: L.minutes };
+    }
     // Written at once: typing reaches here at most every 600 ms (draftSoon),
     // and a close, a post or a hand-off must be on disk before a quit. Only
     // what can come back is written: a draft that is only attachments isn't.
     function storeDrafts() {
       const out = {};
-      const kept = Array.from(drafts.entries()).filter(([, d]) => (d.text || '').trim() || d.gif);
-      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, at: d.at || Date.now() };
+      const kept = Array.from(drafts.entries()).filter(([, d]) => (d.text || '').trim() || d.gif || d.poll);
+      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: d.poll || null, at: d.at || Date.now() };
       save({ drafts: out });
     }
     // The open compose window's text becomes its draft (or, emptied, drops it).
     function keepDraft(c) {
       const key = draftKey(c);
-      if (cmpText.value.trim() || c.files.length || c.gif) {
+      if (cmpText.value.trim() || c.files.length || c.gif || c.poll) {
         const old = drafts.get(key);
-        const d = { text: cmpText.value, files: c.files, gif: c.gif, reply: cmpReply.value, styles: syncedStyles() };
-        const same = old && old.text === d.text && old.gif === d.gif && old.reply === d.reply && JSON.stringify(old.styles || null) === JSON.stringify(d.styles);
+        const d = { text: cmpText.value, files: c.files, gif: c.gif, reply: cmpReply.value, styles: syncedStyles(), poll: c.poll ? draftPoll(c.poll) : null };
+        const same = old && old.text === d.text && old.gif === d.gif && old.reply === d.reply && JSON.stringify(old.styles || null) === JSON.stringify(d.styles) && JSON.stringify(old.poll || null) === JSON.stringify(d.poll);
         if (same && old.files === d.files) return;
         drafts.set(key, Object.assign(d, { at: same ? old.at : Date.now() }));
       } else if (!drafts.delete(key)) return;
@@ -6247,6 +6264,7 @@
 
     function addFiles(list) {
       if (!compose) return;
+      if (compose.poll) return toast('A post can have a poll or media, not both.', 'warn');
       if (compose.gif) return toast('A post can have photos or a video, or one GIF.', 'warn');
       const incoming = Array.from(list || []).filter((f) => f && f.type);
       const bad = incoming.filter((f) => !ACCEPT.includes(f.type));
@@ -6277,6 +6295,65 @@
             return '<div class="cm">' + preview + '<button type="button" data-cmd="cmp-unfile" data-i="' + i + '" title="Remove" aria-label="Remove">' + icon('x') + '</button></div>';
           })
           .join('') + (g ? '<div class="cm" title="' + h(g.alt) + '"><img src="' + h(g.url) + '" alt="' + h(g.alt) + '"><span class="kind">GIF</span><button type="button" data-cmd="cmp-ungif" title="Remove" aria-label="Remove the GIF">' + icon('x') + '</button></div>' : '');
+    }
+
+    // ---------- a poll ----------
+    // X Pro's poll in Sweeter's window: 2 to 4 choices and a length, with
+    // X Pro's limits (Sweeter.text.pollLength). The post's text is its
+    // question. The fields are drawn again only when their number or the
+    // length's choices change, so typing keeps its place.
+    function renderPoll() {
+      const p = compose && compose.poll;
+      cmpPoll.hidden = !p;
+      cmpPollBtn.setAttribute('aria-pressed', p ? 'true' : 'false');
+      cmpPollBtn.classList.toggle('on', !!p);
+      if (p) {
+        cmpPoll.querySelector('.pl-cs').innerHTML =
+          p.choices.map((c, i) => '<input class="pl-c" type="text" data-i="' + i + '" maxlength="' + Sweeter.text.POLL_CHOICE_MAX + '" placeholder="Choice ' + (i + 1) + (i > 1 ? ' (optional)' : '') + '" aria-label="Choice ' + (i + 1) + (i > 1 ? ' (optional)' : '') + '" spellcheck="true">').join('') +
+          (p.choices.length < 4 ? '<button class="pl-add" type="button" data-cmd="cmp-poll-add">Add a choice</button>' : '');
+        cmpPoll.querySelectorAll('.pl-c').forEach((el, i) => (el.value = p.choices[i]));
+        renderPollLength();
+      }
+      fitCompose();
+    }
+    function renderPollLength() {
+      const p = compose && compose.poll;
+      if (!p) return;
+      const L = Sweeter.text.pollLength(p);
+      Object.assign(p, { days: L.days, hours: L.hours, minutes: L.minutes });
+      const opts = (lo, hi, v) => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i).map((n) => '<option value="' + n + '"' + (n === v ? ' selected' : '') + '>' + n + '</option>').join('');
+      cmpPoll.querySelector('.pl-d').innerHTML = opts(0, 7, L.days);
+      cmpPoll.querySelector('.pl-h').innerHTML = opts(0, L.hoursMax, L.hours);
+      cmpPoll.querySelector('.pl-m').innerHTML = opts(L.minutesMin, L.minutesMax, L.minutes);
+    }
+    cmpPoll.addEventListener('input', (e) => {
+      const p = compose && compose.poll;
+      if (!p || !e.target.classList.contains('pl-c')) return;
+      p.choices[Number(e.target.dataset.i)] = e.target.value;
+      // A note about the choices goes once they change.
+      if (/choice/.test(cmpStatus.textContent)) cmpStatus.textContent = '';
+      draftSoon();
+    });
+    cmpPoll.addEventListener('change', (e) => {
+      const p = compose && compose.poll;
+      const k = p && e.target.tagName === 'SELECT' && { 'pl-d': 'days', 'pl-h': 'hours', 'pl-m': 'minutes' }[e.target.className];
+      if (!k) return;
+      p[k] = Number(e.target.value);
+      renderPollLength();
+      draftSoon();
+    });
+    function addPoll() {
+      const c = compose;
+      if (!c) return;
+      if (c.poll) return cmpPoll.querySelector('.pl-c').focus();
+      if (c.kind === 'quote') return toast('A quote post can’t have a poll.', 'warn');
+      if (c.files.length || c.gif) return toast('A post can have a poll or media, not both.', 'warn');
+      closeGifs(false);
+      // X Pro's default length: one day.
+      c.poll = { choices: ['', ''], days: 1, hours: 0, minutes: 0 };
+      renderPoll();
+      draftSoon();
+      cmpPoll.querySelector('.pl-c').focus();
     }
 
     function dropFiles(files) {
@@ -6346,12 +6423,15 @@
       compose.prev = draft.text;
       compose.files = draft.files.slice();
       compose.gif = draft.gif || null;
+      compose.poll = kind !== 'quote' && draft.poll ? draftPoll(draft.poll) : null;
+      cmpPollBtn.hidden = kind === 'quote';
       cmpReply.value = draft.reply;
       syncWho();
       cmpReply.closest('.cmp-who').hidden = kind === 'reply';
       emoEl.hidden = true;
       closeGifs(false);
       renderMedia();
+      renderPoll();
       cmpStatus.textContent = restored ? 'Your saved draft' : '';
       updateCount();
       showCompose();
@@ -6497,6 +6577,7 @@
       nogif: 'X Pro’s GIF search didn’t open. Nothing was posted.',
       gifgone: 'X Pro’s GIF search no longer shows that GIF. Nothing was posted. Pick a GIF again.',
       noreply: 'X Pro’s reply setting didn’t open. Nothing was posted.',
+      nopoll: 'X Pro’s poll didn’t open or didn’t take the choices and length. Nothing was posted.',
     };
 
     async function submitCompose() {
@@ -6506,10 +6587,13 @@
       // opens would move them against a text that is no longer the one sent.
       const styles = syncedStyles();
       const c = compose;
-      const problem = !text.trim() && !c.files.length && !c.gif ? 'Write something or add a photo or GIF first.' : weighted(text) > 25000 ? 'This post is over 25,000 characters.' : null;
+      const problem = Sweeter.text.pollProblem(text, c.poll, { quote: c.kind === 'quote', media: !!(c.files.length || c.gif) }) || (!text.trim() && !c.files.length && !c.gif ? 'Write something or add a photo or GIF first.' : weighted(text) > 25000 ? 'This post is over 25,000 characters.' : null);
       if (problem) {
-        cmpText.setAttribute('aria-invalid', 'true');
         cmpStatus.textContent = problem;
+        // A poll's choices are fixed in the poll; anything else, in the text.
+        const choice = c.poll && /choice/.test(problem) && Array.from(cmpPoll.querySelectorAll('.pl-c')).find((x) => !x.value.trim() || x.value.length > Sweeter.text.POLL_CHOICE_MAX);
+        if (choice) return choice.focus();
+        cmpText.setAttribute('aria-invalid', 'true');
         cmpText.focus();
         return;
       }
@@ -6519,7 +6603,7 @@
       await gifWork;
       cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : c.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
-      if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, reply: c.kind === 'reply' ? null : cmpReply.value, styles: styles.bold.length || styles.italic.length ? styles : null });
+      if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, poll: c.poll, reply: c.kind === 'reply' ? null : cmpReply.value, styles: styles.bold.length || styles.italic.length ? styles : null });
       if (r.reason === 'alttext') return askAltText(c);
       composeResult(c, r);
     }
@@ -6608,7 +6692,7 @@
 
     // “Open in X Pro”: Sweeter steps aside and shows X Pro’s own composer with
     // the text already in it, then comes back when that composer closes.
-    async function handoff(kind, id, key, text, files, tool, gif, styles) {
+    async function handoff(kind, id, key, text, files, tool, gif, styles, poll) {
       closePop();
       passthrough = true;
       closePalette();
@@ -6620,7 +6704,7 @@
         toast(COMPOSE_FAIL[r.reason] || 'X Pro’s composer didn’t open.', 'warn');
         return;
       }
-      const pf = await xpro.prefill(text, files, tool, gif, styles);
+      const pf = await xpro.prefill(text, files, tool, gif, styles, poll);
       if (pf && pf.styled === false) {
         const msg = 'X Pro’s composer didn’t take the bold or italic, so that text went to X Pro without it.';
         // Sweeter may already be back (⌥X): then now, not after a later hand-off.
@@ -7306,7 +7390,6 @@
           answerAltText('back');
           break;
         case 'cmp-xpro':
-        case 'cmp-poll':
         case 'cmp-schedule':
         case 'cmp-location':
         case 'cmp-grok': {
@@ -7316,6 +7399,7 @@
           const files = c ? c.files.slice() : [];
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
           const gif = c ? c.gif : null;
+          const poll = c && c.poll && Sweeter.text.pollChoices(c.poll).length >= 2 ? c.poll : null;
           closeGifs(false);
           if (c) {
             drafts.delete(draftKey(c));
@@ -7325,7 +7409,7 @@
           queueCard();
           cmpBack.hidden = true;
           releaseComposeWindow();
-          const go = () => c && handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null);
+          const go = () => c && handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null, poll);
           // An open image description reminder goes back to X Pro's
           // composer first, so the hand-off starts from a clean one.
           if (altAsk) answerAltText('back').then(go);
@@ -7352,8 +7436,28 @@
             updateCount();
           }
           break;
+        case 'cmp-poll':
+          addPoll();
+          break;
+        case 'cmp-poll-add':
+          if (compose && compose.poll && compose.poll.choices.length < 4) {
+            compose.poll.choices.push('');
+            renderPoll();
+            cmpPoll.querySelectorAll('.pl-c')[compose.poll.choices.length - 1].focus();
+            draftSoon();
+          }
+          break;
+        case 'cmp-poll-remove':
+          if (compose && compose.poll) {
+            compose.poll = null;
+            renderPoll();
+            draftSoon();
+            cmpText.focus();
+          }
+          break;
         case 'cmp-gif':
-          if (gifEl.hidden) openGifs();
+          if (gifEl.hidden && compose && compose.poll) toast('A post can have a poll or media, not both.', 'warn');
+          else if (gifEl.hidden) openGifs();
           else closeGifs(true);
           break;
         case 'cmp-unfile':

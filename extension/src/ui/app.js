@@ -3861,7 +3861,7 @@
           '<button type="button" data-cmd="prof-cancel">Cancel</button><button class="danger" type="button" data-cmd="prof-do">' + h(q[2]) + '</button></div>';
       }
       return '<div class="pf-banner"' + (u.banner ? ' style="background-image:url(&quot;' + h(safeUrl(u.banner)) + '&quot;)"' : '') + '></div>' +
-        '<div class="pf-top">' + (big ? '<img class="pf-av" src="' + h(big) + '" alt="">' : '<div class="pf-av"></div>') +
+        '<div class="pf-top">' + (big ? '<img class="pf-av' + (u.square ? ' sq' : '') + '" src="' + h(big) + '" alt="">' : '<div class="pf-av"></div>') +
         '<div class="pf-btns">' + (p.xpro ? '<button class="pf-icon" type="button" data-cmd="prof-addcol" title="Add as a column, in X Pro on all your devices" aria-label="Add as a column">' + icon('addcol') + '</button>' : '') +
         (p.xpro && !me ? '<button class="pf-icon" type="button" data-cmd="prof-more" title="More" aria-label="More" aria-haspopup="menu">' + icon('more') + '</button>' : '') + follow + '</div></div>' +
         confirm +
@@ -6213,6 +6213,12 @@
       closePop();
       const p = id ? findPost(id) : null;
       if (id && (!p || p.unavailable)) return;
+      // X limits who can reply and this account isn't one of them: X Pro's
+      // own Reply would refuse, so say who can instead.
+      if (kind === 'reply' && p.replyLimit && !p.replyLimit.canReply) {
+        toast('Who can reply? ' + R.replyLimitText(p.replyLimit), 'info');
+        return;
+      }
       // A compose window already open keeps its text as a draft.
       if (compose && !cmpBack.hidden && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value, styles: syncedStyles() });
       compose = { kind, id: id || null, key: key || null, files: [] };

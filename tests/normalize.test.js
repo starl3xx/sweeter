@@ -268,3 +268,53 @@ test('a long post with media keeps its whole text: legacy media indices point in
   t.note_tweet.note_tweet_results.result.text = long + ' https://t.co/media1';
   ok(!N.post(t, 0).html.includes('t.co/media1'));
 });
+
+// What X says about a post besides its text (shapes from the captures and
+// X Pro's own tweet model, read 2026-10-13).
+test('edited posts: the latest version is marked, an old version points to it', () => {
+  const t = F.tweet({ text: 'v2' });
+  const first = String(BigInt(t.rest_id) - 4194304000n * 60n);
+  t.edit_control = { initial_tweet_id: first, edit_control_initial: { edit_tweet_ids: [first, t.rest_id], editable_until_msecs: '1', edits_remaining: '4', is_edit_eligible: true } };
+  const p = N.post(t, 0);
+  eq([p.edit.latest, p.edit.stale], [t.rest_id, false]);
+  ok(p.edit.firstMs < p.createdMs, 'first version is older');
+  const old = F.tweet({ text: 'v1' });
+  old.edit_control = { initial_tweet_id: old.rest_id, edit_control_initial: { edit_tweet_ids: [old.rest_id, '2104599248595719999'] } };
+  eq([N.post(old, 0).edit.latest, N.post(old, 0).edit.stale], ['2104599248595719999', true]);
+  const plain = F.tweet({ text: 'never edited' });
+  plain.edit_control = { edit_tweet_ids: [plain.rest_id], editable_until_msecs: '1', edits_remaining: '5', is_edit_eligible: true };
+  eq(N.post(plain, 0).edit, null);
+});
+
+test('who can reply: the policy, its owner, and whether X refuses this account', () => {
+  const t = F.tweet({ text: 'limited' });
+  t.legacy.conversation_control = { policy: 'Community', conversation_owner_results: { result: { __typename: 'User', core: { screen_name: 'nadiabuilds' } } } };
+  eq(N.post(t, 0).replyLimit, { policy: 'community', owner: 'nadiabuilds', canReply: true });
+  const w = { __typename: 'TweetWithVisibilityResults', tweet: t, limitedActionResults: { limited_actions: [{ action: 'Reply', prompt: { __typename: 'CtaLimitedActionPrompt' } }] } };
+  eq(N.post(w, 0).replyLimit.canReply, false);
+  t.legacy.conversation_control.policy = 'SomethingNew';
+  eq(N.post(t, 0).replyLimit.policy, 'other');
+  eq(N.post(F.tweet({ text: 'open' }), 0).replyLimit, null);
+});
+
+test('community notes: heading, text with links, and the note page', () => {
+  const t = F.tweet({ text: 'a claim' });
+  t.birdwatch_pivot = {
+    title: 'Readers added context they thought people might want to know',
+    shorttitle: 'Readers added context',
+    subtitle: { text: 'The photo is from 2019. reuters.com/x', entities: [{ fromIndex: 24, toIndex: 37, ref: { type: 'TimelineUrl', url: 'https://t.co/n1', urlType: 'ExternalUrl' } }] },
+    destinationUrl: '/i/birdwatch/n/123',
+    visualStyle: 'Default',
+  };
+  const n = N.post(t, 0).note;
+  eq(n.title, 'Readers added context');
+  eq(n.html, 'The photo is from 2019. <a class="u" href="https://t.co/n1" target="_blank" rel="noopener noreferrer" title="https://t.co/n1">reuters.com/x</a>');
+  eq([n.url, n.tentative], ['https://x.com/i/birdwatch/n/123', false]);
+  t.birdwatch_pivot.subtitle = { text: '<b>not html</b>', entities: [{ fromIndex: 0, toIndex: 3, ref: { url: 'javascript:alert(1)' } }] };
+  eq(N.post(t, 0).note.html, '&lt;b&gt;not html&lt;/b&gt;');
+});
+
+test('square avatars: organizations choose them', () => {
+  eq(N.user(F.user('acme', 'Acme', { profile_image_shape: 'Square' })).square, true);
+  eq(N.user(F.user('ivy', 'Ivy', { profile_image_shape: 'Circle' })).square, false);
+});

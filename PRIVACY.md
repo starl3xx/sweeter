@@ -1,6 +1,6 @@
 # Sweeter Privacy Policy
 
-Last updated: October 6, 2026
+Last updated: October 13, 2026
 
 Sweeter is a Mac app and a Safari extension that gives X Pro a different interface. Starl3xx Labs LLC (“we”, “us”) makes it. Sweeter runs on your Mac, inside the X Pro page you are signed in to. We run no server for Sweeter and have no accounts, so we never see who you are.
 
@@ -15,7 +15,7 @@ Sweeter is a Mac app and a Safari extension that gives X Pro a different interfa
 
 - **Your X sign-in.** You sign in on X’s own pages. Sweeter never reads your password, cookies, or tokens, and never sends them anywhere.
 - **What X Pro shows you.** Sweeter reads the timelines the X Pro page loads in your window and draws them in its own columns. That content stays in memory on your Mac.
-- **Your settings.** Settings, filters, mute filters, layouts, and where you stopped reading in each column are saved on your Mac: in `~/Library/Containers/fun.starl3xx.Sweeter` for the Mac app, and in Safari’s storage for the extension. The Mac app also keeps a small log of errors there. Neither is sent anywhere.
+- **Your settings and drafts.** Settings, filters, mute filters, layouts, where you stopped reading in each column, and drafts of posts you haven’t sent (their text, for up to 30 days; attached photos and videos are not saved) are saved on your Mac: in `~/Library/Containers/fun.starl3xx.Sweeter` for the Mac app, and in Safari’s storage for the extension. The Mac app also keeps a small log of errors there. Neither is sent anywhere.
 - **Alerts, Shortcuts, and Spotlight.** Banners for new posts are made on your Mac and shown by macOS. Your column titles are offered to Shortcuts and Spotlight on your Mac.
 
 ## Usage counts (Mac app only)

@@ -5915,8 +5915,53 @@
 
     let compose = null;
     let posting = false;
-    const drafts = new Map();
+    // Drafts: one per kind and target (a new post, a reply to a post, a
+    // quote of a post). Saved on this Mac as you write, so a quit, a reload
+    // or a crash keeps them; X Pro saves a draft only when asked (its
+    // autosave is off). Attached files stay in memory only. A draft is kept
+    // 30 days, the newest 50 at most.
+    const DRAFT_DAYS = 30;
+    const DRAFT_MAX = 50;
+    const drafts = new Map(
+      Object.entries(opts.drafts || {})
+        .filter(([, d]) => d && typeof d.text === 'string' && Date.now() - (d.at || 0) < DRAFT_DAYS * 864e5)
+        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, files: [], at: d.at, saved: true }]),
+    );
     const draftKey = (c) => c.kind + ':' + (c.id || '');
+    // Written at once: typing reaches here at most every 600 ms (draftSoon),
+    // and a close, a post or a hand-off must be on disk before a quit. Only
+    // what can come back is written: a draft that is only attachments isn't.
+    function storeDrafts() {
+      const out = {};
+      const kept = Array.from(drafts.entries()).filter(([, d]) => (d.text || '').trim() || d.gif);
+      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, at: d.at || Date.now() };
+      save({ drafts: out });
+    }
+    // The open compose window's text becomes its draft (or, emptied, drops it).
+    function keepDraft(c) {
+      const key = draftKey(c);
+      if (cmpText.value.trim() || c.files.length || c.gif) {
+        const old = drafts.get(key);
+        const d = { text: cmpText.value, files: c.files, gif: c.gif, reply: cmpReply.value, styles: syncedStyles() };
+        const same = old && old.text === d.text && old.gif === d.gif && old.reply === d.reply && JSON.stringify(old.styles || null) === JSON.stringify(d.styles);
+        if (same && old.files === d.files) return;
+        drafts.set(key, Object.assign(d, { at: same ? old.at : Date.now() }));
+      } else if (!drafts.delete(key)) return;
+      storeDrafts();
+    }
+    let draftSoonTimer = 0;
+    function draftSoon() {
+      clearTimeout(draftSoonTimer);
+      draftSoonTimer = setTimeout(() => {
+        if (compose && !cmpBack.hidden) keepDraft(compose);
+      }, 600);
+    }
+    // The last keystrokes, when the page goes (a reload, a closed tab).
+    // Never a deletion here: on a quit, the Mac app's compose window can go
+    // first and leave its text box empty, which is not the person clearing it.
+    window.addEventListener('pagehide', () => {
+      if (compose && !cmpBack.hidden && cmpText.value.trim()) keepDraft(compose);
+    });
 
     // X’s weighted length: links (draftLinks: with https:// or a bare
     // domain) count 23; most characters outside Latin and common punctuation
@@ -5957,6 +6002,7 @@
 
     function updateCount() {
       syncStyles();
+      draftSoon();
       const n = weighted(cmpText.value);
       cmpCount.textContent = n > 280 ? n.toLocaleString() + ' · long post' : n + ' / 280';
       cmpCount.className = 'cmp-count' + (n > 25000 ? ' over' : n > 280 ? ' long' : '');
@@ -6239,7 +6285,7 @@
         return;
       }
       // A compose window already open keeps its text as a draft.
-      if (compose && !cmpBack.hidden && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value, styles: syncedStyles() });
+      if (compose && !cmpBack.hidden) keepDraft(compose);
       compose = { kind, id: id || null, key: key || null, files: [] };
       cmpTitle.textContent = kind === 'reply' ? 'Reply' : kind === 'quote' ? 'Quote post' : 'New post';
       cmpPost.textContent = kind === 'reply' ? 'Reply' : 'Post';
@@ -6247,6 +6293,9 @@
       if (viewer && viewer.avatar) cmpAv.style.backgroundImage = 'url("' + safeUrl(viewer.avatar.replace(/_(normal|bigger|mini|x96)\./, '_200x200.')) + '")';
       cmpText.placeholder = kind === 'reply' ? 'Post your reply' : kind === 'quote' ? 'Add a comment' : 'What’s happening?';
       const draft = drafts.get(draftKey(compose)) || { text: '', files: [], reply: 'Everyone' };
+      // A draft from an earlier session says so once.
+      const restored = !!draft.saved;
+      delete draft.saved;
       cmpText.value = draft.text;
       compose.styles = { bold: (draft.styles && draft.styles.bold) || [], italic: (draft.styles && draft.styles.italic) || [] };
       compose.prev = draft.text;
@@ -6258,7 +6307,7 @@
       emoEl.hidden = true;
       closeGifs(false);
       renderMedia();
-      cmpStatus.textContent = '';
+      cmpStatus.textContent = restored ? 'Your saved draft' : '';
       updateCount();
       showCompose();
     }
@@ -6369,11 +6418,12 @@
       }
     }
 
-    function closeCompose(keepDraft) {
+    function closeCompose(keep) {
       if (compose) {
-        if (keepDraft && (cmpText.value.trim() || compose.files.length || compose.gif)) drafts.set(draftKey(compose), { text: cmpText.value, files: compose.files, gif: compose.gif, reply: cmpReply.value, styles: syncedStyles() });
+        if (keep) keepDraft(compose);
         else {
           drafts.delete(draftKey(compose));
+          storeDrafts();
           dropFiles(compose.files);
         }
       }
@@ -6482,6 +6532,8 @@
       cmpBack.querySelector('.who-t').textContent = o ? o.textContent : '';
     }
     cmpReply.addEventListener('change', syncWho);
+    // Who can reply is part of the draft too.
+    cmpReply.addEventListener('change', draftSoon);
 
     cmpText.addEventListener('input', updateCount);
     // A pasted image arrives as a file; keep it out of the text.
@@ -7146,7 +7198,10 @@
           const tool = cmd === 'cmp-xpro' ? null : cmd.slice(4);
           const gif = c ? c.gif : null;
           closeGifs(false);
-          if (c) drafts.delete(draftKey(c));
+          if (c) {
+            drafts.delete(draftKey(c));
+            storeDrafts();
+          }
           compose = null;
           queueCard();
           cmpBack.hidden = true;

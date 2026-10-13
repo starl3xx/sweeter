@@ -63,7 +63,7 @@
     } catch (e) {}
   }
 
-  get(['settings', 'mutes', 'read', 'filters', 'decks']).then((saved) => {
+  get(['settings', 'mutes', 'read', 'filters', 'decks', 'drafts']).then((saved) => {
     store = Sweeter.createStore({
       readPositions: saved.read || {},
       onRead: debounce((key, sortIndex, all) => set({ read: all }), 1500),
@@ -80,6 +80,7 @@
         settings: saved.settings || {},
         mutes: saved.mutes || [],
         filters: saved.filters || [],
+        drafts: saved.drafts || {},
         save: set,
         late,
         version: (api.runtime && api.runtime.getManifest && api.runtime.getManifest().version) || '',

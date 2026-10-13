@@ -1191,17 +1191,21 @@
       open.restore();
       return { ok: false, reason: 'nobutton' };
     }
+    // Only a dialog or composer the click opened counts.
+    const before = dialogOpen() || composerOpen();
+    const sheet = () => document.querySelector('[data-testid="confirmationSheetConfirm"]');
     item.click();
     try {
       // A confirmation sheet, a dialog, X Pro's composer (Edit), or nothing.
-      const next = await waitFor(() => document.querySelector('[data-testid="confirmationSheetConfirm"]') || (dialogOpen() || composerOpen() ? 'dialog' : null), 1200);
+      // An item Sweeter confirmed waits for X's sheet a little longer: X
+      // asks for every one of them, so no sheet means nothing happened.
+      const next = await waitFor(() => sheet() || (!before && (dialogOpen() || composerOpen()) ? 'dialog' : null), confirm ? 2500 : 1200);
       if (next === 'dialog') return { ok: true, step: 'dialog' };
-      if (next && !confirm) return { ok: true, step: 'confirm' };
-      if (next) {
-        next.click();
-        await waitFor(() => !document.querySelector('[data-testid="confirmationSheetConfirm"]'), 2500);
-      }
-      return { ok: true, step: 'done' };
+      if (!confirm) return { ok: true, step: next ? 'confirm' : 'done' };
+      if (!next) return { ok: false, reason: 'noconfirm' };
+      next.click();
+      const gone = await waitFor(() => !sheet(), 2500);
+      return gone ? { ok: true, step: 'done' } : { ok: false, reason: 'noconfirm' };
     } finally {
       open.restore();
     }

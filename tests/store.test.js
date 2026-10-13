@@ -316,3 +316,17 @@ test('forget: a deleted post leaves every column, and a repost of it too', () =>
   s.forget('123');
   eq(s.get('home').sorted.length, 1);
 });
+
+test('forget: an open conversation drops the post, and a later page keeps it out', () => {
+  const s = createStore();
+  const body = (entries) => ({ data: { threaded_conversation_with_injections_v2: { instructions: [{ type: 'TimelineAddEntries', entries }] } } });
+  const focal = F.tweet({ text: 'focal' });
+  const r1 = F.tweet({ text: 'reply one' });
+  const r2 = F.tweet({ text: 'reply two' });
+  s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id }, body: body([F.tweetEntry(focal, '9'), F.conversation([r1], '1'), F.conversation([r2], '2')]) });
+  s.forget(r1.rest_id);
+  const texts = () => s.detail(focal.rest_id).blocks.flatMap((b) => (b.kind === 'thread' ? b.posts : [b.post])).map((p) => p.plain);
+  eq(texts(), ['focal', 'reply two']);
+  s.ingest({ op: 'TweetDetail', vars: { focalTweetId: focal.rest_id, cursor: 'c' }, body: body([F.conversation([r1], '1')]) });
+  eq(texts(), ['focal', 'reply two']);
+});

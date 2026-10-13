@@ -8011,6 +8011,7 @@
       notfound: FAIL.notfound,
       nomenu: 'X Pro’s menu for this post didn’t open. Nothing changed.',
       nobutton: 'X Pro’s menu doesn’t offer that for this post now.',
+      noconfirm: 'X Pro didn’t ask to confirm, so nothing changed. Check in X Pro (⌥X).',
     };
     const xRule = (text) => XPOST.find((r) => r[0].test(text)) || [null, 'now', null];
 

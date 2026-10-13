@@ -444,28 +444,54 @@
         emit(key);
       },
       // A post X Pro removed for this person (they deleted it, or chose “Not
-      // interested”): out of every column now. Later polls don't send it
-      // again, but nothing tells the columns that already hold it.
+      // interested”): out of every column, open conversation and profile now.
+      // Later polls don't send it again, but nothing tells what already
+      // holds it. A conversation keeps its key, so a later page of the same
+      // conversation doesn't bring it back either.
       forget(id) {
         const pid = String(id);
-        for (const s of sources.values()) {
+        // The block without the post: unchanged, null (drop it), or a thread with the rest.
+        const without = (b) => {
+          if (b.kind === 'post') return b.post && b.post.id === pid ? null : b;
+          if (b.kind !== 'thread' || !(b.posts || []).some((p) => p.id === pid)) return b;
+          const rest = b.posts.filter((p) => p.id !== pid);
+          return rest.length ? Object.assign({}, b, { posts: rest }) : null;
+        };
+        const prune = (map) => {
           let changed = false;
-          for (const [k, b] of s.blocks) {
-            if (b.kind === 'post' && b.post && b.post.id === pid) {
-              s.blocks.delete(k);
-              changed = true;
-            } else if (b.kind === 'thread' && (b.posts || []).some((p) => p.id === pid)) {
-              const rest = b.posts.filter((p) => p.id !== pid);
-              if (rest.length) s.blocks.set(k, Object.assign({}, b, { posts: rest }));
-              else s.blocks.delete(k);
-              changed = true;
-            }
+          for (const [k, b] of map) {
+            const nb = without(b);
+            if (nb === b) continue;
+            changed = true;
+            if (nb) map.set(k, nb);
+            else map.delete(k);
           }
-          if (changed) {
-            resort(s);
-            emit(s.key);
-          }
+          return changed;
+        };
+        for (const s of sources.values()) {
+          if (!prune(s.blocks)) continue;
+          resort(s);
+          emit(s.key);
         }
+        for (const [fid, d] of details) {
+          const next = d.blocks.map(without).filter(Boolean);
+          if (next.length === d.blocks.length && next.every((b, i) => b === d.blocks[i])) continue;
+          d.blocks = next;
+          d.updated = Date.now();
+          emit('detail:' + fid);
+        }
+        for (const [uid, byOp] of timelines) {
+          let changed = false;
+          for (const t of byOp.values()) {
+            if (!prune(t.blocks) && !(t.pinned && !without(t.pinned))) continue;
+            changed = true;
+            if (t.pinned && !without(t.pinned)) t.pinned = null;
+            t.sorted = Array.from(t.blocks.values()).sort((a, b) => compareSort(b.sortIndex, a.sortIndex));
+            if (t.pinned) t.sorted = [t.pinned].concat(t.sorted.filter((b) => b.key !== t.pinned.key));
+          }
+          if (changed) emit('timeline:' + uid);
+        }
+        posts.delete(pid);
       },
       // A column whose timeline has not arrived yet (or never will: a
       // placeholder) still needs a source to draw.

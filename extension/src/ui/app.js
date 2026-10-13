@@ -92,7 +92,10 @@
   const follows = (c) => c.key !== 'home-foryou';
   const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
-  const KIND_ICON = { merged: 'decks', home: 'home', notifications: 'bell', list: 'list', search: 'search', user: 'profile', likes: 'like', bookmarks: 'bookmark', conversation: 'reply', placeholder: 'open' };
+  const KIND_ICON = { merged: 'decks', home: 'home', notifications: 'bell', list: 'list', search: 'search', user: 'profile', likes: 'like', bookmarks: 'bookmark', conversation: 'reply', community: 'people', placeholder: 'open' };
+  // A source whose title is a stand-in ('List', 'Community', a folder): the
+  // column's own title in X Pro's page says it better.
+  const standIn = (s) => (s.kind === 'list' && s.title === 'List') || s.kind === 'user' || s.kind === 'conversation' || (s.kind === 'community' && s.key !== 'communities') || /^folder:/.test(s.key);
   // X Pro column types Sweeter shows only as a placeholder: [title, icon].
   // The key is x:<type>, or x:<type>:<path> (decks.js keyFor).
   const PLACEHOLDERS = {
@@ -1336,7 +1339,7 @@
     function columnTitle(key, s, own) {
       const m = own || mapping.find((x) => x.key === key);
       if (m && m.col && m.col.title) return m.col.title;
-      const generic = (s.kind === 'list' && s.title === 'List') || s.kind === 'user' || s.kind === 'conversation';
+      const generic = standIn(s);
       return (generic && m && m.dom && m.dom.title) || s.title || (m && m.dom && m.dom.title) || '';
     }
 
@@ -1828,6 +1831,9 @@
       if (k.startsWith('list:')) return store.listName(k.slice(5)) || 'List';
       if (k.startsWith('search:')) return k.split(':').slice(1, -1).join(':');
       if (k === 'bookmarks') return 'Bookmarks';
+      if (k.startsWith('folder:')) return 'Bookmark folder';
+      if (k === 'communities') return 'Communities';
+      if (k.startsWith('community:')) return 'Community';
       if (k.startsWith('conv:')) return 'Conversation';
       if (k.startsWith('x:')) return placeholderOf(k)[0];
       const s = store.get(k);
@@ -1982,7 +1988,8 @@
       if (!s) return;
       c.title.textContent = titleOf(c.vid);
       c.title.title = c.title.textContent;
-      c.sub.textContent = c.merge ? 'Merged' : (s.kind === 'list' ? 'List' : s.kind === 'search' ? 'Search' : '') + (c.view ? (s.kind === 'list' || s.kind === 'search' ? ' view' : 'View') : '');
+      const kindWord = s.kind === 'list' ? 'List' : s.kind === 'search' ? 'Search' : s.kind === 'community' && s.key !== 'communities' ? 'Community' : /^folder:/.test(s.key) ? 'Folder' : '';
+      c.sub.textContent = c.merge ? 'Merged' : kindWord + (c.view ? (kindWord ? ' view' : 'View') : '');
       const who = actingAs(c.vid);
       c.el.classList.toggle('delegated', !!who);
       if (who) c.sub.textContent = who === 'another account' ? 'as ' + who : 'as @' + who;
@@ -4383,6 +4390,9 @@
       if (key.startsWith('list:')) return { key, kind: 'list', title: 'List', listId: key.slice(5) };
       if (key.startsWith('search:')) return { key, kind: 'search', title: key.split(':').slice(1, -1).join(':') };
       if (key === 'bookmarks') return { key, kind: 'bookmarks', title: 'Bookmarks' };
+      if (key.startsWith('folder:')) return { key, kind: 'bookmarks', title: 'Bookmark folder' };
+      if (key === 'communities') return { key, kind: 'community', title: 'Communities' };
+      if (key.startsWith('community:')) return { key, kind: 'community', title: 'Community' };
       if (key.startsWith('user:')) return { key, kind: 'user', title: 'Profile' };
       return null;
     }
@@ -5215,7 +5225,7 @@
         const m = mapOf(c);
         // The usual name, from the data (X Pro’s own default title).
         const s = store.get(c.key);
-        const usual = s && !(s.kind === 'list' && s.title === 'List') && s.kind !== 'user' && s.kind !== 'conversation' ? s.title : '';
+        const usual = s && !standIn(s) ? s.title : '';
         if (m && m.id) xproOp(() => xpro.renameColumn(m.id, v, usual), v ? 'Renamed in X Pro' : 'X Pro’s title is back');
       } else if (save) {
         const s = store.get(c.key);

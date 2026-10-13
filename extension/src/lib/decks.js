@@ -105,6 +105,11 @@
       return 'search:' + q + ':' + (P[u.searchParams.get('f')] || 'Top');
     }
     if (path === '/i/bookmarks' || path === '/i/bookmarks/all') return 'bookmarks';
+    const folder = /^\/i\/bookmarks\/(\d+)$/.exec(path);
+    if (folder) return 'folder:' + folder[1];
+    const community = /^\/i\/communities\/(\d+)$/.exec(path);
+    if (community) return 'community:' + community[1];
+    if (path === '/i/communities') return 'communities';
     if (PLACEHOLDER[path]) return 'x:' + PLACEHOLDER[path];
     const conv = /^\/[A-Za-z0-9_]{1,15}\/status\/(\d+)$/.exec(path);
     if (conv) return 'conv:' + conv[1];

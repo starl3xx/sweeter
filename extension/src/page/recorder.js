@@ -84,6 +84,12 @@
     'HomeTimeline',
     'NotificationsTimeline',
     'ListLatestTweetsTimeline',
+    'ListRankedTweetsTimeline',
+    // A Community, all your Communities, and a bookmark folder (X Pro's
+    // bundle, 2026-10-13).
+    'CommunityTweetsTimeline',
+    'CommunitiesMainPageTimeline',
+    'BookmarkFolderTimeline',
     'ListByRestId',
     'SearchTimeline',
     'UserTweets',

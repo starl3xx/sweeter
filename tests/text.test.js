@@ -164,3 +164,26 @@ test('style ranges follow edits, toggle, and merge (real bold and italic while w
   // UTF-16: an emoji counts two.
   eq(sh([[2, 4]], '🔥ab', '🔥🔥ab'), [[4, 6]]);
 });
+
+test('poll rules: X Pro’s length limits, its choices, and when it refuses', () => {
+  const T = globalThis.Sweeter.text;
+  const L = (d, h, m) => { const r = T.pollLength({ days: d, hours: h, minutes: m }); return [r.days, r.hours, r.minutes]; };
+  eq(L(1, 0, 0), [1, 0, 0]); // X Pro's default
+  eq(L(7, 5, 30), [7, 0, 0]); // 7 days takes no hours or minutes
+  eq(T.pollLength({ days: 7 }).hoursMax, 0);
+  eq(L(0, 0, 2), [0, 0, 5]); // under an hour: 5 minutes at least
+  eq(T.pollLength({ days: 0, hours: 0 }).minutesMin, 5);
+  eq(L(0, 1, 0), [0, 1, 0]);
+  eq(L(9, 30, 99), [7, 0, 0]);
+  eq(L(-1, 25, 61), [0, 23, 59]);
+  eq(L('2', '3', '4'), [2, 3, 4]);
+  eq(T.pollChoices({ choices: [' Yes ', '', 'No', '  '] }), ['Yes', 'No']);
+  const P = { choices: ['Yes', 'No'], days: 1 };
+  eq(T.pollProblem('Which?', P), null);
+  eq(T.pollProblem('Which?', null), null);
+  ok(/question/.test(T.pollProblem('  ', P)));
+  ok(/two choices/.test(T.pollProblem('Which?', { choices: ['Yes', ' '] })));
+  ok(/25/.test(T.pollProblem('Which?', { choices: ['Yes', 'x'.repeat(26)] })));
+  ok(/media/.test(T.pollProblem('Which?', P, { media: true })));
+  ok(/quote/.test(T.pollProblem('Which?', P, { quote: true })));
+});

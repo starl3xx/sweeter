@@ -617,6 +617,49 @@
     return { ok: true };
   }
 
+  // A poll, through X Pro's own poll editor (module 89438): its poll
+  // button (createPollButton), choice fields named Choice1 to Choice4
+  // (maxLength 25; Choice3 and Choice4 appear with addPollChoice), and
+  // three selects for its length (selectPollDays, selectPollHours,
+  // selectPollMinutes; values are plain numbers). Setting the days changes
+  // what the hours and minutes allow, so they are set in that order, and
+  // every value is read back before Post.
+  function setField(el, value, event) {
+    const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, String(value));
+    el.dispatchEvent(new Event(event, { bubbles: true }));
+  }
+  async function setPoll(poll) {
+    const choices = Sweeter.text.pollChoices(poll);
+    const len = Sweeter.text.pollLength(poll);
+    if (choices.length < 2 || choices.length > 4) return { ok: false, reason: 'nopoll' };
+    // The box is found once, before the poll can change what it holds.
+    const root = composerRoot();
+    const btn = root && root.querySelector('[data-testid="createPollButton"]');
+    if (!btn || btn.disabled || btn.getAttribute('aria-disabled') === 'true') return { ok: false, reason: 'nopoll' };
+    btn.click();
+    const field = (i) => root.querySelector('input[name="Choice' + i + '"]');
+    if (!(await waitFor(() => field(1) && field(2), 2500))) return { ok: false, reason: 'nopoll' };
+    for (let i = 3; i <= choices.length; i++) {
+      if (field(i)) continue;
+      const add = root.querySelector('[data-testid="addPollChoice"]');
+      if (!add) return { ok: false, reason: 'nopoll' };
+      add.click();
+      if (!(await waitFor(() => field(i), 1500))) return { ok: false, reason: 'nopoll' };
+    }
+    choices.forEach((c, i) => setField(field(i + 1), c, 'input'));
+    for (const [id, v] of [['selectPollDays', len.days], ['selectPollHours', len.hours], ['selectPollMinutes', len.minutes]]) {
+      const sel = root.querySelector('select[data-testid="' + id + '"]');
+      if (!sel || !Array.from(sel.options).some((o) => o.value === String(v))) return { ok: false, reason: 'nopoll' };
+      setField(sel, v, 'change');
+      await wait(60);
+    }
+    await wait(120);
+    const sel = (id) => root.querySelector('select[data-testid="' + id + '"]');
+    const took = choices.every((c, i) => field(i + 1) && field(i + 1).value === c) && sel('selectPollDays').value === String(len.days) && sel('selectPollHours').value === String(len.hours) && sel('selectPollMinutes').value === String(len.minutes);
+    return took ? { ok: true } : { ok: false, reason: 'nopoll' };
+  }
+
   // X Pro's own answer to a post (the recorder reads CreateTweet's
   // response): the new post's id, or X's error. Read, never sent.
   let lastPostResult = null;
@@ -709,6 +752,14 @@
     }
     const rs = await setReplySetting(o.reply);
     if (!rs.ok) return rs;
+    // After who can reply: X Pro's poll may change what the box holds.
+    if (o.poll) {
+      const pr = await setPoll(o.poll);
+      if (!pr.ok) {
+        clearEditor();
+        return pr;
+      }
+    }
     const btn = await waitFor(postEnabled, 4000);
     if (!btn) {
       clearEditor();
@@ -903,12 +954,19 @@
     return att ? { ok: true } : { ok: false, reason: 'gifgone' };
   }
 
-  async function prefill(text, files, tool, gif, styles) {
+  async function prefill(text, files, tool, gif, styles, poll) {
     await waitFor(editor, 3000);
     if (files && files.length) await attach(files);
     if (gif) await attachGif(gif);
     let styled = null;
     if (text && text.trim() && (await paste(text)) && styles) styled = (await applyStyles(text, styles)).ok;
+    // A poll written in Sweeter goes over filled in. If that fails, X Pro's
+    // poll is left open (or opened) for the person to finish there.
+    if (poll && !(await setPoll(poll)).ok && !document.querySelector('input[name="Choice1"]')) {
+      const root = composerRoot();
+      const b = root && root.querySelector(TOOLS.poll);
+      if (b) b.click();
+    }
     if (tool && TOOLS[tool]) {
       const root = composerRoot();
       const b = root && root.querySelector(TOOLS[tool]);

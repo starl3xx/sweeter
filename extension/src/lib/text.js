@@ -270,6 +270,37 @@
     return normRanges(out);
   }
 
-  Sweeter.text = { richText, plainText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges };
+  // ---------- polls in the compose window ----------
+  // X Pro's poll rules (module 89438): 2 to 4 choices of up to 25
+  // characters; a length of 0-7 days, 0-23 hours and 0-59 minutes, where 7
+  // days allows no hours or minutes and a length under an hour is at least
+  // 5 minutes. pollLength puts a length inside those rules and says what
+  // each part may be now.
+  const POLL_CHOICE_MAX = 25;
+  function pollLength(p) {
+    const int = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || 0));
+    const days = int(p && p.days, 0, 7);
+    const hours = days === 7 ? 0 : int(p && p.hours, 0, 23);
+    const minLow = days === 0 && hours === 0 ? 5 : 0;
+    const minutes = days === 7 ? 0 : int(p && p.minutes, minLow, 59);
+    return { days, hours, minutes, hoursMax: days === 7 ? 0 : 23, minutesMin: minLow, minutesMax: days === 7 ? 0 : 59 };
+  }
+  // The choices X Pro gets: the filled ones, in order.
+  const pollChoices = (p) => ((p && p.choices) || []).map((c) => String(c || '').trim()).filter(Boolean);
+  // Why X Pro would refuse this poll, in words, or null. X Pro posts a poll
+  // only with text (its question) and no media (module 89438's validity
+  // check), and not in a quote.
+  function pollProblem(text, p, o) {
+    if (!p) return null;
+    if (o && o.quote) return 'A quote post can’t have a poll.';
+    if (o && o.media) return 'A post can have a poll or media, not both.';
+    if (!String(text || '').trim()) return 'Ask your question in the text first.';
+    const c = pollChoices(p);
+    if (c.length < 2) return 'A poll needs at least two choices.';
+    if (c.some((x) => x.length > POLL_CHOICE_MAX)) return 'A poll choice can be up to ' + POLL_CHOICE_MAX + ' characters.';
+    return null;
+  }
+
+  Sweeter.text = { richText, plainText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.text;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

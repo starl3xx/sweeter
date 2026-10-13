@@ -504,8 +504,12 @@
   // 2026-09-28). An open conversation adds its own inline reply editor
   // inside the column (inline_reply_offscreen, in a timeline cell); taking
   // that one made posting fail with “the composer didn’t take the text”.
+  // The post Sweeter is filling. X Pro numbers a thread's boxes
+  // tweetTextarea_0, _1, … (module 89438), and every helper here works on
+  // this one; fillAndPost moves it and always puts it back to 0.
+  let item = 0;
   function editor() {
-    const all = Array.from(document.querySelectorAll('[data-testid="tweetTextarea_0"]')).filter((e) => !e.closest('[data-testid^="inline_reply"], [data-testid="cellInnerDiv"]'));
+    const all = Array.from(document.querySelectorAll('[data-testid="tweetTextarea_' + item + '"]')).filter((e) => !e.closest('[data-testid^="inline_reply"], [data-testid="cellInnerDiv"]'));
     const drawer = all.filter((e) => e.closest('[data-testid="drawerAnimatedDiv"], [role="dialog"]'));
     const pool = drawer.length ? drawer : all;
     return pool.length ? pool[pool.length - 1] : null;
@@ -565,10 +569,16 @@
 
   // The composer box: the nearest ancestor of the editor that also holds
   // X Pro’s toolbar and its file input (both verified test IDs).
+  // In a thread only the active post has a toolbar (89438), and the last
+  // one fades out after a new post is added: a box that also holds another
+  // post's text box is the thread's, not this post's, so it doesn't count.
   function composerRoot() {
     let box = editor();
     for (let i = 0; i < 40 && box; i++) {
-      if (box.querySelector('[data-testid="toolBar"]') && box.querySelector('input[data-testid="fileInput"]')) return box;
+      if (box.querySelector('[data-testid="toolBar"]') && box.querySelector('input[data-testid="fileInput"]')) {
+        const other = Array.from(box.querySelectorAll('[data-testid^="tweetTextarea_"]')).some((e) => /^tweetTextarea_\d+$/.test(e.dataset.testid) && e.dataset.testid !== 'tweetTextarea_' + item);
+        return other ? null : box;
+      }
       box = box.parentElement;
     }
     return null;
@@ -592,8 +602,39 @@
     input.files = dt.files;
     input.dispatchEvent(new Event('change', { bubbles: true }));
     const video = files.some((f) => /^video\//.test(f.type));
+    // A later post of a thread: Post is already enabled by the posts before
+    // it. X Pro draws a post's attachments area (testID attachments) only
+    // once its media is in the post (while it prepares, a placeholder
+    // without that ID), and keeps Post disabled while media is being added
+    // or any video uploads (89438: _renderTweetAttachment, hasPendingMedia,
+    // is_uploading). So: this post's media starts, then both settle.
+    if (item > 0) {
+      const mine = () => {
+        const r = composerRoot();
+        return !!(r && r.querySelector('[data-testid="attachments"]'));
+      };
+      await waitFor(() => !postEnabled() || mine(), 5000);
+      // X Pro counts a video as uploading only once it has a progress
+      // number, so the pair must hold a while (longer for a video) before
+      // it counts: a brief true between steps is not ready.
+      const done = await holds(() => mine() && postEnabled(), video ? 3000 : 1000, video ? 120000 : 45000);
+      return done ? { ok: true } : { ok: false, reason: 'upload' };
+    }
     const ready = await waitFor(postEnabled, video ? 120000 : 45000);
     return ready ? { ok: true } : { ok: false, reason: 'upload' };
+  }
+
+  // True once check() has held for `hold` ms in a row, within `limit` ms.
+  async function holds(check, hold, limit) {
+    const end = Date.now() + limit;
+    let since = 0;
+    while (Date.now() < end) {
+      if (!check()) since = 0;
+      else if (!since) since = Date.now();
+      else if (Date.now() - since >= hold) return true;
+      await wait(150);
+    }
+    return false;
   }
 
   // Who can reply: X Pro shows radio options under its “Everyone can reply”
@@ -662,12 +703,15 @@
 
   // X Pro's own answer to a post (the recorder reads CreateTweet's
   // response): the new post's id, or X's error. Read, never sent.
-  let lastPostResult = null;
+  // A thread is one CreateTweet per post, in order, so every answer is kept.
+  let postResults = [];
   window.addEventListener('message', (e) => {
     const d = e.data;
     if (e.source !== window || !d || d.__sweeter !== 1 || (d.op !== 'CreateTweet' && d.op !== 'CreateNoteTweet') || !d.body) return;
-    lastPostResult = { at: Date.now(), id: d.body.id || null, error: d.body.error || null, status: d.body.status || 0 };
+    postResults = postResults.slice(-49).concat([{ at: Date.now(), id: d.body.id || null, error: d.body.error || null, status: d.body.status || 0 }]);
   });
+  // How many posts the last press of Post sends (a thread's length).
+  let pendingPosts = 1;
 
   // Put text and media into X Pro’s open composer and press its Post (or
   // Reply) button once.
@@ -760,6 +804,18 @@
         return pr;
       }
     }
+    // A thread: each next post comes from X Pro's Add post button, in the
+    // toolbar of the post before it. A failure leaves X Pro's thread for the
+    // caller to close (closePanel discards it); Sweeter keeps its own copy.
+    const more = o.more || [];
+    try {
+      for (let i = 0; i < more.length; i++) {
+        const r = await addPost(i + 1, more[i]);
+        if (!r.ok) return r;
+      }
+    } finally {
+      item = 0;
+    }
     const btn = await waitFor(postEnabled, 4000);
     if (!btn) {
       clearEditor();
@@ -768,8 +824,34 @@
     // A test run stops here, with nothing sent.
     if (o.dryRun) return { ok: true, dry: true };
     const t0 = Date.now();
+    pendingPosts = 1 + more.length;
     btn.click();
-    return sent(t0);
+    return sent(t0, true, pendingPosts);
+  }
+
+  // Post i of a thread (i ≥ 1), after post i-1 is filled and active. X Pro
+  // (module 89438) puts “Add post” (testID addButton) in the active post's
+  // toolbar, adds the new box after it as tweetTextarea_i, and makes it
+  // active, so its own toolbar and file input take the media.
+  async function addPost(i, p) {
+    const root = composerRoot();
+    const add = root && root.querySelector('[data-testid="addButton"]');
+    if (!add || add.disabled || add.getAttribute('aria-disabled') === 'true') return { ok: false, reason: 'nothread' };
+    add.click();
+    item = i;
+    if (!(await waitFor(() => editor() && composerRoot(), 3000))) return { ok: false, reason: 'nothread' };
+    const media = p.gif ? await attachGif(p.gif) : await attach(p.files);
+    if (!media.ok) return media;
+    if (p.text && p.text.trim() && !(await paste(p.text))) return { ok: false, reason: 'mismatch' };
+    if (p.styles && p.text && p.text.trim()) {
+      const st = await applyStyles(p.text, p.styles);
+      if (!st.ok) return st;
+    }
+    if (p.poll) {
+      const pr = await setPoll(p.poll);
+      if (!pr.ok) return pr;
+    }
+    return { ok: true };
   }
 
   // X Pro's reminder to describe images, shown at Post when the person
@@ -796,7 +878,7 @@
       no.click();
       // The sheet closes as X Pro sends; it is never a new stop here.
       await waitFor(() => !altPrompt(), 2500);
-      return sent(t0, false);
+      return sent(t0, false, pendingPosts);
     }
     if (choice === 'add') {
       sheet.querySelector('[data-testid="confirmationSheetConfirm"]').click();
@@ -809,27 +891,40 @@
     return { ok: !!(await waitFor(() => !altPrompt(), 2500)) };
   }
 
-  // After a press of Post: X Pro's own answer names the new post (or X's
-  // error), or, if that never arrives, the composer closes or resets to
-  // empty. X Pro's image description reminder stops it first.
-  async function sent(t0, watchAlt) {
-    const answer = () => (lastPostResult && lastPostResult.at >= t0 ? lastPostResult : null);
-    const closed = () => !composerOpen() || (norm(editor().innerText) === '' && !postEnabled());
+  // After a press of Post: X Pro's own answers name the new posts (or X's
+  // error), or, if they never arrive, the composer closes or resets to
+  // empty. X Pro's image description reminder stops it first. A thread of
+  // n posts is n answers in order; X Pro sends nothing after a refusal
+  // (module 309505), and the posts before it are already live.
+  async function sent(t0, watchAlt, n) {
+    const count = n || 1;
+    const answers = () => postResults.filter((r) => r.at >= t0);
+    const answer = () => {
+      const a = answers();
+      return a.find((r) => !r.id) || (a.length >= count ? a[count - 1] : null);
+    };
+    // An emptied first box means a single post went; a thread's first box
+    // can be empty all along (a photo-only post), so a thread counts only
+    // X Pro's composer closing.
+    const closed = () => !composerOpen() || (count === 1 && norm(editor().innerText) === '' && !postEnabled());
     const stop = () => watchAlt !== false && altPrompt();
-    const done = await waitFor(() => answer() || closed() || stop(), 45000);
+    const done = await waitFor(() => answer() || closed() || stop(), 45000 + 15000 * (count - 1));
     if (!answer() && stop()) return { ok: false, reason: 'alttext' };
     // X's answer decides. The composer emptying is ambiguous (a photo-only
-    // post starts empty), so when it comes first the answer gets a moment
+    // post starts empty), so when it comes first the answers get a moment
     // more before the fallback counts it as sent.
-    const res = answer() || (done ? await waitFor(answer, 8000) : null);
+    const res = answer() || (done ? await waitFor(answer, 8000 + 4000 * (count - 1)) : null);
     if (res && !res.id) {
       const e = res.error || {};
-      return { ok: false, reason: 'xerror', detail: (e.message || 'HTTP ' + res.status) + (e.code ? ' (code ' + e.code + ')' : '') };
+      const detail = (e.message || 'HTTP ' + res.status) + (e.code ? ' (code ' + e.code + ')' : '');
+      const posted = answers().filter((r) => r.id).length;
+      return posted ? { ok: false, reason: 'partial', posted, of: count, detail } : { ok: false, reason: 'xerror', detail };
     }
     if (res || done) {
       await waitFor(() => !composerOpen(), 3000);
       closePanel();
-      return { ok: true, id: res ? res.id : null };
+      const ids = answers().filter((r) => r.id).map((r) => r.id);
+      return { ok: true, id: ids[0] || null, ids };
     }
     // No answer at all: what X Pro shows, if anything.
     const t = document.querySelector('[data-testid="toast"]');
@@ -875,6 +970,10 @@
   // The compose panel’s own GIF button (not an inline reply’s), found
   // without its editor, which X Pro loads a moment later.
   function gifButton() {
+    // The post being filled first (in a thread, the active one).
+    const own = composerRoot();
+    const mine = own && own.querySelector(TOOLS.gif);
+    if (mine) return mine;
     const all = Array.from(document.querySelectorAll(TOOLS.gif)).filter((b) => !b.closest('[data-testid^="inline_reply"], [data-testid="cellInnerDiv"]'));
     const drawer = all.filter((b) => b.closest('[data-testid="drawerAnimatedDiv"], [role="dialog"]'));
     return (drawer.length ? drawer : all).pop() || null;
@@ -954,7 +1053,7 @@
     return att ? { ok: true } : { ok: false, reason: 'gifgone' };
   }
 
-  async function prefill(text, files, tool, gif, styles, poll) {
+  async function prefill(text, files, tool, gif, styles, poll, more) {
     await waitFor(editor, 3000);
     if (files && files.length) await attach(files);
     if (gif) await attachGif(gif);
@@ -967,27 +1066,57 @@
       const b = root && root.querySelector(TOOLS.poll);
       if (b) b.click();
     }
-    if (tool && TOOLS[tool]) {
-      const root = composerRoot();
-      const b = root && root.querySelector(TOOLS[tool]);
-      if (b) b.click();
+    // A thread goes over post by post; the tool opens on the last one, the
+    // post X Pro has active.
+    let added = 0;
+    try {
+      for (let i = 0; i < (more || []).length; i++) {
+        if (!(await addPost(i + 1, more[i])).ok) break;
+        added++;
+      }
+      if (tool && TOOLS[tool]) {
+        const root = composerRoot();
+        const b = root && root.querySelector(TOOLS[tool]);
+        if (b) b.click();
+      }
+    } finally {
+      item = 0;
     }
-    return { ok: true, styled };
+    return { ok: true, styled, posts: 1 + added, of: 1 + (more || []).length };
   }
 
   // The compose drawer closes with “Done”; a reply or quote opens X Pro’s
   // Reply dialog, which closes with its own Close button (the first click
   // can go to the dialog’s focus handling, so it is pressed until it goes).
-  async function closePanel() {
+  // discard: only after Sweeter's own fill failed, when what X Pro holds is
+  // Sweeter's copy. Anything else (a panel the person left open) is never
+  // discarded here.
+  async function closePanel(discard) {
     if (!editor()) return;
     const done = document.querySelector('[aria-label="Done"]');
-    if (done) return done.click();
+    if (done) {
+      done.click();
+      return discard === true ? discardSheet() : undefined;
+    }
     for (let i = 0; i < 3 && editor(); i++) {
       const c = document.querySelector('[role="dialog"] [data-testid="app-bar-close"]');
       if (!c) return;
       c.click();
-      await waitFor(() => !editor(), 800);
+      await waitFor(() => !editor() || (discard === true && discardButton()), 800);
+      if (discard === true && discardButton()) return discardSheet();
     }
+  }
+  // Closing a composer that still holds something (a thread, media) asks
+  // “Discard post?” or “Discard thread?” (89438, _renderDiscardConfirmation).
+  // Sweeter keeps the person's own copy, so X Pro's is discarded, never
+  // saved as an X draft. Discard is the sheet's confirm or its cancel,
+  // depending on the case, so it is found by its label.
+  function discardButton() {
+    return Array.from(document.querySelectorAll('[data-testid="confirmationSheetDialog"] [data-testid^="confirmationSheet"]')).find((x) => /^\s*Discard\s*$/.test(x.textContent || '')) || null;
+  }
+  async function discardSheet() {
+    const b = await waitFor(discardButton, 1200);
+    if (b) b.click();
   }
 
   // ---------- conversations ----------

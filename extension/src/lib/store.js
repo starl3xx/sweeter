@@ -443,6 +443,30 @@
         s.updated = Date.now();
         emit(key);
       },
+      // A post X Pro removed for this person (they deleted it, or chose “Not
+      // interested”): out of every column now. Later polls don't send it
+      // again, but nothing tells the columns that already hold it.
+      forget(id) {
+        const pid = String(id);
+        for (const s of sources.values()) {
+          let changed = false;
+          for (const [k, b] of s.blocks) {
+            if (b.kind === 'post' && b.post && b.post.id === pid) {
+              s.blocks.delete(k);
+              changed = true;
+            } else if (b.kind === 'thread' && (b.posts || []).some((p) => p.id === pid)) {
+              const rest = b.posts.filter((p) => p.id !== pid);
+              if (rest.length) s.blocks.set(k, Object.assign({}, b, { posts: rest }));
+              else s.blocks.delete(k);
+              changed = true;
+            }
+          }
+          if (changed) {
+            resort(s);
+            emit(s.key);
+          }
+        }
+      },
       // A column whose timeline has not arrived yet (or never will: a
       // placeholder) still needs a source to draw.
       declare(src) {

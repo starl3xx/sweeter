@@ -1125,6 +1125,88 @@
     return { ok: true };
   }
 
+  // ---------- a post's menus ----------
+  // X Pro's “More” (the caret) and “Share post” menus for one post, read as
+  // X Pro shows them right now, and one item pressed. Opening a menu writes
+  // nothing. Verified 2026-10-13 on another account's post: More holds
+  // Follow @x, Add/remove from Lists, Mute, Mute this conversation, Leave
+  // this conversation, Block @x (testid block), View post activity
+  // (tweetEngagements), Embed post, Report post (report), Request Community
+  // Note; Share holds Send via Chat, Copy link, Share post via …, Bookmark
+  // to Folder. A person's own post has Delete, Pin, Edit and the rest (X Pro's
+  // bundle, module 714377).
+  const POST_MENU = {
+    more: (art) => button(art, 'caret'),
+    share: (art) => Array.from(art.querySelectorAll('button')).find((b) => b.getAttribute('aria-label') === 'Share post') || null,
+  };
+
+  async function openPostMenu(id, mapping, hint, which) {
+    const r = await reveal(id, mapping, hint);
+    if (!r) return null;
+    const btn = POST_MENU[which](r.art);
+    if (!btn) {
+      r.restore();
+      return null;
+    }
+    btn.click();
+    const menu = await waitFor(() => document.querySelector('[role="menu"]'), 2500);
+    if (!menu) {
+      r.restore();
+      return null;
+    }
+    return { menu, btn, restore: r.restore };
+  }
+
+  const menuItems = (menu) => Array.from(menu.querySelectorAll('[role="menuitem"]'));
+
+  // Both menus' items, in order: { menu: 'more' | 'share', text, testid }.
+  // null when the post or its More menu can't be found.
+  async function readPostMenu(id, mapping, hint) {
+    const out = [];
+    for (const which of ['more', 'share']) {
+      const open = await openPostMenu(id, mapping, hint, which);
+      if (!open) {
+        if (which === 'more') return null;
+        continue;
+      }
+      for (const m of menuItems(open.menu)) out.push({ menu: which, text: (m.textContent || '').trim(), testid: m.getAttribute('data-testid') || '' });
+      await closeMenu(open.btn);
+      open.restore();
+    }
+    return out;
+  }
+
+  // Presses the item whose text is `match` (a string, or a RegExp) in one
+  // menu. `confirm`: the person agreed in Sweeter, so X's own confirmation
+  // is pressed too. `step` says what followed: 'done'; 'confirm' (X asks,
+  // and Sweeter didn't: the question waits in X Pro); or 'dialog' (X Pro
+  // opened something to finish in, such as a report or the lists).
+  async function postAction(id, mapping, hint, which, match, confirm) {
+    const open = await openPostMenu(id, mapping, hint, which);
+    if (!open) return { ok: false, reason: 'nomenu' };
+    const is = (t) => (typeof match === 'string' ? t === match : match.test(t));
+    const item = menuItems(open.menu).find((m) => is((m.textContent || '').trim()));
+    if (!item) {
+      await closeMenu(open.btn);
+      open.restore();
+      return { ok: false, reason: 'nobutton' };
+    }
+    item.click();
+    try {
+      // A confirmation sheet, a dialog, X Pro's composer (Edit), or nothing.
+      const next = await waitFor(() => document.querySelector('[data-testid="confirmationSheetConfirm"]') || (dialogOpen() || composerOpen() ? 'dialog' : null), 1200);
+      if (next === 'dialog') return { ok: true, step: 'dialog' };
+      if (next && !confirm) return { ok: true, step: 'confirm' };
+      if (next) {
+        next.click();
+        await waitFor(() => !document.querySelector('[data-testid="confirmationSheetConfirm"]'), 2500);
+      }
+      return { ok: true, step: 'done' };
+    } finally {
+      open.restore();
+    }
+  }
+
   // Posts, Replies or Media: X Pro loads the tab when it is chosen.
   function profileTab(handle, label) {
     const stack = profileStack(String(handle).toLowerCase());
@@ -1134,8 +1216,9 @@
     return true;
   }
 
+  // A dialog, or X's confirmation sheet (which may be an alertdialog).
   function dialogOpen() {
-    return !!document.querySelector('[role="dialog"]');
+    return !!document.querySelector('[role="dialog"], [role="alertdialog"], [data-testid="confirmationSheetConfirm"]');
   }
 
   // ---------- column management (Release 1) ----------
@@ -1744,5 +1827,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

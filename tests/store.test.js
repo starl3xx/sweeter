@@ -301,3 +301,18 @@ test('a posted reply without the __typename fields X’s answer may leave out st
   eq(s.lastPosted().why, 'X didn’t take the post');
   ok(!/secret|starl3xx/.test(s.lastPosted().shape), 'no content in the log line');
 });
+
+test('forget: a deleted post leaves every column, and a repost of it too', () => {
+  const s = createStore();
+  const mine = F.tweet({ text: 'oops' });
+  const other = F.tweet({ text: 'stays' });
+  const rt = F.tweet({ text: 'RT', retweetOf: mine, user: F.user('ivycodes', 'Ivy Chen') });
+  s.ingest(homeMsg([F.tweetEntry(mine, '100'), F.tweetEntry(other, '90'), F.tweetEntry(rt, '80')]));
+  const seen = [];
+  s.subscribe((k) => seen.push(k));
+  s.forget(mine.rest_id);
+  eq(s.get('home').sorted.map((b) => b.post.plain), ['stays']);
+  ok(seen.includes('home'), 'the column redraws');
+  s.forget('123');
+  eq(s.get('home').sorted.length, 1);
+});

@@ -614,11 +614,27 @@
         return !!(r && r.querySelector('[data-testid="attachments"]'));
       };
       await waitFor(() => !postEnabled() || mine(), 5000);
-      const done = await waitFor(() => mine() && postEnabled(), video ? 120000 : 45000);
+      // X Pro counts a video as uploading only once it has a progress
+      // number, so the pair must hold a while (longer for a video) before
+      // it counts: a brief true between steps is not ready.
+      const done = await holds(() => mine() && postEnabled(), video ? 3000 : 1000, video ? 120000 : 45000);
       return done ? { ok: true } : { ok: false, reason: 'upload' };
     }
     const ready = await waitFor(postEnabled, video ? 120000 : 45000);
     return ready ? { ok: true } : { ok: false, reason: 'upload' };
+  }
+
+  // True once check() has held for `hold` ms in a row, within `limit` ms.
+  async function holds(check, hold, limit) {
+    const end = Date.now() + limit;
+    let since = 0;
+    while (Date.now() < end) {
+      if (!check()) since = 0;
+      else if (!since) since = Date.now();
+      else if (Date.now() - since >= hold) return true;
+      await wait(150);
+    }
+    return false;
   }
 
   // Who can reply: X Pro shows radio options under its “Everyone can reply”

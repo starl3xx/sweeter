@@ -8059,7 +8059,9 @@
         // or article open on it closes.
         if (match === 'Delete' || match === 'Not interested in this post') {
           store.forget(p.id);
-          for (const c of cols.values()) if (c.detail && c.detail.post && c.detail.post.id === p.id) closeDetail(c);
+          // Not while a profile sheet is open: its X Pro stack sits on top of
+          // the conversation's, and closing the conversation pops both.
+          if (!prof) for (const c of cols.values()) if (c.detail && c.detail.post && c.detail.post.id === p.id) closeDetail(c);
           if (rd && rd.post && rd.post.id === p.id) closeReader();
         }
         toast(say(rule[3]) || 'Done: ' + (typeof match === 'string' ? match : 'X Pro'));

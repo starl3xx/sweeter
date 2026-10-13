@@ -45,6 +45,36 @@
 
   // Columns Sweeter shows only as a placeholder with “Open in X Pro”.
   const PLACEHOLDER = { '/explore': 'explore', '/i/grok': 'grok', '/compose/post/unsent/drafts': 'drafts', '/compose/post/unsent/scheduled': 'scheduled' };
+  // Every other column type in X Pro's route table (its bundle, module
+  // 23503, read 2026-10-13) gets a placeholder too, keyed by its own path
+  // (x:<type>:<path>), since a deck may hold several of one type. Without
+  // one, the column had no place in Sweeter at all.
+  const OTHER = [
+    [/^\/i\/communities$/, 'communities'],
+    [/^\/(i|[A-Za-z0-9_]{1,15})\/communities(\/|$)/, 'community'],
+    [/^\/i\/bookmarks\/[^/]+$/, 'folder'],
+    [/^\/(messages|i\/chat)(\/|$)/, 'chat'],
+    [/^\/explore\/tabs\/|^\/i\/discover$/, 'explore'],
+    [/^\/i\/(trends|trending)(\/|$)/, 'trends'],
+    [/^\/i\/topics(\/|$)|^\/[A-Za-z0-9_]{1,15}\/topics$/, 'topic'],
+    [/^\/i\/(events|live|moments)\//, 'event'],
+    [/\/status\/\d+\/(retweets\/with_comments|quotes)$/, 'quotes'],
+    [/\/status\/\d+\/hidden$/, 'hidden'],
+    [/\/status\/\d+\/history$/, 'history'],
+    [/\/status\/\d+\/similar$/, 'similar'],
+    [/^\/[A-Za-z0-9_]{1,15}\/following$/, 'following'],
+    [/^\/[A-Za-z0-9_]{1,15}\/(followers|verified_followers|followers_you_follow)$/, 'followers'],
+    [/^\/i\/account_analytics(\/|$)/, 'analytics'],
+    [/^\/i\/communitynotes(\/|$)/, 'notes'],
+    [/^\/places\//, 'place'],
+    [/^\/i\/(broadcasts|spaces)\//, 'broadcast'],
+    [/^\/i\/grok\//, 'grok'],
+  ];
+  // Columns whose posts come through an operation Sweeter reads (a
+  // profile's tabs, a hashtag's search): paired by shared post IDs instead.
+  const PAIRED = /^\/[A-Za-z0-9_]{1,15}\/(likes|with_replies|media|tweets)$|^\/hashtag\//;
+  // X Pro routes that are never a column of their own.
+  const NOT_COLUMN = /^\/$|^\/(settings|compose|login|logout|tos|privacy)(\/|$)|^\/i\/(columns|display|keyboard_shortcuts)(\/|$)/;
   const RESERVED = new Set(['home', 'explore', 'notifications', 'messages', 'search', 'settings', 'compose', 'i', 'login', 'logout', 'tos', 'privacy']);
 
   // The store source key for a column’s route, or null when Sweeter cannot
@@ -83,7 +113,9 @@
       const id = userId ? userId(prof[1]) : null;
       return id ? 'user:' + id : null;
     }
-    return null;
+    if (NOT_COLUMN.test(path) || PAIRED.test(path)) return null;
+    const other = OTHER.find((o) => o[0].test(path));
+    return 'x:' + (other ? other[1] : 'other') + ':' + path;
   }
 
   function createDecks() {

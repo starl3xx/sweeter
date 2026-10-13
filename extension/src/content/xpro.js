@@ -603,15 +603,19 @@
     input.dispatchEvent(new Event('change', { bubbles: true }));
     const video = files.some((f) => /^video\//.test(f.type));
     // A later post of a thread: Post is already enabled by the posts before
-    // it, so first wait for this post's own previews (one group each in
-    // its attachments). X Pro keeps Post disabled while media is still
-    // being added or a video uploads (89438: hasPendingMedia, is_uploading).
+    // it. X Pro draws a post's attachments area (testID attachments) only
+    // once its media is in the post (while it prepares, a placeholder
+    // without that ID), and keeps Post disabled while media is being added
+    // or any video uploads (89438: _renderTweetAttachment, hasPendingMedia,
+    // is_uploading). So: this post's media starts, then both settle.
     if (item > 0) {
-      const shown = () => {
+      const mine = () => {
         const r = composerRoot();
-        return r && r.querySelectorAll('[data-testid="attachments"] [role="group"]').length >= files.length;
+        return !!(r && r.querySelector('[data-testid="attachments"]'));
       };
-      if (!(await waitFor(shown, video ? 120000 : 45000))) return { ok: false, reason: 'upload' };
+      await waitFor(() => !postEnabled() || mine(), 5000);
+      const done = await waitFor(() => mine() && postEnabled(), video ? 120000 : 45000);
+      return done ? { ok: true } : { ok: false, reason: 'upload' };
     }
     const ready = await waitFor(postEnabled, video ? 120000 : 45000);
     return ready ? { ok: true } : { ok: false, reason: 'upload' };

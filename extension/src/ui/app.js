@@ -643,6 +643,8 @@
       '</div>' +
       '<div class="cmp-drop">Drop photos or a video</div>' +
       '<input type="file" id="cmp-file" accept="' + ACCEPT.join(',') + '" multiple hidden>' +
+      // X Pro's image description reminder, asked here (askAltText).
+      '<div class="cmp-ask" hidden role="group" aria-label="Image descriptions"><span class="cmp-ask-t">X Pro reminds you to describe your images for people who can’t see them.</span><button class="cmp-ask-b" type="button" data-cmd="cmp-alt-back">Cancel</button><button class="cmp-ask-b" type="button" data-cmd="cmp-alt-post">Not This Time</button><button class="cmp-ask-go" type="button" data-cmd="cmp-alt-add">Describe in X Pro</button></div>' +
       '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for GIFs, polls, scheduling, and more">Open in X Pro</button>' +
       '<span class="cmp-status" id="cmp-status" role="status"></span><span class="grow"></span><span class="cmp-count"></span>' +
       '<button class="cmp-post" type="button" data-cmd="cmp-post" title="Post (⌘Return)">Post</button></div>' +
@@ -732,6 +734,7 @@
     Sweeter.editor.textbox(cmpText);
     const cmpCount = shadow.querySelector('.cmp-count');
     const cmpStatus = shadow.querySelector('.cmp-status');
+    const cmpAsk = shadow.querySelector('.cmp-ask');
     const cmpPost = shadow.querySelector('.cmp-post');
     const cmpBox = shadow.querySelector('.cmp');
     const cmpMedia = shadow.querySelector('.cmp-media');
@@ -5954,6 +5957,7 @@
 
     let compose = null;
     let posting = false;
+    let altAsk = null; // the compose waiting on X Pro's image description reminder
     // Drafts: one per kind and target (a new post, a reply to a post, a
     // quote of a post). Saved on this Mac as you write, so a quit, a reload
     // or a crash keeps them; X Pro saves a draft only when asked (its
@@ -6323,8 +6327,10 @@
         toast('Who can reply? ' + R.replyLimitText(p.replyLimit), 'info');
         return;
       }
-      // A compose window already open keeps its text as a draft.
+      // A compose window already open keeps its text as a draft, and an
+      // open image description reminder goes back to X Pro's composer.
       if (compose && !cmpBack.hidden) keepDraft(compose);
+      if (altAsk) answerAltText('back');
       compose = { kind, id: id || null, key: key || null, files: [] };
       cmpTitle.textContent = kind === 'reply' ? 'Reply' : kind === 'quote' ? 'Quote post' : 'New post';
       cmpPost.textContent = kind === 'reply' ? 'Reply' : 'Post';
@@ -6458,6 +6464,8 @@
     }
 
     function closeCompose(keep) {
+      // Nothing was sent: X Pro's reminder goes back to its composer.
+      if (altAsk) answerAltText('back');
       if (compose) {
         if (keep) keepDraft(compose);
         else {
@@ -6512,6 +6520,11 @@
       cmpStatus.textContent = c.files.length ? 'Uploading and posting through X Pro…' : c.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
       if (r.ok) r = await xpro.fillAndPost(text, { files: c.files, gif: c.gif, reply: c.kind === 'reply' ? null : cmpReply.value, styles: styles.bold.length || styles.italic.length ? styles : null });
+      if (r.reason === 'alttext') return askAltText(c);
+      composeResult(c, r);
+    }
+
+    function composeResult(c, r) {
       posting = false;
       if (r.ok) {
         closeCompose(false);
@@ -6532,6 +6545,64 @@
       if (compose === c) {
         cmpStatus.textContent = failMsg;
         updateCount();
+      }
+    }
+
+    // X Pro's reminder to describe images (on when the person turned it on
+    // in X's settings) stopped the post, and its sheet waits under the cover.
+    // The compose window asks the same question; Post stays locked until an
+    // answer, and closing the window answers Cancel.
+    function askAltText(c) {
+      if (compose !== c) {
+        altAsk = c;
+        return answerAltText('back');
+      }
+      altAsk = c;
+      cmpStatus.textContent = '';
+      cmpAsk.hidden = false;
+      cmpAsk.querySelector('[data-cmd="cmp-alt-add"]').focus();
+    }
+    async function answerAltText(choice) {
+      const c = altAsk;
+      if (!c) return;
+      altAsk = null;
+      cmpAsk.hidden = true;
+      if (choice === 'post') {
+        if (compose === c) cmpStatus.textContent = 'Posting through X Pro…';
+        return composeResult(c, await xpro.answerAltPrompt('post'));
+      }
+      if (choice === 'add') {
+        const r = await xpro.answerAltPrompt('add');
+        posting = false;
+        if (!r.ok) {
+          xpro.clearEditor();
+          xpro.closePanel();
+          if (compose === c) {
+            cmpStatus.textContent = 'X Pro’s media editor didn’t open. Nothing was posted; your text is still here.';
+            updateCount();
+          }
+          return;
+        }
+        // As Open in X Pro does: the post goes on in X Pro (its media editor,
+        // then its composer), and Sweeter comes back when both close.
+        drafts.delete(draftKey(c));
+        storeDrafts();
+        if (compose === c) {
+          compose = null;
+          queueCard();
+          cmpBack.hidden = true;
+          releaseComposeWindow();
+        }
+        return xproHandoff(async () => ({ ok: true }), () => xpro.dialogOpen() || xpro.composerOpen());
+      }
+      await xpro.answerAltPrompt('back');
+      xpro.clearEditor();
+      xpro.closePanel();
+      posting = false;
+      if (compose === c) {
+        cmpStatus.textContent = 'Not posted. Your text is still here.';
+        updateCount();
+        cmpText.focus();
       }
     }
 
@@ -7225,6 +7296,15 @@
         case 'cmp-post':
           submitCompose();
           break;
+        case 'cmp-alt-post':
+          answerAltText('post');
+          break;
+        case 'cmp-alt-add':
+          answerAltText('add');
+          break;
+        case 'cmp-alt-back':
+          answerAltText('back');
+          break;
         case 'cmp-xpro':
         case 'cmp-poll':
         case 'cmp-schedule':
@@ -7245,7 +7325,11 @@
           queueCard();
           cmpBack.hidden = true;
           releaseComposeWindow();
-          if (c) handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null);
+          const go = () => c && handoff(c.kind, c.id, c.key, text, files, tool, gif, styles && (styles.bold.length || styles.italic.length) ? styles : null);
+          // An open image description reminder goes back to X Pro's
+          // composer first, so the hand-off starts from a clean one.
+          if (altAsk) answerAltText('back').then(go);
+          else go();
           break;
         }
         case 'cmp-photo':

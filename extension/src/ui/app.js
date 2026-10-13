@@ -1430,7 +1430,7 @@
       if (!e || e.view || e.merge || !e.m || actingAs(e.vid) !== null) return false;
       const s = store.get(e.key);
       if (!s) return false;
-      return e.key === 'home' || s.kind === 'list' || s.kind === 'user' || (s.kind === 'search' && /:Latest$/.test(e.key));
+      return e.key === 'home' || (s.kind === 'list' && !e.key.startsWith('listtop:')) || s.kind === 'user' || (s.kind === 'search' && /:Latest$/.test(e.key));
     }
     // The newest post id in a block: its time, as X numbers posts.
     function idOf(b) {
@@ -1828,7 +1828,7 @@
       if (k === 'home-foryou') return 'For You';
       if (k === 'mentions') return 'Mentions';
       if (k.startsWith('notifications:')) return 'Notifications';
-      if (k.startsWith('list:')) return store.listName(k.slice(5)) || 'List';
+      if (/^list(top)?:/.test(k)) return store.listName(k.slice(k.indexOf(':') + 1)) || 'List';
       if (k.startsWith('search:')) return k.split(':').slice(1, -1).join(':');
       if (k === 'bookmarks') return 'Bookmarks';
       if (k.startsWith('folder:')) return 'Bookmark folder';
@@ -4387,7 +4387,7 @@
       if (key === 'home-foryou') return { key, kind: 'home', title: 'For You' };
       if (key === 'mentions') return { key, kind: 'notifications', title: 'Mentions' };
       if (key.startsWith('notifications:')) return { key, kind: 'notifications', title: key === 'notifications:all' ? 'Notifications' : key.slice(14).replace(/^./, (x) => x.toUpperCase()) };
-      if (key.startsWith('list:')) return { key, kind: 'list', title: 'List', listId: key.slice(5) };
+      if (/^list(top)?:/.test(key)) return { key, kind: 'list', title: 'List', listId: key.slice(key.indexOf(':') + 1) };
       if (key.startsWith('search:')) return { key, kind: 'search', title: key.split(':').slice(1, -1).join(':') };
       if (key === 'bookmarks') return { key, kind: 'bookmarks', title: 'Bookmarks' };
       if (key.startsWith('folder:')) return { key, kind: 'bookmarks', title: 'Bookmark folder' };

@@ -25,9 +25,11 @@
           : { key: 'notifications:' + t.toLowerCase(), kind: 'notifications', title: t === 'All' ? 'Notifications' : t };
       }
       case 'ListLatestTweetsTimeline':
-      // A list column ordered Top (X Pro's bundle, module 45428): the same column.
-      case 'ListRankedTweetsTimeline':
         return v.listId ? { key: 'list:' + v.listId, kind: 'list', title: 'List', listId: String(v.listId) } : null;
+      // A list column ordered Top (X Pro's bundle, module 45428): ranked, so
+      // a source of its own (never merged, which needs time order).
+      case 'ListRankedTweetsTimeline':
+        return v.listId ? { key: 'listtop:' + v.listId, kind: 'list', title: 'List', listId: String(v.listId) } : null;
       // A Community, Top or Latest (rankingMode), and the posts of all your
       // Communities (X Pro's bundle, module 899844).
       case 'CommunityTweetsTimeline':

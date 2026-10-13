@@ -48,6 +48,8 @@ test('Communities, bookmark folders: columns of their own', () => {
   const k = (p) => D.keyFor({ pathname: p });
   eq(k('/i/communities/1700000000000000001'), 'community:1700000000000000001');
   eq(k('/i/communities'), 'communities');
+  eq(D.keyFor({ pathname: '/i/lists/42', latest: false }), 'listtop:42');
+  eq(D.keyFor({ pathname: '/i/lists/42', latest: true }), 'list:42');
   eq(k('/i/bookmarks/1800000000000000002'), 'folder:1800000000000000002');
 });
 

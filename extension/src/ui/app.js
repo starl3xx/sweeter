@@ -5938,8 +5938,10 @@
       }, 600);
     }
     // The last keystrokes, when the page goes (a reload, a closed tab).
+    // Never a deletion here: on a quit, the Mac app's compose window can go
+    // first and leave its text box empty, which is not the person clearing it.
     window.addEventListener('pagehide', () => {
-      if (compose && !cmpBack.hidden) keepDraft(compose);
+      if (compose && !cmpBack.hidden && cmpText.value.trim()) keepDraft(compose);
     });
 
     // X’s weighted length: links (draftLinks: with https:// or a bare

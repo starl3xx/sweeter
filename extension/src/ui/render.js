@@ -358,6 +358,8 @@
       (on('barLike') ? '<button type="button" data-act="like" class="' + (p.state.liked ? 'on-like' : '') + '" title="' + (p.state.liked ? 'Unlike (l)' : 'Like (l)') + '" aria-label="Like" aria-pressed="' + !!p.state.liked + '" tabindex="-1">' + icon(p.state.liked ? 'likeOn' : 'like') + count(p.counts.like, ctx) + '</button>' : '') +
       (on('barViews') && s.counts && views ? '<span class="vw" title="' + h(views.toLocaleString('en-US')) + (views === 1 ? ' view' : ' views') + '">' + icon('chartbar') + count(views, ctx) + '</span>' : '') +
       (on('barBookmark') ? '<button type="button" data-act="bookmark" class="' + (p.state.bookmarked ? 'on-bm' : '') + '" title="' + (p.state.bookmarked ? 'Remove bookmark (b)' : 'Bookmark (b)') + '" aria-label="Bookmark" aria-pressed="' + !!p.state.bookmarked + '" tabindex="-1">' + icon(p.state.bookmarked ? 'bookmarkOn' : 'bookmark') + '</button>' : '') +
+      // X Pro's More and Share menus, read when pressed (app.js showPostXMenu).
+      (on('barMore') ? '<button type="button" data-act="xmenu" title="More: X Pro’s menu for this post" aria-label="More" aria-haspopup="menu" tabindex="-1">' + icon('more') + '</button>' : '') +
       (on('barCopy') ? '<button type="button" data-act="copy" title="Copy link to post" aria-label="Copy link to post" tabindex="-1">' + icon('link') + '</button>' : '') +
       (on('barOpen') ? '<button type="button" data-act="open" title="Open on x.com" aria-label="Open on x.com" tabindex="-1">' + icon('open') + '</button>' : '') +
       '</div>'

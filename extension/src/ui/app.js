@@ -29,6 +29,7 @@
     barLike: true,
     barViews: true,
     barBookmark: true,
+    barMore: true,
     barCopy: true,
     barOpen: true,
     round: true,
@@ -405,6 +406,7 @@
       { k: 'check', key: 'barLike', label: '', text: 'Like' },
       { k: 'check', key: 'barViews', label: '', text: 'Views', note: 'How many times X counted the post seen. Shown with the other counts.' },
       { k: 'check', key: 'barBookmark', label: '', text: 'Bookmark' },
+      { k: 'check', key: 'barMore', label: '', text: 'More: X Pro’s menu for the post' },
       { k: 'check', key: 'barCopy', label: '', text: 'Copy link' },
       { k: 'check', key: 'barOpen', label: '', text: 'Open on x.com', note: 'In a narrow column, Open on x.com, then Copy link, then views step aside, only as many as the room needs: turning one off makes room for the others. The keys work either way: r, t, l, and b.' },
     ],
@@ -440,6 +442,7 @@
     ['t', 'Repost or quote'], ['⌥ t', 'Quote'],
     ['r', 'Reply'], ['n', 'New post'],
     ['b', 'Bookmark or remove bookmark'],
+    ['u', 'Mute the author on X'], ['x', 'Block the author on X (asks first)'],
     ['⌘ Return', 'Send from the compose window'], ['Esc', 'Close compose, keep the draft'],
     ['⌘ B', 'Bold selected text'], ['⌘ I', 'Italic selected text'],
     ['o', 'Open media or link'], ['Return  →', 'Open the conversation here'],
@@ -464,7 +467,7 @@
   ];
   // What a layout holds: Sweeter’s own arrangement, never X Pro’s decks.
   const LAYOUT_KEYS = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
-  const REBUILD = new Set(['barReply', 'barRepost', 'barLike', 'barViews', 'barBookmark', 'barCopy', 'barOpen', 'actions', 'tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
+  const REBUILD = new Set(['barReply', 'barRepost', 'barLike', 'barViews', 'barBookmark', 'barMore', 'barCopy', 'barOpen', 'actions', 'tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
   const REPLY_OPTIONS = ['Everyone', 'Accounts you follow', 'Accounts you follow and who they follow', 'Only accounts you mention', 'Verified accounts'];
   // The picker’s categories (emoji-test.txt’s groups), each with its symbol.
   const EMO_TABS = [['recent', 'clock', 'Frequently used'], ['Smileys & Emotion', 'emoji'], ['People & Body', 'people'], ['Animals & Nature', 'paw'], ['Food & Drink', 'fork'], ['Travel & Places', 'plane'], ['Activities', 'football'], ['Objects', 'bulb'], ['Symbols', 'hash'], ['Flags', 'flag']];
@@ -3197,15 +3200,17 @@
       const focalCtx = Object.assign({}, ctx, { focal: true });
       let html = '';
       let focalSeen = false;
+      // A post deleted (or dismissed) while open: a note in its place.
+      const gone = d.gone ? '<article class="cell gone-cell"><div></div><div class="main gone">' + h(d.gone) + '</div></article>' : '';
       for (const b of data ? data.blocks : []) {
         if (b.kind === 'post' && b.post.id === d.id) {
-          html += R.post(b.post, focalCtx);
+          html += gone || R.post(b.post, focalCtx);
           focalSeen = true;
         } else if (b.kind === 'post' && !focalSeen) {
           html += R.post(b.post, ctx, 'ancestor'); // what the post replies to
         } else html += R.block(b, ctx, b.kind === 'thread' ? b.posts : null);
       }
-      if (!focalSeen) html = R.post(d.post, focalCtx) + html;
+      if (!focalSeen) html = (gone || R.post(d.post, focalCtx)) + html;
       const keep = c.dscroll.scrollTop;
       const sel = d.selId;
       c.dlist.innerHTML = html;
@@ -7726,6 +7731,9 @@
             case 'copy':
               copyText(cell.dataset.url, 'Link copied');
               break;
+            case 'xmenu':
+              showPostXMenu(cell.dataset.id, key, act);
+              break;
             case 'more-text': {
               const id = cell.dataset.id;
               const open = !expanded.has(id);
@@ -7931,9 +7939,11 @@
           { id: 'browser', title: 'Open in Browser', symbol: 'safari' },
           { id: 'share', title: 'Share…', symbol: 'square.and.arrow.up', share: p.url },
           { separator: true },
+          { id: 'xmenu', title: 'X Pro’s Menu for This Post…', symbol: 'ellipsis.circle' },
+          { separator: true },
           { id: 'profile', title: 'Show @' + handle + '’s Profile', symbol: 'person.crop.circle' },
           { id: 'addcol', title: 'Add Column for @' + handle, symbol: 'rectangle.stack.badge.plus' },
-          { id: 'muteUser', title: 'Mute @' + handle, symbol: 'speaker.slash' },
+          { id: 'muteUser', title: 'Mute @' + handle + ' in Sweeter', symbol: 'speaker.slash' },
           p.source ? { id: 'muteClient', title: 'Mute “' + p.source + '”', symbol: 'nosign' } : null,
         ],
         run: {
@@ -7948,12 +7958,136 @@
           copyLink: () => copyText(p.url, 'Link copied'),
           copyText: () => copyText(p.plain, 'Text copied'),
           browser: () => openUrl(p.url),
+          xmenu: () => showPostXMenu(p.id, ref),
           profile: () => openProfile(handle, { postId: p.id, key }),
           addcol: () => addColumnFor(handle, { postId: p.id, key }),
           muteUser: () => muteRule('@' + handle),
           muteClient: () => muteRule('via:' + p.source),
         },
       };
+    }
+
+    // ---------- X Pro's own menu for a post ----------
+    // The More and Share post menus X Pro shows for a post, read when asked
+    // (xpro.readPostMenu), so the items are the ones X offers this post right
+    // now: Delete and Pin only on your own, Unmute once muted. What Sweeter
+    // does with each: [pattern, how, SF Symbol, toast, question]. How: 'ask'
+    // in Sweeter first, then X's own confirmation is pressed too; 'now' at
+    // once; 'xpro' X Pro shows what it opens (a report, the lists, an edit)
+    // until it closes; 'embed' Sweeter opens X's embed page itself (X Pro's
+    // own new window is blocked while Sweeter covers it); 'skip' Sweeter has
+    // its own. An item no pattern knows is pressed as 'now', and anything it
+    // opens shows in X Pro.
+    const author = (p) => '@' + p.author.handle;
+    const XPOST = [
+      [/^Delete$/, 'ask', 'trash', 'Post deleted', ['Delete post?', 'This can’t be undone, and it will be removed from your profile, the timeline of any accounts that follow you, and from search results.', 'Delete']],
+      [/^Pin to your profile$/, 'ask', 'pin', 'Pinned to your profile', ['Pin post to profile?', 'This will appear at the top of your profile and replace any previously pinned post.', 'Pin']],
+      [/^Unpin from profile$/, 'ask', 'pin.slash', 'Unpinned from your profile', ['Unpin post from profile?', 'This will no longer appear automatically at the top of your profile.', 'Unpin']],
+      [/^Edit( post)?$/, 'xpro', 'pencil'],
+      [/^Change who can reply$/, 'xpro', 'bubble.left.and.bubble.right'],
+      [/content disclosure/i, 'xpro', 'info.circle'],
+      [/Highlights?\b/, 'xpro', 'sparkles'],
+      [/^Follow @/, 'now', 'person.badge.plus', (p) => 'Following ' + author(p)],
+      [/^Unfollow @/, 'ask', 'person.badge.minus', (p) => 'Unfollowed ' + author(p), (p) => ['Unfollow ' + author(p) + '?', 'Their posts will no longer show in your Home timeline.', 'Unfollow']],
+      [/^Subscribe to @/, 'xpro', 'star'],
+      [/^Add\/remove .*Lists$/, 'xpro', 'list.bullet'],
+      [/^Mute\b(?! this conversation)/, 'now', 'speaker.slash', (p) => 'Muted ' + author(p) + ' on X'],
+      [/^Unmute\b(?! this conversation)/, 'now', 'speaker.wave.2', (p) => 'Unmuted ' + author(p) + ' on X'],
+      [/^Mute this conversation$/, 'now', 'bell.slash', 'Notifications muted for this conversation'],
+      [/^Unmute this conversation$/, 'now', 'bell', 'Notifications unmuted for this conversation'],
+      [/^Leave this conversation$/, 'now', 'rectangle.portrait.and.arrow.right', 'You’ve left this conversation'],
+      [/^Block @/, 'ask', 'hand.raised', (p) => 'Blocked ' + author(p), (p) => ['Block ' + author(p) + '?', 'They can’t follow you or see your posts, and you won’t see their posts.', 'Block']],
+      [/^Unblock @/, 'ask', 'hand.raised.slash', (p) => 'Unblocked ' + author(p), (p) => ['Unblock ' + author(p) + '?', 'They can follow you and see your posts again.', 'Unblock']],
+      [/^Hide reply$/, 'now', 'eye.slash', 'Reply hidden'],
+      [/^Unhide reply$/, 'now', 'eye', 'Reply unhidden'],
+      [/^Not interested in this post$/, 'now', 'hand.thumbsdown', 'You’ll see fewer posts like this'],
+      [/^View .*(activity|analytics)/i, 'xpro', 'chart.bar'],
+      [/^Embed post$/, 'embed', 'chevron.left.forwardslash.chevron.right'],
+      [/^Report /, 'xpro', 'exclamationmark.bubble'],
+      [/^Request Community Note$/, 'now', 'person.2', 'Community Note requested'],
+      [/^Bookmark to Folder$/, 'xpro', 'folder.badge.plus'],
+      [/^(Copy link|Share post via|Send via)/, 'skip'],
+      [/^Download video$/, 'skip'],
+    ];
+    const XPOST_FAIL = {
+      notfound: FAIL.notfound,
+      nomenu: 'X Pro’s menu for this post didn’t open. Nothing changed.',
+      nobutton: 'X Pro’s menu doesn’t offer that for this post now.',
+      noconfirm: 'X Pro didn’t ask to confirm, so nothing changed. Check in X Pro (⌥X).',
+    };
+    const xRule = (text) => XPOST.find((r) => r[0].test(text)) || [null, 'now', null];
+
+    async function showPostXMenu(id, key, anchor) {
+      const p = findPost(id);
+      if (!p || p.unavailable || refuseDelegated(key)) return;
+      const items = await xpro.readPostMenu(p.id, target(key).m, hintFor(p.id, key));
+      if (!items) return toast(XPOST_FAIL.nomenu, 'warn');
+      const rows = [];
+      let last = null;
+      items.forEach((it, i) => {
+        const r = xRule(it.text);
+        if (r[1] === 'skip') return;
+        if (last && last !== it.menu) rows.push({ separator: true });
+        last = it.menu;
+        rows.push({ id: 'x' + i, title: it.text + (r[1] === 'ask' || r[1] === 'xpro' ? '…' : ''), symbol: r[2] || 'ellipsis' });
+      });
+      if (!rows.length) return toast('X Pro offers nothing more for this post.', 'info');
+      const run = (choice) => {
+        const it = /^x\d+$/.test(String(choice)) ? items[Number(choice.slice(1))] : null;
+        if (it) runPostX(p, key, it.menu, it.text, xRule(it.text));
+      };
+      if (native && native.menu) return native.menu({ items: tidy(rows) }).then((c) => c && run(c));
+      // Safari: the page's own menu, beside the button that opened it.
+      pop.innerHTML = tidy(rows).map((it) => (it.separator ? '<div class="psep" role="separator"></div>' : '<button type="button" role="menuitem" data-cmd="pop-run" data-v="' + h(it.id) + '"><span class="pl2">' + h(it.title) + '</span></button>')).join('');
+      pop.dataset.kind = 'xpost';
+      pop.__run = run;
+      placePop(anchor || app);
+    }
+
+    // `match` is the item's text, or a pattern (the u and x keys).
+    async function runPostX(p, key, menu, match, rule) {
+      const how = rule[1];
+      const say = (x) => (typeof x === 'function' ? x(p) : x);
+      if (how === 'embed') return openUrl('https://publish.twitter.com/?url=' + encodeURIComponent(p.url));
+      const press = (confirmed) => xpro.postAction(p.id, target(key).m, hintFor(p.id, key), menu, match, confirmed);
+      const still = () => xpro.dialogOpen() || xpro.composerOpen();
+      if (how === 'xpro') return xproHandoff(() => press(false), still);
+      const go = async (confirmed) => {
+        const r = await press(confirmed);
+        if (!r.ok) return toast(XPOST_FAIL[r.reason] || 'X Pro didn’t do that. Try again in X Pro (⌥X).', 'warn');
+        // X Pro asked something Sweeter didn't, or opened a dialog: show it there.
+        if (r.step !== 'done') return xproHandoff(async () => ({ ok: true }), still);
+        // Gone for this person: out of every column now. A conversation open
+        // on it stays (closing it would pop X Pro's stack, and a profile
+        // opened on top of it), with a note where the post was; an article
+        // open on it closes.
+        if (match === 'Delete' || match === 'Not interested in this post') {
+          const open = Array.from(cols.values()).filter((c) => c.detail && c.detail.post && c.detail.post.id === p.id);
+          for (const c of open) c.detail.gone = match === 'Delete' ? 'You deleted this post.' : 'You said you’re not interested in this post.';
+          store.forget(p.id);
+          for (const c of open) renderDetail(c, false);
+          if (rd && rd.post && rd.post.id === p.id) closeReader();
+        }
+        toast(say(rule[3]) || 'Done: ' + (typeof match === 'string' ? match : 'X Pro'));
+      };
+      if (how !== 'ask') return go(false);
+      const q = say(rule[4]);
+      const a = macAlert({ title: q[0], text: q[1], buttons: [q[2], 'Cancel'], destructive: true });
+      if (a) {
+        return a.then((res) => {
+          app.focus({ preventScroll: true });
+          if (res.button === 0) go(true);
+        });
+      }
+      showConfirm(q[0], q[2], () => go(true));
+    }
+
+    // u and x: X Pro's own keys, mute and block the post's author on X.
+    function postXKey(p, key, which) {
+      const me = viewer && viewer.handle && viewer.handle.toLowerCase() === p.author.handle.toLowerCase();
+      if (me) return toast('That’s your own post.', 'info');
+      const re = which === 'mute' ? /^Mute\b(?! this conversation)/ : /^Block @/;
+      runPostX(p, key, 'more', re, XPOST.find((r) => String(r[0]) === String(re)));
     }
 
     // No separator at either end or twice in a row.
@@ -9174,6 +9308,14 @@
         case 'b': {
           const sp = selectedPost();
           if (sp) doBookmark(sp.id, sp.key);
+          return true;
+        }
+        // X Pro's own: mute (u) and block (x) the author, on X.
+        case 'u':
+        case 'x': {
+          const sp = selectedPost();
+          const p = sp && findPost(sp.id);
+          if (p && !refuseDelegated(sp.key)) postXKey(p, sp.key, e.key === 'u' ? 'mute' : 'block');
           return true;
         }
         case 'n':

@@ -19,6 +19,17 @@
     // (verified 2026-10-06). The newest POSTS_MAX are kept.
     const posts = new Map();
     const POSTS_MAX = 300;
+    // Posts X Pro removed for this person this session (forget): a copy of a
+    // conversation into its column leaves them out too.
+    const forgotten = new Set();
+    // A block without the forgotten posts: the same block, null (drop it), or a thread with the rest.
+    function withoutForgotten(b) {
+      if (!forgotten.size) return b;
+      if (b.kind === 'post') return b.post && forgotten.has(b.post.id) ? null : b;
+      if (b.kind !== 'thread' || !(b.posts || []).some((p) => forgotten.has(p.id))) return b;
+      const rest = b.posts.filter((p) => !forgotten.has(p.id));
+      return rest.length ? Object.assign({}, b, { posts: rest }) : null;
+    }
     // Profiles Sweeter asked X Pro to open: the person (by lowercase handle)
     // and their timelines (by user id, then by X’s operation name, one per
     // profile tab). A watched user’s timelines never become columns.
@@ -359,7 +370,7 @@
     }
 
     function fillConv(cs, d) {
-      cs.blocks = new Map(d.blocks.map((b) => [b.key, b]));
+      cs.blocks = new Map(d.blocks.map(withoutForgotten).filter(Boolean).map((b) => [b.key, b]));
       resort(cs);
       if (!cs.readSort && cs.sorted.length) cs.readSort = cs.sorted[0].sortIndex;
       cs.updated = Date.now();
@@ -442,6 +453,55 @@
         if (s.sorted.length && (!s.readSort || (s.readSort === '1' && s.readAt))) s.readSort = s.readAt ? sortAt(s, s.readAt) : s.sorted[0].sortIndex;
         s.updated = Date.now();
         emit(key);
+      },
+      // A post X Pro removed for this person (they deleted it, or chose “Not
+      // interested”): out of every column, open conversation and profile now.
+      // Later polls don't send it again, but nothing tells what already
+      // holds it. A conversation keeps its key, so a later page of the same
+      // conversation doesn't bring it back either.
+      forget(id) {
+        const pid = String(id);
+        forgotten.add(pid);
+        const without = withoutForgotten;
+        const prune = (map) => {
+          let changed = false;
+          for (const [k, b] of map) {
+            const nb = without(b);
+            if (nb === b) continue;
+            changed = true;
+            if (nb) map.set(k, nb);
+            else map.delete(k);
+          }
+          return changed;
+        };
+        for (const s of sources.values()) {
+          if (!prune(s.blocks)) continue;
+          resort(s);
+          emit(s.key);
+        }
+        for (const [fid, d] of details) {
+          // A conversation of the post itself keeps it, in its place: the UI
+          // draws a note there (what it replies to stays above it).
+          const next = d.blocks.map((b) => (b.kind === 'post' && b.post && b.post.id === fid ? b : without(b))).filter(Boolean);
+          if (next.length === d.blocks.length && next.every((b, i) => b === d.blocks[i])) continue;
+          d.blocks = next;
+          d.updated = Date.now();
+          emit('detail:' + fid);
+        }
+        for (const [uid, byOp] of timelines) {
+          let changed = false;
+          for (const t of byOp.values()) {
+            const pin = t.pinned ? without(t.pinned) : null;
+            const pinChanged = !!t.pinned && pin !== t.pinned;
+            if (!prune(t.blocks) && !pinChanged) continue;
+            changed = true;
+            if (pinChanged) t.pinned = pin;
+            t.sorted = Array.from(t.blocks.values()).sort((a, b) => compareSort(b.sortIndex, a.sortIndex));
+            if (t.pinned) t.sorted = [t.pinned].concat(t.sorted.filter((b) => b.key !== t.pinned.key));
+          }
+          if (changed) emit('timeline:' + uid);
+        }
+        posts.delete(pid);
       },
       // A column whose timeline has not arrived yet (or never will: a
       // placeholder) still needs a source to draw.

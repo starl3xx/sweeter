@@ -87,6 +87,33 @@
   // The coin a token pill shows until its logo is known (a CSS mask).
   const COIN = 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><path d="' + ((Sweeter.SYMBOLS && Sweeter.SYMBOLS.coin) || '') + '"/></svg>') + '")';
 
+  // A narrow column's action bar: at most `cap` items stay, and the ones
+  // past that step aside in this order: Open on x.com, Copy link, the view
+  // count (only the ones Settings ▸ General ▸ Action bar shows count, so
+  // turning one off makes room for the rest). One rule per bar length (up
+  // to all 8 items) and per mix of the earlier ones present.
+  const BAR_ITEMS = 8;
+  const BAR_STEP = ['[data-act="open"]', '[data-act="copy"]', '.vw'];
+  function barSteps(cap) {
+    const rules = [];
+    for (let n = cap + 1; n <= BAR_ITEMS; n++) {
+      const len = '.acts:has(> :nth-child(' + n + '))' + (n < BAR_ITEMS ? ':not(:has(> :nth-child(' + (n + 1) + ')))' : '');
+      for (let i = 0; i < BAR_STEP.length; i++) {
+        for (let mix = 0; mix < 1 << i; mix++) {
+          let ahead = 0;
+          let sel = len;
+          for (let j = 0; j < i; j++) {
+            const there = (mix >> j) & 1;
+            ahead += there;
+            sel += there ? ':has(> ' + BAR_STEP[j] + ')' : ':not(:has(> ' + BAR_STEP[j] + '))';
+          }
+          if (ahead < n - cap) rules.push(sel + ' > ' + BAR_STEP[i]);
+        }
+      }
+    }
+    return rules.join(',') + '{display:none}';
+  }
+
   Sweeter.css = `
 :host{all:initial}
 .app,.popout{--coin:${COIN}}
@@ -367,10 +394,10 @@ img{display:block}
    the ones Settings ▸ General ▸ Action bar shows (so turning one off makes
    room for the rest): Open on x.com first (the post's time opens the same
    page), then Copy link, then the view count; the buttons tighten too. */
-@container col (max-width:26.5em){.acts:has(> :nth-child(7)) > [data-act="open"],.acts:has(> :nth-child(7)):not(:has(> [data-act="open"])) > [data-act="copy"],.acts:has(> :nth-child(7)):not(:has(> [data-act="open"])):not(:has(> [data-act="copy"])) > .vw{display:none}.acts{margin-left:-4px;margin-right:-4px}.acts button,.acts a,.acts .vw{padding:4px}}
+@container col (max-width:26.5em){${barSteps(6)}.acts{margin-left:-4px;margin-right:-4px}.acts button,.acts a,.acts .vw{padding:4px}}
 @container col (max-width:22.75em){.acts svg,.acts .vw svg{width:15px;height:15px}.acts button,.acts a,.acts .vw{padding:4px 3px}}
-@container col (max-width:21.25em){.acts:has(> :nth-child(6)) > [data-act="open"],.acts:has(> :nth-child(6)):not(:has(> [data-act="open"])) > [data-act="copy"],.acts:has(> :nth-child(7)):has(> [data-act="open"]) > [data-act="copy"],.acts:has(> :nth-child(6)):not(:has(> [data-act="open"])):not(:has(> [data-act="copy"])) > .vw,.acts:has(> :nth-child(7)):has(> [data-act="open"]):not(:has(> [data-act="copy"])) > .vw,.acts:has(> :nth-child(7)):has(> [data-act="copy"]):not(:has(> [data-act="open"])) > .vw{display:none}}
-@container col (max-width:20em){.acts:has(> :nth-child(5)) > [data-act="open"],.acts:has(> :nth-child(5)):not(:has(> [data-act="open"])) > [data-act="copy"],.acts:has(> :nth-child(6)):has(> [data-act="open"]) > [data-act="copy"],.acts:has(> :nth-child(5)):not(:has(> [data-act="open"])):not(:has(> [data-act="copy"])) > .vw,.acts:has(> :nth-child(6)):has(> [data-act="open"]):not(:has(> [data-act="copy"])) > .vw,.acts:has(> :nth-child(6)):has(> [data-act="copy"]):not(:has(> [data-act="open"])) > .vw,.acts:has(> :nth-child(7)):has(> [data-act="open"]):has(> [data-act="copy"]) > .vw{display:none}}
+@container col (max-width:21.25em){${barSteps(5)}}
+@container col (max-width:20em){${barSteps(4)}}
 .acts button.busy{opacity:.45;pointer-events:none}
 .acts button.off{opacity:.45}
 .acts button.off:hover{color:var(--act)}

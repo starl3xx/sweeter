@@ -9688,6 +9688,7 @@
         if (e.key === 'Escape') {
           if (!gifEl.hidden) closeGifs(true);
           else if (!emoEl.hidden) closeEmoji(true);
+          else if (!cmpDesc.hidden) closeDesc(true);
           else closeCompose(true);
           return true;
         }

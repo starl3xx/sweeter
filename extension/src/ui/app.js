@@ -421,7 +421,7 @@
       { k: 'check', key: 'obscureSensitive', label: 'Sensitive media', text: 'Obscure possibly sensitive media' },
       { k: 'sep' },
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
-      { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'It floats above Sweeter, keeps the size and place you give it, and needs no room in the columns.', app: true },
+      { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'Like Mail’s compose window: it keeps the size and place you give it, shows in Mission Control, and needs no room in the columns.', app: true },
       { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, polls, scheduling, threads, and a toolbar in the title bar.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },

@@ -453,13 +453,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private let moreMenu = NSMenu()
 
     private init() {
-        let panel = QuietPanel(contentRect: NSRect(x: 0, y: 0, width: 660, height: 460), styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: true)
+        // A window like Mail's compose window: it stays while another app is
+        // in front, shows in Mission Control, ⌘` and the Window menu, and
+        // goes behind Sweeter's window like any other (a floating panel hid
+        // on switching apps and was left out of Mission Control).
+        let panel = QuietWindow(contentRect: NSRect(x: 0, y: 0, width: 660, height: 460), styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: true)
         panel.isReleasedWhenClosed = false
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = true
-        // A window of its own to the person: Mission Control and ⌘` too.
-        panel.collectionBehavior = [.managed, .participatesInCycle, .fullScreenAuxiliary]
-        panel.becomesKeyOnlyIfNeeded = false
+        panel.tabbingMode = .disallowed
+        panel.collectionBehavior = [.fullScreenAuxiliary]
         // Wide enough for the floating bar's every tool.
         panel.contentMinSize = NSSize(width: Self.minWidth, height: 320)
         // Plain paper to the top: the window's buttons sit on it, and the

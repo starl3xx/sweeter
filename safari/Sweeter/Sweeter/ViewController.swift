@@ -1016,7 +1016,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     private var popupAllowedUntil = Date.distantPast
     private var popupKind = ""
     /// The compose window, while one is open, and its title binding.
-    private var composePanel: NSPanel?
+    private var composePanel: NSWindow?
     private var composeTitle: NSKeyValueObservation?
     private let popoutNav = PopoutNavigation()
 
@@ -1055,23 +1055,21 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         return nil
     }
 
-    /// The compose window: a panel above Sweeter (it hides while another
-    /// app is in front), titled by its page, that keeps the size and place
-    /// the person gives it. Closing it with its own button keeps the draft
+    /// The compose window: a window of its own, like Mail's compose window
+    /// (it stays while another app is in front, and shows in Mission
+    /// Control, ⌘` and the Window menu), titled by its page, that keeps the
+    /// size and place the person gives it. Closing it with its own button keeps the draft
     /// (the page hears of it through Sweeter.native.composeClosed).
     private func composeWindow(_ configuration: WKWebViewConfiguration, size: NSSize) -> WKWebView {
         let popup = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: configuration)
         popup.uiDelegate = self
         popup.navigationDelegate = popoutNav
-        let panel = QuietPanel(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        // A normal window: a floating panel hid on switching apps and stayed
+        // out of Mission Control even when asked in (Jake, 2026-10-14).
+        let panel = QuietWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = true
-        // A floating panel is left out of Mission Control and ⌘` by
-        // default; the compose window is a window of its own to the person
-        // (Jake, 2026-10-06), so it takes part in both.
-        panel.collectionBehavior = [.managed, .participatesInCycle, .fullScreenAuxiliary]
-        panel.becomesKeyOnlyIfNeeded = false
+        panel.tabbingMode = .disallowed
+        panel.collectionBehavior = [.fullScreenAuxiliary]
         panel.title = "New post"
         panel.contentView = popup
         panel.contentMinSize = NSSize(width: 380, height: 260)
@@ -1385,13 +1383,6 @@ private func quietNoResponder(_ selector: Selector) -> Bool {
 }
 
 final class QuietWindow: NSWindow {
-    override func noResponder(for eventSelector: Selector) {
-        if quietNoResponder(eventSelector) { return }
-        super.noResponder(for: eventSelector)
-    }
-}
-
-final class QuietPanel: NSPanel {
     override func noResponder(for eventSelector: Selector) {
         if quietNoResponder(eventSelector) { return }
         super.noResponder(for: eventSelector)

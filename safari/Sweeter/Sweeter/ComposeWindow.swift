@@ -1398,6 +1398,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private static let partSize = 1_500_000
 
     private func endUpload() {
+        afterBytes = []
+        savingToClose = false
         guard uploading else { return }
         uploadRun += 1
         uploading = false
@@ -1613,6 +1615,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if closingFromPage || closeDecided { return true }
+        // Save chose to close once the media's bytes are with the page.
+        if savingToClose { return false }
         syncTimer?.invalidate()
         syncTimer = nil
         guard isOpen else { return true }
@@ -1639,9 +1643,18 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         alert.addButton(withTitle: "Delete Draft").hasDestructiveAction = true
         alert.beginSheetModal(for: w) { [weak self] response in
             guard let self, self.isOpen, response != .alertSecondButtonReturn else { return }
-            ViewController.shared?.composeOp(response == .alertFirstButtonReturn ? "close" : "discard", self.draft()) { _ in }
-            self.closeDecided = true
-            w.close()
+            guard response == .alertFirstButtonReturn else {
+                ViewController.shared?.composeOp("discard", self.draft()) { _ in }
+                self.closeDecided = true
+                return w.close()
+            }
+            self.savingToClose = true
+            self.withBytes {
+                self.savingToClose = false
+                ViewController.shared?.composeOp("close", self.draft()) { _ in }
+                self.closeDecided = true
+                w.close()
+            }
         }
     }
 
@@ -1650,7 +1663,38 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         guard isOpen, !busy else { return }
         syncTimer?.invalidate()
         syncTimer = nil
-        send("save", draft())
+        withBytes { [weak self] in
+            guard let self, self.isOpen else { return }
+            self.send("save", self.draft())
+        }
+    }
+
+    /// Save: the media's bytes go to the page first, as for Post, so the
+    /// draft can go to X with them (app.js saveToX). A failure still saves
+    /// the draft here; the page then says why X didn't get it.
+    private var afterBytes: [() -> Void] = []
+    private var savingToClose = false
+    private func withBytes(_ then: @escaping () -> Void) {
+        // A Save while the bytes go: after them, in turn.
+        if uploading { return afterBytes.append(then) }
+        let all = thread.flatMap(\.media)
+        guard !all.isEmpty else { return then() }
+        uploading = true
+        uploadRun += 1
+        let run = uploadRun
+        spinner.startAnimation(nil)
+        statusLabel.stringValue = "Saving the media…"
+        statusLabel.textColor = SweeterColor.secondary
+        statusRow.isHidden = false
+        upload(all, run: run) { [weak self] _ in
+            guard let self, self.uploadRun == run else { return }
+            self.uploading = false
+            self.spinner.stopAnimation(nil)
+            let rest = self.afterBytes
+            self.afterBytes = []
+            then()
+            rest.forEach { $0() }
+        }
     }
 
     /// Escape anywhere in the window closes it and keeps the draft.

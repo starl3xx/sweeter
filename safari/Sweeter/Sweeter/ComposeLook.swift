@@ -251,6 +251,40 @@ final class ComposePill: NSButton {
     }
 }
 
+/// A push button on the theme's solid accent (Post, Set): its title in
+/// the color the theme puts on that accent (dark on Catppuccin's and
+/// Dracula's light ones), dimmed while disabled.
+final class ComposeAccentButton: NSButton {
+    private var painting = false
+
+    override var title: String {
+        didSet { repaint() }
+    }
+
+    override var isEnabled: Bool {
+        didSet { repaint() }
+    }
+
+    func repaint() {
+        guard !painting else { return }
+        painting = true
+        defer { painting = false }
+        bezelColor = SweeterColor.pinkFill
+        let p = NSMutableParagraphStyle()
+        p.alignment = .center
+        attributedTitle = NSAttributedString(string: title, attributes: [
+            .font: font ?? .systemFont(ofSize: NSFont.systemFontSize),
+            .foregroundColor: SweeterColor.onPink.withAlphaComponent(isEnabled ? 1 : 0.55),
+            .paragraphStyle: p,
+        ])
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        repaint()
+    }
+}
+
 /// A small round label: a poll choice's letter, a thread post's number.
 final class ComposeDisc: NSView {
     enum Tone { case sky, pink }

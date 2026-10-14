@@ -397,7 +397,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private let statusLabel = NSTextField(labelWithString: "")
     private let countRing = ComposeCountRing()
     private let countLabel = NSTextField(labelWithString: "")
-    private let postButton = NSButton(title: "Post", target: nil, action: nil)
+    private let postButton = ComposeAccentButton(title: "Post", target: nil, action: nil)
 
     private init() {
         let panel = QuietPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 380), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: true)
@@ -595,7 +595,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
         postButton.bezelStyle = .push
         postButton.controlSize = .large
-        postButton.bezelColor = SweeterColor.pinkFill
+        postButton.font = .systemFont(ofSize: NSFont.systemFontSize(for: .large), weight: .medium)
+        postButton.repaint()
         postButton.keyEquivalent = "\r"
         postButton.keyEquivalentModifierMask = [.command]
         postButton.target = self
@@ -741,7 +742,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         }
         textView.typingAttributes[.foregroundColor] = SweeterColor.text
         textView.insertionPointColor = SweeterColor.pinkFill
-        postButton.bezelColor = SweeterColor.pinkFill
+        postButton.repaint()
     }
 
     // MARK: Text, bold and italic

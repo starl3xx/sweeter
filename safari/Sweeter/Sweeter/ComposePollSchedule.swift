@@ -325,7 +325,7 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
     private let calendar = NSDatePicker()
     private let time = NSDatePicker()
     private let summary = NSTextField(labelWithString: "")
-    private let setButton = NSButton(title: "Set", target: nil, action: nil)
+    private let setButton = ComposeAccentButton(title: "Set", target: nil, action: nil)
     private let start: Date
     private let had: Bool
     private weak var popover: NSPopover?
@@ -372,7 +372,7 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
         setButton.target = self
         setButton.action = #selector(set)
         setButton.keyEquivalent = "\r"
-        setButton.bezelColor = SweeterColor.pinkFill
+        setButton.repaint()
         let clear = NSButton(title: had ? "Clear" : "Cancel", target: self, action: #selector(clearIt))
         let buttons = NSStackView(views: [clear, NSView(), setButton])
 

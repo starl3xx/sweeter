@@ -348,7 +348,12 @@ final class ComposeTimeField: NSView {
     override func scrollWheel(with event: NSEvent) {
         guard event.momentumPhase.isEmpty else { return }
         if event.phase == .began { scrolled = 0 }
-        if let p = part(at: convert(event.locationInWindow, from: nil)) { part = p }
+        // The part under the pointer is the one being scrolled, and shows so.
+        if let p = part(at: convert(event.locationInWindow, from: nil)), p != part {
+            part = p
+            typed = ""
+            needsDisplay = true
+        }
         guard event.hasPreciseScrollingDeltas else {
             if event.scrollingDeltaY != 0 { step(part, event.scrollingDeltaY > 0 ? 1 : -1) }
             return

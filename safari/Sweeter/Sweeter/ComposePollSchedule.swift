@@ -408,6 +408,8 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
         popover = p
         // The top edge, in the anchor's own coordinates (a button's are flipped).
         p.show(relativeTo: view.bounds, of: view, preferredEdge: view.isFlipped ? .minY : .maxY)
+        // The keyboard goes to the calendar: arrows move the day, Return sets.
+        self.view.window?.makeFirstResponder(calendar)
     }
 
     /// The calendar's day and the time field's hour and minute.

@@ -227,11 +227,17 @@ final class ComposeTextView: NSTextView {
         return NSSize(width: NSView.noIntrinsicMetric, height: max(minHeight, ceil(used.height + textContainerInset.height * 2)))
     }
 
+    /// The width changed (the text wraps anew, so the window fits again).
+    var onWidth: (() -> Void)?
+
     override func setFrameSize(_ newSize: NSSize) {
         let width = frame.width
         super.setFrameSize(newSize)
         // A new width wraps the text anew.
-        if newSize.width != width { invalidateIntrinsicContentSize() }
+        if newSize.width != width {
+            invalidateIntrinsicContentSize()
+            onWidth?()
+        }
     }
     var onEscape: (() -> Void)?
     var onStyle: ((ComposeStyle) -> Void)?
@@ -528,6 +534,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         textView.onEscape = { [weak self] in self?.window?.performClose(nil) }
         textView.onStyle = { [weak self] style in self?.toggle(style) }
         textView.onFiles = { [weak self] urls, png in self?.add(urls: urls, png: png) }
+        textView.onWidth = { [weak self] in self?.fitSoon() }
         textView.acceptPromises()
         mediaRow.orientation = .horizontal
         mediaRow.spacing = 10
@@ -680,10 +687,16 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         column.spacing = 10
         column.setCustomSpacing(6, after: nameRow)
         column.translatesAutoresizingMaskIntoConstraints = false
+        // The column fills its height with its gaps at their size: the body
+        // (the loosest part) takes what is left. While fitting, the body asks
+        // for its own height (505, above the window keeping its size), so
+        // the window shrinks to fit; a window sized by hand gives the body
+        // the room and keeps that size.
+        column.distribution = .fill
         for v in [nameRow, noteLabel, quoteBox, scroll, statusRow] as [NSView] {
             v.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         }
-        scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        scroll.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .vertical)
         scroll.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
         content.addSubview(avatarView)

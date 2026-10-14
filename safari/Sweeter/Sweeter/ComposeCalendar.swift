@@ -346,7 +346,10 @@ final class ComposeTimeField: NSView {
         switch p {
         case .hour: hour = (hour + n + 24) % 24
         case .minute: minute = (minute + n + 60) % 60
-        case .ampm: hour = (hour + 12) % 24
+        // Up (or a scroll up) is PM, down is AM: a direction, never a flip,
+        // so a trackpad's many scroll events land where the gesture points.
+        case .ampm:
+            if (n > 0) != (hour >= 12) { hour = (hour + 12) % 24 }
         }
         changed()
     }

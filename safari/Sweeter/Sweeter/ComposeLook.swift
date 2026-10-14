@@ -181,6 +181,10 @@ final class ComposePill: NSButton {
         self.action = action
         translatesAutoresizingMaskIntoConstraints = false
         setContentHuggingPriority(.required, for: .horizontal)
+        // Never taller than its capsule: a button hugs its height loosely (below
+        // the window keeping its size, 500), so a fit stretched the reply pill
+        // into an oval instead of shrinking the compose window.
+        setContentHuggingPriority(.required, for: .vertical)
     }
 
     private var gap: CGFloat { 5 }

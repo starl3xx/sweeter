@@ -695,7 +695,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         column.distribution = .fill
         // Every other part holds its height above the window keeping its
         // size (500): otherwise a fit leaves the window tall and stretches
-        // a loose part instead (the reply pill's row grew 150 points).
+        // a loose part instead. A row holds only as tightly as its parts, so
+        // each part holds too (ComposePill hugs its height).
         for v in [nameRow, replyRow, whenRow, statusRow] { v.setHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical) }
         for v in [noteLabel, contextLabel, quoteBox] as [NSView] { v.setContentHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical) }
         for v in [nameRow, noteLabel, quoteBox, scroll, statusRow] as [NSView] {

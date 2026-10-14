@@ -31,6 +31,7 @@
 		4A5B8F7F306AC8D80046AF31 /* ComposeGifs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F7E306AC8D80046AF31 /* ComposeGifs.swift */; };
 		4A5B8F81306AC8D80046AF31 /* ComposePollSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F80306AC8D80046AF31 /* ComposePollSchedule.swift */; };
 		4A5B8F83306AC8D80046AF31 /* ComposeLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F82306AC8D80046AF31 /* ComposeLook.swift */; };
+		4A5B8F85306AC8D80046AF31 /* ComposeCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5B8F84306AC8D80046AF31 /* ComposeCalendar.swift */; };
 		730F3E0A3A4710E106A5C047 /* Licensing.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA9797A338B563819A35E5D /* Licensing.swift */; };
 		10349C06A2EBC05BA26C07DE /* Purchase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70288C1A5E133E16798CA447 /* Purchase.swift */; };
 /* End PBXBuildFile section */
@@ -84,6 +85,7 @@
 		4A5B8F7E306AC8D80046AF31 /* ComposeGifs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeGifs.swift; sourceTree = "<group>"; };
 		4A5B8F80306AC8D80046AF31 /* ComposePollSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposePollSchedule.swift; sourceTree = "<group>"; };
 		4A5B8F82306AC8D80046AF31 /* ComposeLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeLook.swift; sourceTree = "<group>"; };
+		4A5B8F84306AC8D80046AF31 /* ComposeCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeCalendar.swift; sourceTree = "<group>"; };
 		CCA9797A338B563819A35E5D /* Licensing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Licensing.swift; sourceTree = "<group>"; };
 		70288C1A5E133E16798CA447 /* Purchase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Purchase.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -135,6 +137,7 @@
 				4A5B8F7E306AC8D80046AF31 /* ComposeGifs.swift */,
 				4A5B8F80306AC8D80046AF31 /* ComposePollSchedule.swift */,
 				4A5B8F82306AC8D80046AF31 /* ComposeLook.swift */,
+				4A5B8F84306AC8D80046AF31 /* ComposeCalendar.swift */,
 				CCA9797A338B563819A35E5D /* Licensing.swift */,
 				70288C1A5E133E16798CA447 /* Purchase.swift */,
 				4A5B8F3D306AC8D60046AF31 /* Main.storyboard */,
@@ -297,6 +300,7 @@
 				4A5B8F7F306AC8D80046AF31 /* ComposeGifs.swift in Sources */,
 				4A5B8F81306AC8D80046AF31 /* ComposePollSchedule.swift in Sources */,
 				4A5B8F83306AC8D80046AF31 /* ComposeLook.swift in Sources */,
+				4A5B8F85306AC8D80046AF31 /* ComposeCalendar.swift in Sources */,
 				730F3E0A3A4710E106A5C047 /* Licensing.swift in Sources */,
 				10349C06A2EBC05BA26C07DE /* Purchase.swift in Sources */,
 			);

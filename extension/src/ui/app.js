@@ -425,7 +425,7 @@
       { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'Like Mail’s compose window: it keeps the size and place you give it, shows in Mission Control, and needs no room in the columns.', app: true },
       { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, polls, scheduling, threads, and a toolbar in the title bar.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
-      { k: 'check', key: 'xDrafts', label: 'Drafts', text: 'Show your drafts on X', note: 'From a Drafts column in your X Pro deck, which Sweeter keeps out of sight. A draft with only text opens here; one with media, a reply, a quote, or a thread opens in X Pro’s composer.' },
+      { k: 'check', key: 'xDrafts', label: 'Drafts', text: 'Keep drafts on X too', note: 'Drafts lists your drafts on X, and Save also saves a new post to them, with its photos, video, or GIF (a poll, a thread, a reply, a send time, and who can reply stay on this Mac). Sweeter uses a Drafts column in your X Pro deck, adds one if needed, and keeps it out of sight. A draft on X with only text opens here; one with media, a reply, a quote, or a thread opens in X Pro’s composer.' },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
       { k: 'check', key: 'articleReader', label: 'X Articles', text: 'Open in Sweeter’s reader', note: 'X Pro loads an article’s text with its conversation, which Sweeter opens in the post’s column and closes again. ⌘-click opens x.com.' },
@@ -6031,8 +6031,13 @@
     const drafts = new Map(
       Object.entries(opts.drafts || {})
         .filter(([, d]) => d && typeof d.text === 'string' && Date.now() - (d.at || 0) < DRAFT_DAYS * 864e5)
-        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), more: draftMore(d.more), when: d.when || null, files: [], at: d.at, saved: true, xid: d.xid || null, xtext: typeof d.xtext === 'string' ? d.xtext : null }]),
+        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), more: draftMore(d.more), when: d.when || null, files: [], at: d.at, saved: true, xid: d.xid || null, xtext: typeof d.xtext === 'string' ? d.xtext : null, xsig: typeof d.xsig === 'string' ? d.xsig : null }]),
     );
+    // Drafts on X: X Pro tasks one at a time (posting waits for them too),
+    // and the ones being deleted, out of the list already.
+    let xWork = Promise.resolve();
+    const xStep = (fn) => (xWork = xWork.then(fn).catch(() => {}));
+    const xGoing = new Set();
     // A new post's key carries its own id ('new:' alone is a draft from
     // before there were many).
     const draftKey = (c) => c.kind + ':' + ((c.kind === 'new' ? c.draftId : c.id) || '');
@@ -6061,7 +6066,7 @@
       const out = {};
       const kept = Array.from(drafts.entries()).filter(([, d]) => [d].concat(d.more || []).some((p) => (p.text || '').trim() || p.gif || p.poll));
       const slim = (p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: p.poll || null });
-      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = Object.assign(slim(d), { reply: d.reply || 'Everyone', more: (d.more || []).map(slim), when: d.when || null, at: d.at || Date.now() }, d.xid ? { xid: d.xid, xtext: d.xtext || '' } : null);
+      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = Object.assign(slim(d), { reply: d.reply || 'Everyone', more: (d.more || []).map(slim), when: d.when || null, at: d.at || Date.now() }, d.xid ? { xid: d.xid, xtext: d.xtext || '', xsig: d.xsig || '' } : null);
       save({ drafts: out });
       renderDrafts();
     }
@@ -6076,7 +6081,7 @@
         const old = drafts.get(key);
         // Media only the Mac window can show (held) go back with their post.
         const one = (p) => ({ text: p.text, files: (p.files || []).concat(p.held || []), gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
-        const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null }, c.xid ? { xid: c.xid, xtext: c.xtext } : null);
+        const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null }, c.xid ? { xid: c.xid, xtext: c.xtext, xsig: old && old.xid === c.xid ? old.xsig : null } : null);
         const sig = (x) => JSON.stringify([x].concat(x.more || []).map((p) => [p.text, p.gif || null, p.styles || null, p.poll || null]).concat([x.reply, x.when || null]));
         const same = old && sig(old) === sig(d);
         const files = (x) => [x.files].concat((x.more || []).map((p) => p.files));
@@ -6115,7 +6120,7 @@
       const linked = new Map();
       for (const d of drafts.values()) if (d.xid) linked.set(d.xid, d.xtext);
       if (compose && compose.xid) linked.set(compose.xid, compose.xtext);
-      return list.filter((d) => !(linked.has(d.id) && linked.get(d.id) === d.text));
+      return list.filter((d) => !xGoing.has(d.id) && !(linked.has(d.id) && linked.get(d.id) === d.text));
     }
     // A draft Sweeter's window can hold: text, with bold and italic, alone.
     // X keeps the rest (its media, the post it answers or quotes, a thread)
@@ -6162,7 +6167,8 @@
       if (xDraftHere(d)) {
         const draftId = newDraftId();
         const styles = d.styles.bold.length || d.styles.italic.length ? { bold: d.styles.bold, italic: d.styles.italic } : null;
-        drafts.set('new:' + draftId, { text: d.text, styles, reply: 'Everyone', gif: null, poll: null, more: [], when: null, files: [], at: Date.now(), xid: d.id, xtext: d.text });
+        const entry = { text: d.text, styles, reply: 'Everyone', gif: null, poll: null, more: [], when: null, files: [], at: Date.now(), xid: d.id, xtext: d.text };
+        drafts.set('new:' + draftId, Object.assign(entry, { xsig: xSig(entry) }));
         storeDrafts();
         return openCompose('new', null, null, draftId);
       }
@@ -6175,6 +6181,80 @@
         () => xpro.composerOpen() || xpro.dialogOpen(),
       );
     }
+    // ---------- saving to X ----------
+    // Save (⌘S, the close sheet's Save, the Mac window's) also saves a new
+    // post's draft to X, so X's other apps have it: its text with bold and
+    // italic, and its photos, video, or GIF. X keeps no poll, send time, or
+    // who can reply, and Sweeter sends no thread or reply there: those stay
+    // on this Mac only. Saved again after a change, the copy on X is
+    // replaced: a new draft, then the old one deleted. A deck with no Drafts
+    // column gets one first (kept out of sight). One X Pro task at a time:
+    // posting waits for them (xWork).
+    const xSig = (d) => {
+      const st = d.styles && ((d.styles.bold || []).length || (d.styles.italic || []).length) ? [d.styles.bold || [], d.styles.italic || []] : null;
+      return JSON.stringify([d.text || '', st, d.gif ? d.gif.id || d.gif.url || '' : null, (d.files || []).map((f) => [f.name || '', f.size || 0, f.type || '', f.__alt || ''])]);
+    };
+    const X_SAVE_FAIL = {
+      held: 'X Pro’s composer holds a post you started there, so Sweeter left it alone.',
+      busy: 'X Pro was busy with another post or dialog.',
+      noopen: 'X Pro’s composer didn’t open.',
+      upload: 'X Pro didn’t take the media.',
+      nosave: 'X Pro didn’t offer to save it.',
+      unsaved: 'X didn’t confirm the save.',
+      nocolumn: 'X Pro didn’t add a Drafts column to this deck.',
+    };
+    const xListed = (id) => (store.xDrafts() || []).some((x) => x.id === id);
+    async function until(check, ms) {
+      for (const end = Date.now() + ms; Date.now() < end; ) {
+        if (check()) return true;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      return check();
+    }
+    function saveToX(key) {
+      if (settings.xDrafts === false || !key || !key.startsWith('new:')) return;
+      const d = drafts.get(key);
+      if (!d || (d.more || []).length || d.poll || !((d.text || '').trim() || d.gif || (d.files || []).length)) return;
+      const sig = xSig(d);
+      // X has this one already.
+      if (d.xid && d.xsig === sig && xListed(d.xid)) return;
+      // Media live only until Sweeter quits: a copy on X that has some keeps them.
+      const xs = d.xid && (store.xDrafts() || []).find((x) => x.id === d.xid);
+      if (xs && xs.media.length && !d.gif && !(d.files || []).length) return;
+      const snap = { text: d.text || '', styles: d.styles || null, files: (d.files || []).slice(), gif: d.gif || null };
+      const say = (msg) => toast('Your draft is saved on this Mac. ' + msg, 'warn');
+      xStep(async () => {
+        if (!mappingFor('x:drafts')) {
+          const r = await runColumnOp(() => xpro.addColumn('drafts'));
+          if (!r.ok) {
+            if (r.pickerId) xpro.removePicker(r.pickerId);
+            return say(X_SAVE_FAIL.nocolumn);
+          }
+          if (!(await until(() => mappingFor('x:drafts'), 5000))) return say(X_SAVE_FAIL.nocolumn);
+        }
+        const r = await xpro.saveXDraft(snap);
+        if (!r.ok) return say(X_SAVE_FAIL[r.reason] || 'X Pro didn’t save it to X.');
+        const now = drafts.get(key);
+        const old = now ? now.xid : d.xid;
+        // The copy it replaces leaves the list now, before X deletes it.
+        if (old && old !== r.id) xGoing.add(old);
+        if (now) {
+          Object.assign(now, { xid: r.id, xtext: snap.text, xsig: sig });
+          storeDrafts();
+          if (compose && draftKey(compose) === key) {
+            Object.assign(compose, { xid: r.id, xtext: snap.text });
+            if (cmpStatus.textContent === 'Draft saved') cmpStatus.textContent = 'Draft saved, on X too';
+          }
+        }
+        // Sweeter finds a draft in X Pro's column by X's list, which X
+        // Pro asks for again after the save.
+        await until(() => xListed(r.id), 6000);
+        // Posted or deleted while X saved it: the new copy goes too.
+        if (!now || !drafts.has(key)) await deleteXDraftsNow([r.id]);
+        if (old && old !== r.id) await deleteXDraftsNow([old]);
+      });
+    }
+
     // A post is on its way (sent, partly sent, or going on in X Pro's
     // composer to be sent) or its draft deleted: the X copy it came from goes.
     function xCopyGone(c) {
@@ -6182,8 +6262,22 @@
       const xid = c.xid || (was && was.xid);
       if (xid) deleteXDrafts([xid]);
     }
-    // Deletes drafts from X; a failure is said, and the list shows them still.
-    async function deleteXDrafts(ids) {
+    // Deletes drafts from X, one X Pro task at a time; a failure is said,
+    // and the list shows them still.
+    function deleteXDrafts(ids) {
+      return xStep(() => deleteXDraftsNow(ids));
+    }
+    async function deleteXDraftsNow(ids) {
+      for (const id of ids) xGoing.add(id);
+      renderDrafts();
+      try {
+        return await deleteXDraftsRun(ids);
+      } finally {
+        for (const id of ids) xGoing.delete(id);
+        renderDrafts();
+      }
+    }
+    async function deleteXDraftsRun(ids) {
       // Just after a post, X Pro's composer is still closing.
       for (let i = 0; i < 30 && (xpro.composerOpen() || xpro.dialogOpen()); i++) await new Promise((r) => setTimeout(r, 200));
       const m = mappingFor('x:drafts');
@@ -6229,7 +6323,7 @@
       cmpDl.innerHTML =
         list
           .map((d) => '<div class="dl-row"><button class="dl-open" type="button" role="menuitem" data-cmd="cmp-draft-open" data-key="' + h(d.key) + '"><span class="dl-t">' + h(d.title) + '</span><span class="dl-i">' + h(d.info) + '</span></button><button class="dl-x" type="button" data-cmd="cmp-draft-del" data-key="' + h(d.key) + '" title="Delete this draft" aria-label="Delete draft: ' + h(d.title) + '">×</button></div>')
-          .join('') + '<div class="dl-foot">Drafts stay on this Mac for ' + DRAFT_DAYS + ' days. ⌘S saves the open post.</div>';
+          .join('') + '<div class="dl-foot">Drafts stay on this Mac for ' + DRAFT_DAYS + ' days. ⌘S saves the open post' + (settings.xDrafts !== false ? ', here and on X.' : '.') + '</div>';
     }
     // g f: a compose window with its Drafts list open (the Mac window's
     // Drafts are its pill's menu).
@@ -6277,6 +6371,7 @@
       if (!compose) return;
       keepDraft(compose);
       cmpStatus.textContent = 'Draft saved';
+      saveToX(draftKey(compose));
     }
     // Closing a window that holds something asks first (Save, Cancel, or
     // Delete Draft), as a Mac app asks about a document; an empty one, or an
@@ -6940,6 +7035,7 @@
       posting = true;
       updateCount();
       cmpStatus.textContent = 'Updating through X Pro…';
+      await xWork;
       let r = await xpro.openComposer('edit', c.id, target(c.key).m, hintFor(c.id, c.key));
       if (r.ok) r = await xpro.fillAndPost(p.text, { styles: styled(p), edit: true, lastEdit: !!c.lastEdit });
       if (r.reason === 'alttext') return askAltText(c);
@@ -7269,6 +7365,7 @@
       updateCount();
       closeGifs(false);
       await gifWork;
+      await xWork;
       const first = posts[0];
       cmpStatus.textContent = c.when ? 'Scheduling through X Pro…' : many ? 'Posting the thread through X Pro…' : first.files.length ? 'Uploading and posting through X Pro…' : first.gif ? 'Adding the GIF and posting through X Pro…' : 'Posting through X Pro…';
       let r = await xpro.openComposer(c.kind, c.id, target(c.key).m, c.id ? hintFor(c.id, c.key) : null);
@@ -7727,7 +7824,11 @@
         case 'close':
           // The window is closing itself (Save, or nothing to keep).
           macCmp = false;
-          closeCompose(true);
+          {
+            const k = draftKey(compose);
+            closeCompose(true);
+            saveToX(k);
+          }
           return null;
         case 'discard':
           // Closing with Delete Draft.
@@ -7770,6 +7871,7 @@
       closePalette();
       applySettings();
       await gifWork;
+      await xWork;
       const r = await xpro.openComposer(kind, id, target(key).m, id ? hintFor(id, key) : null);
       if (!r.ok) {
         endPassthrough();
@@ -8457,9 +8559,12 @@
         case 'cmp-cancel':
           askClose();
           break;
-        case 'cmp-save-keep':
+        case 'cmp-save-keep': {
+          const k = compose && draftKey(compose);
           closeCompose(true);
+          saveToX(k);
           break;
+        }
         case 'cmp-save-delete':
           closeCompose(false);
           break;

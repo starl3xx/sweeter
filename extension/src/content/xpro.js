@@ -1719,6 +1719,73 @@
     return w ? Array.from(w.querySelectorAll('[role="button"], button')).find((b) => norm(b.textContent) === text) || null : null;
   }
 
+  // A draft saved to X from Sweeter's own. X Pro's compose panel never
+  // saves one (Done only hides it, keeping what it holds); its composer at
+  // /compose/post does: closed with something in it, it asks "Save post?",
+  // and Save sends CreateDraftTweet, then X Pro lists the drafts again
+  // (verified 2026-10-14). The panel and that composer hold one draft
+  // between them, so the panel is looked at first: something the person
+  // left there is theirs, and stays.
+  let draftSaves = [];
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (e.source !== window || !d || d.__sweeter !== 1 || d.op !== 'CreateDraftTweet' || !d.body) return;
+    const id = d.body.data && d.body.data.tweet && d.body.data.tweet.rest_id;
+    if (id) draftSaves = draftSaves.slice(-9).concat([{ at: Date.now(), id: String(id) }]);
+  });
+  // true: X Pro's composer holds something; null: the panel didn't open.
+  async function panelHolds() {
+    const b = document.querySelector('[role="button"][aria-label="Compose post"], [data-testid="SideNav_NewTweet_Button"]');
+    if (!b) return null;
+    b.click();
+    const ed = await waitFor(editor, 3000);
+    if (!ed) return null;
+    const root = composerRoot();
+    const held = !!norm(ed.innerText) || !!(root && root.querySelector('[data-testid="attachments"]'));
+    const done = document.querySelector('[aria-label="Done"]');
+    if (done) done.click();
+    await waitFor(() => !editor(), 2000);
+    return held;
+  }
+  // o: { text, styles, files, gif }. Returns the new draft's id.
+  async function saveXDraft(o) {
+    if (composerOpen() || dialogOpen()) return { ok: false, reason: 'busy' };
+    const held = await panelHolds();
+    if (held === null) return { ok: false, reason: 'noopen' };
+    if (held) return { ok: false, reason: 'held' };
+    history.pushState(history.state, '', '/compose/post');
+    window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+    const ed = await waitFor(() => {
+      const e = editor();
+      return e && e.closest('[role="dialog"]') ? e : null;
+    }, 4000);
+    if (!ed) return { ok: false, reason: 'noopen' };
+    const fail = async (reason) => {
+      clearEditor();
+      await closePanel(true);
+      return { ok: false, reason };
+    };
+    const media = o.gif ? await attachGif(o.gif) : await attach(o.files);
+    if (!media.ok) return fail(media.reason || 'upload');
+    if (!(await setAltTexts(altsOf(o.files))).ok) return fail('alt');
+    const text = o.text || '';
+    if (text.trim() && !(await paste(text))) return fail('mismatch');
+    if (o.styles && text.trim() && !(await applyStyles(text, o.styles)).ok) return fail('styles');
+    if (!(await waitFor(postEnabled, 4000))) return fail('disabled');
+    const close = document.querySelector('[role="dialog"] [data-testid="app-bar-close"]');
+    if (!close) return fail('noclose');
+    const t0 = Date.now();
+    close.click();
+    const save = await waitFor(() => {
+      const b = document.querySelector('[data-testid="confirmationSheetDialog"] [data-testid="confirmationSheetConfirm"]');
+      return b && norm(b.textContent) === 'Save' ? b : null;
+    }, 2500);
+    if (!save) return fail('nosave');
+    save.click();
+    const got = await waitFor(() => draftSaves.find((x) => x.at >= t0) || null, 15000);
+    return got ? { ok: true, id: got.id } : { ok: false, reason: 'unsaved' };
+  }
+
   // The draft in X Pro's composer, for the person to finish there.
   async function openXDraft(colId, ref) {
     if (composerOpen() || dialogOpen()) return { ok: false, reason: 'busy' };
@@ -1835,9 +1902,10 @@
     return true;
   }
 
-  // Home (X Pro picks Following) or Notifications (All), at the end.
+  // Home (X Pro picks Following), Notifications (All), or Drafts (the
+  // picker's "Draft posts", verified 2026-10-14), at the end.
   async function addColumn(kind) {
-    const href = { home: 'https://x.com/home', notifications: 'https://x.com/notifications' }[kind];
+    const href = { home: 'https://x.com/home', notifications: 'https://x.com/notifications', drafts: 'https://x.com/compose/post/unsent/drafts' }[kind];
     if (!href) return { ok: false, reason: 'kind' };
     const id = await newPicker();
     if (!id) return { ok: false, reason: 'nopicker' };
@@ -2399,5 +2467,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts) };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts), saveXDraft: lifted(saveXDraft) };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

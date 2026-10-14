@@ -6772,10 +6772,11 @@
         native.composeShow(macSnapshot(c));
         return;
       }
-      // A draft the Mac window can't hold yet: the web window, and the Mac one closes.
+      // A draft the Mac window can't hold yet: the web window, and the Mac
+      // one closes (keeping the draft it showed, and that draft's media).
       if (macCmp) {
         macCmp = false;
-        native.composeHide();
+        native.composeHide(false);
       }
       if (c && c.files.some((f) => !(f instanceof File))) {
         c.files = webFiles(c.files);
@@ -6832,10 +6833,12 @@
     });
 
     // The sheet goes home to Sweeter and the window closes.
-    function releaseComposeWindow() {
+    // done: the post is finished with (posted, or handed on with its
+    // bytes), so the Mac window can let go of its media too.
+    function releaseComposeWindow(done) {
       if (macCmp) {
         macCmp = false;
-        native.composeHide();
+        native.composeHide(done !== false);
       }
       macFiles.clear();
       macParts.clear();
@@ -6905,7 +6908,7 @@
       compose = null;
       queueCard();
       cmpBack.hidden = true;
-      releaseComposeWindow();
+      releaseComposeWindow(!keep);
       app.focus({ preventScroll: true });
     }
 
@@ -7245,6 +7248,8 @@
         case 'add': {
           const incoming = (Array.isArray(arg.incoming) ? arg.incoming : []).map((f) => ({ type: String((f && f.type) || '') }));
           const r = mediaCheck(compose.files, incoming);
+          // Said in the status line, which the window shows.
+          if (r.msg) cmpStatus.textContent = r.msg;
           return JSON.stringify({ take: r.take, msg: r.msg });
         }
         case 'post':
@@ -7276,10 +7281,11 @@
     async function macToWeb(tool) {
       const c = compose;
       macCmp = false;
-      native.composeHide();
+      native.composeHide(true);
       c.web = true;
-      // The window sent its media's bytes first.
+      // The window sent its media's bytes first; they are the web window's now.
       c.files = webFiles(c.files);
+      for (const f of c.files) delete f.__mac;
       c.thread[c.at] = livePost();
       renderMedia();
       await showCompose();

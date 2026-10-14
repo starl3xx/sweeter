@@ -107,21 +107,64 @@ final class ComposeTextView: NSTextView {
         return rep.representation(using: .png, properties: [:])
     }
 
+    /// Photos and other apps drag a picture as a file promise, which this
+    /// view must ask for; NSTextView doesn't register for those itself.
+    func acceptPromises() {
+        registerForDraggedTypes(registeredDraggedTypes + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
+    }
+
+    private func carriesFiles(_ pb: NSPasteboard) -> Bool {
+        !Self.fileURLs(pb).isEmpty || pb.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
+    }
+
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        onFiles != nil && !Self.fileURLs(sender.draggingPasteboard).isEmpty ? .copy : super.draggingEntered(sender)
+        onFiles != nil && carriesFiles(sender.draggingPasteboard) ? .copy : super.draggingEntered(sender)
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        onFiles != nil && !Self.fileURLs(sender.draggingPasteboard).isEmpty ? .copy : super.draggingUpdated(sender)
+        onFiles != nil && carriesFiles(sender.draggingPasteboard) ? .copy : super.draggingUpdated(sender)
     }
 
+    private static let promiseQueue: OperationQueue = {
+        let q = OperationQueue()
+        q.qualityOfService = .userInitiated
+        return q
+    }()
+
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let urls = Self.fileURLs(sender.draggingPasteboard)
-        if let onFiles, !urls.isEmpty {
+        let pb = sender.draggingPasteboard
+        guard let onFiles else { return super.performDragOperation(sender) }
+        let urls = Self.fileURLs(pb)
+        if !urls.isEmpty {
             onFiles(urls, nil)
             return true
         }
-        return super.performDragOperation(sender)
+        guard let promises = pb.readObjects(forClasses: [NSFilePromiseReceiver.self], options: nil) as? [NSFilePromiseReceiver], !promises.isEmpty else {
+            return super.performDragOperation(sender)
+        }
+        // Each promised file is written to a folder of its own, then they come in together.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SweeterDrops", isDirectory: true).appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var got: [URL] = []
+        for p in promises {
+            group.enter()
+            p.receivePromisedFiles(atDestination: dir, options: [:], operationQueue: Self.promiseQueue) { url, error in
+                if error == nil {
+                    lock.lock()
+                    got.append(url)
+                    lock.unlock()
+                }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            MainActor.assumeIsolated {
+                if !got.isEmpty { onFiles(got, nil) }
+            }
+        }
+        return true
     }
 
     override func cancelOperation(_ sender: Any?) {
@@ -180,6 +223,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private var kind = "new"
     private var tools: [String] = []
     private var busy = false
+    /// Bytes are on their way to the page: nothing else may start, whatever
+    /// a late state says.
+    private var uploading = false
+    /// The page is deciding on new media.
+    private var adding = false
     /// The page closed the window: it needs no word back.
     private var closingFromPage = false
     private var asked = ""
@@ -190,6 +238,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private var media: [ComposeMedia] = []
     private var mediaByKey: [String: [ComposeMedia]] = [:]
     private let mediaRow = NSStackView()
+    private let mediaScroll = NSScrollView()
     private let textView = ComposeTextView(usingTextLayoutManager: false)
     private let scroll = NSScrollView()
     private let noteLabel = NSTextField(wrappingLabelWithString: "")
@@ -280,9 +329,24 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         textView.onEscape = { [weak self] in self?.window?.performClose(nil) }
         textView.onStyle = { [weak self] style in self?.toggle(style) }
         textView.onFiles = { [weak self] urls, png in self?.add(urls: urls, png: png) }
+        textView.acceptPromises()
         mediaRow.orientation = .horizontal
         mediaRow.spacing = 8
         mediaRow.alignment = .centerY
+        mediaRow.translatesAutoresizingMaskIntoConstraints = false
+        // Wider than the window: the row scrolls sideways.
+        mediaScroll.documentView = mediaRow
+        mediaScroll.hasHorizontalScroller = true
+        mediaScroll.hasVerticalScroller = false
+        mediaScroll.autohidesScrollers = true
+        mediaScroll.drawsBackground = false
+        mediaScroll.borderType = .noBorder
+        mediaScroll.verticalScrollElasticity = .none
+        mediaScroll.heightAnchor.constraint(equalToConstant: ComposeMediaTile.height + 4).isActive = true
+        NSLayoutConstraint.activate([
+            mediaRow.leadingAnchor.constraint(equalTo: mediaScroll.contentView.leadingAnchor),
+            mediaRow.topAnchor.constraint(equalTo: mediaScroll.contentView.topAnchor, constant: 2),
+        ])
         scroll.documentView = textView
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -336,13 +400,13 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         bar.setHuggingPriority(.defaultLow, for: .horizontal)
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, scroll, mediaRow, cardBox, bar])
+        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, scroll, mediaScroll, cardBox, bar])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 10, right: 16)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [noteLabel, quoteBox, scroll, cardBox, bar] as [NSView] {
+        for v in [noteLabel, quoteBox, scroll, mediaScroll, cardBox, bar] as [NSView] {
             v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
         }
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
@@ -427,11 +491,12 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         apply(s)
     }
 
-    /// The page is done with the window (posted, or moved elsewhere).
-    func closeFromPage() {
+    /// The page closes the window. done: the post was sent or handed on
+    /// with its bytes, so its media are done here; otherwise the draft
+    /// keeps them for when it opens again.
+    func closeFromPage(done: Bool) {
         guard isOpen else { return }
-        // Posted, or handed on with its bytes: this draft's media are done here.
-        mediaByKey[key] = nil
+        if done { mediaByKey[key] = nil }
         syncTimer?.invalidate()
         syncTimer = nil
         closingFromPage = true
@@ -439,15 +504,17 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     }
 
     private func apply(_ s: ComposeState) {
+        postButton.title = s.post.isEmpty ? "Post" : s.post
+        // While bytes go to the page, the window stays as the upload set it.
+        if uploading { return }
         busy = s.busy
         statusLabel.stringValue = s.status
         statusLabel.textColor = s.invalid ? .systemRed : .secondaryLabelColor
         statusLabel.toolTip = s.status.isEmpty ? nil : s.status
-        if s.busy { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
-        postButton.title = s.post.isEmpty ? "Post" : s.post
-        postButton.isEnabled = !s.busy
-        textView.isEditable = !s.busy
-        replyPopUp.isEnabled = !s.busy
+        if busy { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
+        postButton.isEnabled = !busy
+        textView.isEditable = !busy
+        replyPopUp.isEnabled = !busy
         countLabel.stringValue = s.count
         countLabel.textColor = s.level == "over" ? .systemRed : s.level == "long" ? .systemOrange : .secondaryLabelColor
         underline(s.links)
@@ -653,22 +720,28 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     /// A request that needs the media's bytes on the page first (Post, and
     /// a move to the web window or X Pro): they go, then the request.
     private func withMedia(_ op: String, _ d: [String: Any]) {
+        guard !uploading else { return }
         syncTimer?.invalidate()
         syncTimer = nil
         busy = true
         postButton.isEnabled = false
         textView.isEditable = false
+        replyPopUp.isEnabled = false
         guard !media.isEmpty else { return send(op, d) }
+        uploading = true
         spinner.startAnimation(nil)
         statusLabel.stringValue = media.contains { $0.type.hasPrefix("video/") } ? "Preparing the video…" : "Preparing the media…"
         statusLabel.textColor = .secondaryLabelColor
         let key = self.key
         upload(media) { [weak self] problem in
-            guard let self, self.isOpen, self.key == key else { return }
+            guard let self else { return }
+            self.uploading = false
+            guard self.isOpen, self.key == key else { return }
             guard let problem else { return self.send(op, d) }
             self.busy = false
             self.postButton.isEnabled = true
             self.textView.isEditable = true
+            self.replyPopUp.isEnabled = true
             self.spinner.stopAnimation(nil)
             self.statusLabel.stringValue = problem
             self.statusLabel.textColor = .systemRed
@@ -718,7 +791,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     /// New media, as far as X allows (the page decides: app.js mediaCheck).
     private func add(urls: [URL], png: Data?) {
-        guard isOpen, !busy else { return }
+        guard isOpen, !busy, !adding else { return NSSound.beep() }
         var items = urls.compactMap { ComposeMedia(url: $0) }
         if let png { items.append(ComposeMedia(png: png)) }
         guard !items.isEmpty else { return }
@@ -727,18 +800,19 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         var d = draft()
         d["incoming"] = items.map { ["name": $0.name, "type": $0.type, "size": $0.size] as [String: Any] }
         let key = self.key
-        ViewController.shared?.composeOp("add", d) { [weak self] reply in
-            guard let self, self.isOpen, self.key == key, let text = reply as? String, let data = text.data(using: .utf8),
+        guard let vc = ViewController.shared else { return }
+        adding = true
+        vc.composeOp("add", d) { [weak self] reply in
+            guard let self else { return }
+            self.adding = false
+            guard self.isOpen, self.key == key, let text = reply as? String, let data = text.data(using: .utf8),
                   let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
             let take = (o["take"] as? [Int]) ?? []
             for i in take where i >= 0 && i < items.count { self.media.append(items[i]) }
             self.mediaByKey[key] = self.media
             self.rebuildMediaRow()
-            if !take.isEmpty { self.sync() }
-            if let msg = o["msg"] as? String, !msg.isEmpty {
-                self.statusLabel.stringValue = msg
-                self.statusLabel.textColor = .systemRed
-            }
+            // The page's status line says what it didn't take; the sync's state carries it.
+            self.sync()
         }
     }
 
@@ -767,7 +841,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             }
             mediaRow.addArrangedSubview(tile)
         }
-        mediaRow.isHidden = media.isEmpty
+        mediaScroll.isHidden = media.isEmpty
     }
 
     // MARK: Closing

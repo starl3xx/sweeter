@@ -23,6 +23,8 @@ final class ComposeMedia {
     private let data: Data?
     var alt = ""
     var thumb: NSImage?
+    /// Kept while it works: a generator let go of never calls back.
+    private var generator: AVAssetImageGenerator?
 
     /// What X takes (app.js ACCEPT): JPEG, PNG, WebP, GIF, MP4 and MOV.
     static let types: [UTType] = [.jpeg, .png, .webP, .gif, .mpeg4Movie, .quickTimeMovie]
@@ -69,10 +71,13 @@ final class ComposeMedia {
         let gen = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         gen.appliesPreferredTrackTransform = true
         gen.maximumSize = CGSize(width: 480, height: 480)
-        gen.generateCGImageAsynchronously(for: .zero) { cg, _, _ in
+        generator = gen
+        gen.generateCGImageAsynchronously(for: .zero) { cg, _, error in
             let img = cg.map { NSImage(cgImage: $0, size: NSSize(width: $0.width, height: $0.height)) }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    self.generator = nil
+                    if let error { Log.write("compose window: no video thumbnail: \(error.localizedDescription)") }
                     self.thumb = img
                     done(img)
                 }

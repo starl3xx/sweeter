@@ -252,7 +252,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             composeFront: () => post({ type: 'composeFront' }),
             composeShow: (o) => post({ type: 'composeShow', json: JSON.stringify(o || {}) }),
             composeState: (o) => post({ type: 'composeState', json: JSON.stringify(o || {}) }),
-            composeHide: () => post({ type: 'composeHide' }),
+            composeHide: (done) => post({ type: 'composeHide', done: !!done }),
             covered: (on) => post({ type: 'covered', on: !!on }),
             show: () => post({ type: 'show' }),
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
@@ -533,7 +533,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             if ComposeWindowController.made { ComposeWindowController.shared.update(json: body["json"] as? String ?? "") }
             replyHandler(nil, nil)
         case "composeHide":
-            if ComposeWindowController.made { ComposeWindowController.shared.closeFromPage() }
+            if ComposeWindowController.made { ComposeWindowController.shared.closeFromPage(done: body["done"] as? Bool ?? false) }
             replyHandler(nil, nil)
         case "covered":
             xProShown = !(body["on"] as? Bool ?? true)
@@ -924,7 +924,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     /// Pop-out windows draw from the main page: they close when it reloads.
     func closePopouts() {
         for window in popoutWindows { window.close() }
-        if ComposeWindowController.made { ComposeWindowController.shared.closeFromPage() }
+        if ComposeWindowController.made { ComposeWindowController.shared.closeFromPage(done: false) }
     }
 
     /// Closing hides the window, so X Pro keeps refreshing for the Dock badge.

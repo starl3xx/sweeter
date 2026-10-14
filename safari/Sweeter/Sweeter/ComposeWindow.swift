@@ -227,11 +227,17 @@ final class ComposeTextView: NSTextView {
         return NSSize(width: NSView.noIntrinsicMetric, height: max(minHeight, ceil(used.height + textContainerInset.height * 2)))
     }
 
+    /// The width changed (the text wraps anew, so the window fits again).
+    var onWidth: (() -> Void)?
+
     override func setFrameSize(_ newSize: NSSize) {
         let width = frame.width
         super.setFrameSize(newSize)
         // A new width wraps the text anew.
-        if newSize.width != width { invalidateIntrinsicContentSize() }
+        if newSize.width != width {
+            invalidateIntrinsicContentSize()
+            onWidth?()
+        }
     }
     var onEscape: (() -> Void)?
     var onStyle: ((ComposeStyle) -> Void)?
@@ -528,6 +534,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         textView.onEscape = { [weak self] in self?.window?.performClose(nil) }
         textView.onStyle = { [weak self] style in self?.toggle(style) }
         textView.onFiles = { [weak self] urls, png in self?.add(urls: urls, png: png) }
+        textView.onWidth = { [weak self] in self?.fitSoon() }
         textView.acceptPromises()
         mediaRow.orientation = .horizontal
         mediaRow.spacing = 10
@@ -680,6 +687,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         column.spacing = 10
         column.setCustomSpacing(6, after: nameRow)
         column.translatesAutoresizingMaskIntoConstraints = false
+        // Its gaps stay their size (above the window keeping its size, 500,
+        // like the body's own height, 505), so a fit shrinks the window
+        // rather than spreading the parts down it; a window made taller by
+        // hand gives the room to the body, which hugs loosely.
+        column.setHuggingPriority(NSLayoutConstraint.Priority(505), for: .vertical)
         for v in [nameRow, noteLabel, quoteBox, scroll, statusRow] as [NSView] {
             v.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         }

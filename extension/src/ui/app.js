@@ -7175,10 +7175,7 @@
         syncWho();
       }
       // A GIF from X Pro's search (the recorder passes only GIPHY's).
-      if ('gif' in d) {
-        const g = d.gif;
-        c.gif = g && typeof g.id === 'string' && /^https:\/\/media\d?\.giphy\.com\//.test(String(g.url || '')) ? { query: String(g.query || ''), id: g.id, alt: String(g.alt || ''), url: String(g.url), still: String(g.still || ''), w: g.w | 0, h: g.h | 0 } : null;
-      }
+      if ('gif' in d) c.gif = macGifOf(d.gif);
       // The window's media: its own ids, with their descriptions. The bytes
       // come only at Post (macFile); until then each is a stand-in.
       if (Array.isArray(d.files)) {
@@ -7205,7 +7202,8 @@
       let old = drafts.get(d.key);
       // Emptied, it is no draft, as keepDraft has it: an edit then opens on
       // the post's own text again.
-      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !(old && ((old.more || []).length || old.poll || old.gif))) {
+      const gif = 'gif' in d ? macGifOf(d.gif) : old ? old.gif : null;
+      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !gif && !(old && ((old.more || []).length || old.poll))) {
         if (drafts.delete(d.key)) storeDrafts();
         return;
       }
@@ -7216,7 +7214,7 @@
       }
       const text = d.text;
       const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
-      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, at: Date.now() });
+      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, gif, at: Date.now() });
       if (REPLY_OPTIONS.includes(d.reply)) old.reply = d.reply;
       // The window's media, as stand-ins (the window keeps their bytes).
       if (Array.isArray(d.files)) old.files = d.files.filter((m) => m && typeof m.id === 'string').slice(0, 4).map((m) => ({ name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0, __mac: m.id, __alt: String(m.alt || '').slice(0, 1000) }));
@@ -7241,6 +7239,10 @@
       macParts.delete(a.id);
       macFiles.set(a.id, new File(parts, String(a.name || 'media'), { type: String(a.type || '') }));
       return 'done';
+    }
+    // A GIF from the window, as the sheet keeps it: GIPHY's only.
+    function macGifOf(g) {
+      return g && typeof g.id === 'string' && /^https:\/\/media\d?\.giphy\.com\//.test(String(g.url || '')) ? { query: String(g.query || ''), id: g.id, alt: String(g.alt || ''), url: String(g.url), still: String(g.still || ''), w: g.w | 0, h: g.h | 0 } : null;
     }
     // The Mac window's GIF picker: X Pro's own GIF search, one query after
     // another (gifStep, as the web picker's), and closed again when the

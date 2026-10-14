@@ -119,6 +119,8 @@ final class ComposeGifPicker: NSViewController, NSSearchFieldDelegate, NSCollect
     private let message = NSTextField(labelWithString: "")
     private var items: [ComposeGif] = []
     private var query = ""
+    /// The search the grid shows (nil while the first is loading).
+    private var shown: String?
     private var timer: Timer?
     private weak var popover: NSPopover?
 
@@ -190,6 +192,7 @@ final class ComposeGifPicker: NSViewController, NSSearchFieldDelegate, NSCollect
         search?(q) { [weak self] gifs, empty in
             guard let self, self.query == q else { return }
             self.items = gifs.map { var g = $0; g.query = q; return g }
+            self.shown = q
             self.grid.reloadData()
             self.grid.scroll(.zero)
             self.say(gifs.isEmpty ? empty : "")
@@ -218,7 +221,9 @@ final class ComposeGifPicker: NSViewController, NSSearchFieldDelegate, NSCollect
     // Return picks the first GIF; Escape closes (the popover's own).
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         if selector == #selector(NSResponder.insertNewline(_:)) {
-            if let g = items.first, field.stringValue.trimmingCharacters(in: .whitespaces) == query { pick(g) } else { searchNow() }
+            // Only a GIF of the search typed, once its answer is in.
+            let typed = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let g = items.first, shown == typed { pick(g) } else { searchNow() }
             return true
         }
         return false

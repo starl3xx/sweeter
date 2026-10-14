@@ -13,7 +13,7 @@ import Cocoa
 // MARK: - A poll
 
 struct ComposePoll: Equatable {
-    static let choiceMax = 25
+    nonisolated static let choiceMax = 25
     var choices: [String]
     var days: Int
     var hours: Int
@@ -47,7 +47,7 @@ struct ComposePoll: Equatable {
 
     /// At most 25 UTF-16 units, as the page counts (and X Pro's field),
     /// never cutting a character in two.
-    static func clip(_ s: String) -> String {
+    nonisolated static func clip(_ s: String) -> String {
         var out = ""
         var n = 0
         for ch in s {

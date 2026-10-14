@@ -9,8 +9,7 @@
 //  with a snapshot of the draft (composeShow), hears every edit
 //  (Sweeter.native.cw), saves the draft, counts the text, posts it through
 //  X Pro, reports back while it does (composeState), and closes the window
-//  when the post is done (composeHide). A tool this window doesn't draw
-//  yet hands the draft to the web compose window.
+//  when the post is done (composeHide).
 //
 
 import Cocoa
@@ -58,6 +57,19 @@ struct ComposeSnapshot: Decodable {
 
     let poll: PollRef?
     let when: WhenRef?
+
+    /// Every post of a thread (the open one too), and which is open.
+    struct PostRef: Decodable {
+        let text: String
+        let bold: [[Int]]
+        let italic: [[Int]]
+        let files: [FileRef]
+        let gif: ComposeGif?
+        let poll: PollRef?
+    }
+
+    let thread: [PostRef]?
+    let at: Int?
     let reply: String
     let replyOptions: [String]
     let replyHidden: Bool
@@ -85,6 +97,99 @@ struct ComposeState: Decodable {
     /// "alttext" while X Pro's image description reminder waits.
     let ask: String
     let card: Card?
+    /// The window's title (“New post · 2 of 3”), and, in Post's answer
+    /// only, the post a check stopped on.
+    let title: String?
+    let at: Int?
+}
+
+// MARK: - A post of the window
+
+/// One post of a thread, as it waits while another is open.
+final class ComposePost {
+    var text: NSAttributedString
+    var media: [ComposeMedia]
+    var gif: ComposeGif?
+    var poll: ComposePoll?
+
+    init(text: NSAttributedString = NSAttributedString(), media: [ComposeMedia] = [], gif: ComposeGif? = nil, poll: ComposePoll? = nil) {
+        self.text = text
+        self.media = media
+        self.gif = gif
+        self.poll = poll
+    }
+
+    var filled: Bool { !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !media.isEmpty || gif != nil || poll != nil }
+
+    /// What it carries, for its row.
+    var carries: String {
+        if media.contains(where: { $0.type.hasPrefix("video/") }) { return "Video" }
+        if !media.isEmpty { return media.count == 1 ? "1 photo" : "\(media.count) photos" }
+        return gif != nil ? "GIF" : poll != nil ? "Poll" : ""
+    }
+}
+
+/// Another post of the thread, above or below the open one: its number,
+/// the start of its text, what it carries, and a remove button.
+final class ComposeThreadRow: NSView, NSGestureRecognizerDelegate {
+    var onOpen: (() -> Void)?
+    var onRemove: (() -> Void)?
+    private var removeButton: NSButton?
+
+    init(number: Int, post: ComposePost) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.backgroundColor = NSColor.quaternaryLabelColor.withAlphaComponent(0.12).cgColor
+        let n = NSTextField(labelWithString: String(number))
+        n.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        n.textColor = .secondaryLabelColor
+        let words = post.text.string.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let t = NSTextField(labelWithString: words.isEmpty ? "Empty post" : String(words.prefix(200)))
+        t.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        t.textColor = words.isEmpty ? .tertiaryLabelColor : .labelColor
+        t.lineBreakMode = .byTruncatingTail
+        t.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let c = NSTextField(labelWithString: post.carries)
+        c.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        c.textColor = .tertiaryLabelColor
+        c.isHidden = post.carries.isEmpty
+        let x = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove post \(number)") ?? NSImage(), target: nil, action: nil)
+        x.isBordered = false
+        x.contentTintColor = .tertiaryLabelColor
+        x.toolTip = "Remove post \(number)"
+        x.target = self
+        x.action = #selector(removePressed)
+        removeButton = x
+        let row = NSStackView(views: [n, t, c, x])
+        row.spacing = 8
+        row.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 4, right: 6)
+        row.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: trailingAnchor),
+            row.topAnchor.constraint(equalTo: topAnchor),
+            row.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        toolTip = "Edit post \(number)"
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Post \(number): " + (words.isEmpty ? "empty" : words))
+        let click = NSClickGestureRecognizer(target: self, action: #selector(openPressed))
+        click.delegate = self
+        addGestureRecognizer(click)
+    }
+
+    // A click on the remove button only removes.
+    func gestureRecognizer(_ g: NSGestureRecognizer, shouldAttemptToRecognizeWith event: NSEvent) -> Bool {
+        guard let x = removeButton else { return true }
+        return !x.bounds.contains(x.convert(event.locationInWindow, from: nil))
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    @objc private func openPressed() { onOpen?() }
+    @objc private func removePressed() { onRemove?() }
 }
 
 // MARK: - The text view
@@ -262,6 +367,13 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private var gif: ComposeGif?
     private var poll: ComposePoll?
     private var when: ComposeWhen?
+    /// Every post of the window; the open one (at) is live in the text
+    /// view and the media, GIF and poll above, and stash() copies it back.
+    private var thread: [ComposePost] = [ComposePost()]
+    private var at = 0
+    private static let threadMax = 25
+    private let prevRows = NSStackView()
+    private let nextRows = NSStackView()
     private let pollView = ComposePollView()
     private let whenLabel = NSTextField(labelWithString: "")
     private let whenRow = NSStackView()
@@ -448,13 +560,18 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         for v in [clock, whenLabel, change, clearWhen] as [NSView] { whenRow.addArrangedSubview(v) }
         whenRow.spacing = 6
 
-        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, scroll, mediaScroll, pollView, cardBox, whenRow, bar])
+        for rows in [prevRows, nextRows] {
+            rows.orientation = .vertical
+            rows.alignment = .leading
+            rows.spacing = 4
+        }
+        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, nextRows, cardBox, whenRow, bar])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 10, right: 16)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [noteLabel, quoteBox, scroll, mediaScroll, pollView, cardBox, whenRow, bar] as [NSView] {
+        for v in [noteLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, nextRows, cardBox, whenRow, bar] as [NSView] {
             v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
         }
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
@@ -508,19 +625,28 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             contextLabel.isHidden = true
             quoteBox.isHidden = true
         }
-        setText(snap.text, bold: snap.bold, italic: snap.italic)
         let known = mediaByKey[snap.key] ?? []
-        media = snap.files.compactMap { f in
-            guard let m = known.first(where: { $0.id == f.id }) else { return nil }
-            m.alt = f.alt
-            return m
+        let post = { (text: String, bold: [[Int]], italic: [[Int]], files: [ComposeSnapshot.FileRef], gif: ComposeGif?, poll: ComposeSnapshot.PollRef?) -> ComposePost in
+            ComposePost(
+                text: Self.styled(text, bold: bold, italic: italic),
+                media: files.compactMap { f in
+                    guard let m = known.first(where: { $0.id == f.id }) else { return nil }
+                    m.alt = f.alt
+                    return m
+                },
+                gif: gif,
+                poll: poll.map { ComposePoll(choices: $0.choices, days: $0.days, hours: $0.hours, minutes: $0.minutes) }
+            )
         }
-        mediaByKey[snap.key] = media
-        gif = snap.gif
-        rebuildMediaRow()
-        poll = snap.poll.map { ComposePoll(choices: $0.choices, days: $0.days, hours: $0.hours, minutes: $0.minutes) }
-        if let poll { pollView.show(poll) }
-        pollView.isHidden = poll == nil
+        if let list = snap.thread, !list.isEmpty {
+            thread = list.prefix(Self.threadMax).map { post($0.text, $0.bold, $0.italic, $0.files, $0.gif, $0.poll) }
+            at = max(0, min(thread.count - 1, snap.at ?? 0))
+        } else {
+            thread = [post(snap.text, snap.bold, snap.italic, snap.files, snap.gif, snap.poll)]
+            at = 0
+        }
+        mediaByKey[snap.key] = thread.flatMap(\.media)
+        load(at)
         when = snap.when.flatMap { ComposeWhen(["y": $0.y, "mo": $0.mo, "d": $0.d, "h": $0.h, "mi": $0.mi]) }
         showWhen()
         replyPopUp.removeAllItems()
@@ -560,6 +686,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     private func apply(_ s: ComposeState) {
         postButton.title = s.post.isEmpty ? "Post" : s.post
+        if let t = s.title, !t.isEmpty { window?.title = t }
+        if let a = s.at, a != at, a >= 0, a < thread.count, !uploading {
+            stash()
+            load(a)
+        }
         // While bytes go to the page, the window stays as the upload set it.
         if uploading { return }
         busy = s.busy
@@ -582,7 +713,15 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     // MARK: Text, bold and italic
 
-    private func setText(_ text: String, bold: [[Int]], italic: [[Int]]) {
+    private func setText(_ text: NSAttributedString) {
+        textView.textStorage?.setAttributedString(text)
+        textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: NSColor.textColor]
+        textView.undoManager?.removeAllActions()
+        textView.needsDisplay = true
+    }
+
+    /// A post's text with its bold and italic, as the text view keeps it.
+    static func styled(_ text: String, bold: [[Int]], italic: [[Int]]) -> NSAttributedString {
         let s = NSMutableAttributedString(string: text, attributes: [.font: Self.baseFont, .foregroundColor: NSColor.textColor])
         let n = s.length
         for (ranges, style) in [(bold, ComposeStyle.bold), (italic, .italic)] {
@@ -594,10 +733,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
                 }
             }
         }
-        textView.textStorage?.setAttributedString(s)
-        textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: NSColor.textColor]
-        textView.undoManager?.removeAllActions()
-        textView.needsDisplay = true
+        return s
     }
 
     static func font(_ f: NSFont?, _ style: ComposeStyle, on: Bool) -> NSFont {
@@ -650,9 +786,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     /// Bold and italic runs as the page keeps them: [start, end) in UTF-16
     /// units, which NSString counts too.
-    private func styles() -> (bold: [[Int]], italic: [[Int]]) {
+    private static func styles(_ storage: NSAttributedString) -> (bold: [[Int]], italic: [[Int]]) {
         var bold: [[Int]] = [], italic: [[Int]] = []
-        guard let storage = textView.textStorage else { return ([], []) }
         storage.enumerateAttribute(.font, in: NSRange(location: 0, length: storage.length)) { v, r, _ in
             let t = ((v as? NSFont) ?? Self.baseFont).fontDescriptor.symbolicTraits
             if t.contains(.bold) { bold.append([r.location, r.location + r.length]) }
@@ -740,8 +875,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     /// The draft as it is now, for the page.
     private func draft() -> [String: Any] {
-        let s = styles()
+        stash()
+        let s = Self.styles(textView.textStorage ?? NSAttributedString())
+        let note = pendingNote ?? ""
+        pendingNote = nil
         return [
+            "note": note,
+            "thread": thread.map { Self.dict($0) },
+            "at": at,
             "key": key,
             "text": textView.string,
             "bold": s.bold,
@@ -770,6 +911,97 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         }
     }
 
+    private static func dict(_ p: ComposePost) -> [String: Any] {
+        let s = styles(p.text)
+        return [
+            "text": p.text.string,
+            "bold": s.bold,
+            "italic": s.italic,
+            "files": p.media.map { ["id": $0.id, "name": $0.name, "type": $0.type, "size": $0.size, "alt": $0.alt] as [String: Any] },
+            "gif": p.gif?.dict ?? NSNull(),
+            "poll": p.poll?.dict ?? NSNull(),
+        ]
+    }
+
+    // MARK: A thread
+
+    /// The open post back into the thread.
+    private func stash() {
+        guard at < thread.count, let storage = textView.textStorage else { return }
+        let p = thread[at]
+        p.text = NSAttributedString(attributedString: storage)
+        p.media = media
+        p.gif = gif
+        p.poll = poll
+    }
+
+    /// Post i into the text view, the media row and the poll.
+    private func load(_ i: Int) {
+        at = max(0, min(thread.count - 1, i))
+        let p = thread[at]
+        setText(p.text)
+        media = p.media
+        gif = p.gif
+        poll = p.poll
+        rebuildMediaRow()
+        if let poll { pollView.show(poll) }
+        pollView.isHidden = poll == nil
+        rebuildRows()
+        window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+    }
+
+    private func rebuildRows() {
+        for rows in [prevRows, nextRows] {
+            for v in rows.arrangedSubviews {
+                rows.removeArrangedSubview(v)
+                v.removeFromSuperview()
+            }
+        }
+        let many = thread.count > 1
+        if many {
+            for (i, p) in thread.enumerated() where i != at {
+                let row = ComposeThreadRow(number: i + 1, post: p)
+                row.onOpen = { [weak self] in self?.open(i) }
+                row.onRemove = { [weak self] in self?.removePost(i) }
+                let rows = i < at ? prevRows : nextRows
+                rows.addArrangedSubview(row)
+                row.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
+            }
+        }
+        prevRows.isHidden = prevRows.arrangedSubviews.isEmpty
+        nextRows.isHidden = nextRows.arrangedSubviews.isEmpty
+    }
+
+    private func open(_ i: Int) {
+        guard !busy, i != at, i < thread.count else { return }
+        stash()
+        load(i)
+        sync()
+    }
+
+    /// Add Post: a new empty post after the open one, as X Pro's own.
+    private func addPost() {
+        stash()
+        guard thread[at].filled else { return say("Write this post first.") }
+        guard thread.count < Self.threadMax else { return say("A thread can have up to \(Self.threadMax) posts.") }
+        thread.insert(ComposePost(), at: at + 1)
+        load(at + 1)
+        sync()
+    }
+
+    private func removePost(_ i: Int) {
+        guard !busy, i < thread.count else { return }
+        stash()
+        thread.remove(at: i)
+        if thread.isEmpty { thread = [ComposePost()] }
+        // A quote's own post takes no poll: one that has moved up loses it, and says so.
+        let lost = kind == "quote" && thread[0].poll != nil
+        if lost { thread[0].poll = nil }
+        load(i < at || (i == at && i > 0) ? at - 1 : at)
+        if lost { say("A quote post can’t have a poll, so the poll of the post that is now first was removed.") } else { sync() }
+    }
+
     @objc private func post() {
         guard isOpen, !busy else { return }
         withMedia("post", draft())
@@ -785,15 +1017,16 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         postButton.isEnabled = false
         textView.isEditable = false
         replyPopUp.isEnabled = false
-        guard !media.isEmpty else { return send(op, d) }
+        let all = thread.flatMap(\.media)
+        guard !all.isEmpty else { return send(op, d) }
         uploading = true
         uploadRun += 1
         let run = uploadRun
         spinner.startAnimation(nil)
-        statusLabel.stringValue = media.contains { $0.type.hasPrefix("video/") } ? "Preparing the video…" : "Preparing the media…"
+        statusLabel.stringValue = all.contains { $0.type.hasPrefix("video/") } ? "Preparing the video…" : "Preparing the media…"
         statusLabel.textColor = .secondaryLabelColor
         let key = self.key
-        upload(media, run: run) { [weak self] problem in
+        upload(all, run: run) { [weak self] problem in
             guard let self, self.uploadRun == run else { return }
             self.uploading = false
             guard self.isOpen, self.key == key else { return }
@@ -879,7 +1112,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
                   let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
             let take = (o["take"] as? [Int]) ?? []
             for i in take where i >= 0 && i < items.count { self.media.append(items[i]) }
-            self.mediaByKey[key] = self.media
+            self.stash()
+            self.mediaByKey[key] = self.thread.flatMap(\.media)
             self.rebuildMediaRow()
             // The page's status line says what it didn't take; the sync's state carries it.
             self.sync()
@@ -889,7 +1123,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private func removeMedia(_ id: String) {
         guard !busy else { return }
         media.removeAll { $0.id == id }
-        mediaByKey[key] = media
+        stash()
+        mediaByKey[key] = thread.flatMap(\.media)
         rebuildMediaRow()
         sync()
     }
@@ -928,7 +1163,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     private func addPoll() {
         if let _ = poll { return pollView.focusFirstChoice() }
-        if kind == "quote" { return say("A quote post can’t have a poll.") }
+        if kind == "quote" && at == 0 { return say("A quote post can’t have a poll.") }
         if !media.isEmpty || gif != nil { return say("A post can have a poll or media, not both.") }
         if when != nil { return say("X Pro can’t schedule a post with a poll. Clear the time first.") }
         poll = .fresh
@@ -971,11 +1206,16 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     // MARK: GIFs
 
-    /// A note in the status line, until the page's next state.
+    /// A note of the window's own: shown now, and sent at once with the
+    /// draft as it is, so the page keeps it in its status line until the
+    /// draft changes from that.
+    private var pendingNote: String?
     private func say(_ s: String) {
         statusLabel.stringValue = s
         statusLabel.textColor = .systemRed
         statusLabel.toolTip = s
+        pendingNote = s
+        sync()
     }
 
     private func chooseGif(from item: NSToolbarItem) {
@@ -1172,12 +1412,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             addPoll()
         case .schedule:
             schedule(from: sender, or: nil)
-        default:
-            // Not drawn here yet: the web compose window takes the draft
-            // (with its media) and opens the tool.
-            var d = draft()
-            d["tool"] = tool.rawValue
-            withMedia("web", d)
+        case .thread:
+            addPost()
         }
     }
 

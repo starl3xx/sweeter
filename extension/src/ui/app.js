@@ -422,7 +422,7 @@
       { k: 'sep' },
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
       { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'It floats above Sweeter, keeps the size and place you give it, and needs no room in the columns.', app: true },
-      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, polls, scheduling, and a toolbar. For now, threads move the post to the other window.', app: true },
+      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, polls, scheduling, threads, and a toolbar in the title bar.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
@@ -6037,12 +6037,11 @@
       if (c === compose && stash !== false) stashPost();
       const t = c.thread;
       const unchanged = c.kind === 'edit' && editUnchanged(c, t[0]);
-      if (!unchanged && (t.some(postFilled) || (c.held && c.held.length))) {
+      if (!unchanged && t.some((p) => postFilled(p) || (p.held && p.held.length))) {
         const old = drafts.get(key);
-        const one = (p) => ({ text: p.text, files: p.files, gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
+        // Media only the Mac window can show (held) go back with their post.
+        const one = (p) => ({ text: p.text, files: (p.files || []).concat(p.held || []), gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
         const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null });
-        // Media only the Mac window can show, kept for it.
-        if (c.held) d.files = (d.files || []).concat(c.held);
         const sig = (x) => JSON.stringify([x].concat(x.more || []).map((p) => [p.text, p.gif || null, p.styles || null, p.poll || null]).concat([x.reply, x.when || null]));
         const same = old && sig(old) === sig(d);
         const files = (x) => [x.files].concat((x.more || []).map((p) => p.files));
@@ -6059,8 +6058,10 @@
     // X Pro takes up to THREAD_MAX posts in a thread (module 89438).
     const emptyPost = () => ({ text: '', styles: { bold: [], italic: [] }, files: [], gif: null, poll: null });
     const postFilled = (p) => !!(p && ((p.text || '').trim() || (p.files && p.files.length) || p.gif || p.poll));
+    // held: the Mac window's media this post keeps while the web window shows it.
     function livePost() {
-      return { text: cmpText.value, styles: syncedStyles(), files: compose.files, gif: compose.gif, poll: compose.poll };
+      const was = compose.thread && compose.thread[compose.at];
+      return { text: cmpText.value, styles: syncedStyles(), files: compose.files, gif: compose.gif, poll: compose.poll, held: (was && was.held) || null };
     }
     function stashPost() {
       if (compose && compose.thread) compose.thread[compose.at] = livePost();
@@ -6782,13 +6783,15 @@
       }
       // Media the Mac window holds (its bytes are there) stay in the draft
       // but not in this window, which says so.
-      const held = c ? c.files.filter((f) => !(f instanceof File)) : [];
-      if (held.length) {
+      // Each post holds its own (held), so they move with it.
+      const held = c ? c.thread.map((p, i) => (i === c.at ? c.files : p.files || []).filter((f) => !(f instanceof File))) : [];
+      const nHeld = held.reduce((n, h) => n + h.length, 0);
+      if (nHeld) {
         c.files = webFiles(c.files);
-        c.held = held;
-        c.thread[c.at] = livePost();
+        c.thread = c.thread.map((p, i) => Object.assign({}, p, { files: i === c.at ? c.files : webFiles(p.files), held: (p.held || []).concat(held[i]) }));
         renderMedia();
-        const one = held.length === 1;
+        renderThread();
+        const one = nHeld === 1;
         cmpStatus.textContent = 'This draft’s ' + (one ? 'photo is' : 'photos are') + ' in the Mac compose window. Turn it on in Settings ▸ Media ▸ Compose to post ' + (one ? 'it' : 'them') + '.';
       }
       if (native && native.allowPopup && settings.composeWindow !== false) {
@@ -7108,16 +7111,17 @@
     // hidden and holds the open post as before (each edit from the window
     // writes it: macSync), so the drafts, the count, the checks, posting and
     // X Pro's questions run as they do for the web window, and the window
-    // hears what the sheet would show (macState). What it can't hold yet
-    // (photos, a GIF, a poll, a time, a thread) goes to the web window.
+    // hears what the sheet would show (macState).
     let macCmp = false; // the Mac window shows the open post
     let macCard = null; // the link card the sheet shows
     let macMediaMsg = ''; // what the last add didn't take, while it shows
     let macMediaIds = ''; // the media that add left, until they change
+    let macNote = ''; // the window's own note, while it shows
+    let macNoteSig = ''; // the posts as they were when it came
     const cmpOpen = () => !cmpBack.hidden || macCmp;
     function macFits(c) {
       if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
-      return c.thread.length === 1 && c.files.every((f) => f.__mac);
+      return c.files.every((f) => f.__mac) && c.thread.every((p) => (p.files || []).every((f) => f.__mac));
     }
     function macSnapshot(c) {
       const p = c.id ? findPost(c.id, c.kind === 'edit') : null;
@@ -7137,10 +7141,20 @@
         gif: c.gif || null,
         poll: c.poll || null,
         when: c.when || null,
+        thread: c.thread.map((p) => ({
+          text: p.text,
+          bold: (p.styles && p.styles.bold) || [],
+          italic: (p.styles && p.styles.italic) || [],
+          files: (p.files || []).filter((f) => f.__mac).map((f) => ({ id: f.__mac, alt: f.__alt || '' })),
+          gif: p.gif || null,
+          poll: p.poll || null,
+        })),
+        at: c.at,
         reply: cmpReply.value,
         replyOptions: REPLY_OPTIONS,
         replyHidden: c.kind === 'reply' || c.kind === 'edit',
-        tools: c.kind === 'edit' ? ['emoji', 'bold', 'italic'] : ['photo', 'gif', 'emoji', 'bold', 'italic'].concat(c.kind === 'quote' ? [] : ['poll'], ['schedule', 'thread', 'xpro']),
+        // A quote's own post takes no poll, but the posts after it can (the window says so).
+        tools: c.kind === 'edit' ? ['emoji', 'bold', 'italic'] : ['photo', 'gif', 'emoji', 'bold', 'italic', 'poll', 'schedule', 'thread', 'xpro'],
         state: macState(),
       };
     }
@@ -7158,6 +7172,7 @@
         invalid: !!status && !/…$/.test(status) && status !== 'Your saved draft',
         ask: cmpAsk.hidden ? '' : 'alttext',
         card: macCard,
+        title: cmpTitle.textContent,
       };
     }
     // The window's draft into the sheet: its text, bold and italic (UTF-16
@@ -7167,17 +7182,30 @@
       const c = compose;
       if (d && c && d.key !== draftKey(c)) macLate(d);
       if (!c || !macCmp || !d || d.key !== draftKey(c)) return false;
-      const text = String(d.text || '');
-      const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
-      cmpText.value = text;
-      c.prev = text;
-      c.styles = { bold: fit(d.bold), italic: fit(d.italic) };
+      // The window's media keep their stand-ins (or the Files their bytes became).
+      const was = new Map();
+      for (const p of c.thread.concat([{ files: c.files }])) for (const f of p.files || []) if (f.__mac) was.set(f.__mac, f);
+      // Every post of a thread, or (an older window) the open one.
+      const list = Array.isArray(d.thread) && d.thread.length ? d.thread.slice(0, THREAD_MAX) : null;
+      const at = list ? Math.max(0, Math.min(list.length - 1, d.at | 0)) : c.at;
+      const open = list ? list[at] : d;
+      if (macMediaMsg && cmpStatus.textContent === macMediaMsg && (Array.isArray(open.files) ? open.files : []).map((m) => m && m.id).join() !== macMediaIds) cmpStatus.textContent = '';
+      if (list) c.thread = list.map((p, i) => macPostOf(p, c.kind, was, i, c.thread[i]));
+      else c.thread[c.at] = macPostOf(d, c.kind, was, c.at, c.thread[c.at]);
+      c.at = at;
+      // The open post into the sheet, which the shared code reads.
+      const p = c.thread[at];
+      cmpText.value = p.text;
+      c.prev = p.text;
+      c.styles = { bold: p.styles.bold.slice(), italic: p.styles.italic.slice() };
+      c.files = p.files;
+      c.gif = p.gif;
+      c.poll = p.poll;
       if (REPLY_OPTIONS.includes(d.reply) && cmpReply.value !== d.reply) {
         cmpReply.value = d.reply;
         syncWho();
       }
-      // A poll (an edit has none) and a send time, inside X Pro's rules.
-      if ('poll' in d) c.poll = d.poll && c.kind !== 'edit' ? draftPoll(d.poll) : null;
+      // A send time, inside X Pro's rules (an edit has none).
       if ('when' in d) {
         const w = d.when && Sweeter.text.whenDate(d.when) ? Sweeter.text.whenOf(Sweeter.text.whenDate(d.when)) : null;
         if (JSON.stringify(w) !== JSON.stringify(c.when || null)) {
@@ -7185,37 +7213,63 @@
           renderWhen();
         }
       }
-      // A GIF from X Pro's search (the recorder passes only GIPHY's).
-      if ('gif' in d) c.gif = macGifOf(d.gif);
-      // The window's media: its own ids, with their descriptions. The bytes
-      // come only at Post (macFile); until then each is a stand-in.
-      if (Array.isArray(d.files)) {
-        const was = new Map(c.files.filter((f) => f.__mac).map((f) => [f.__mac, f]));
-        if (macMediaMsg && cmpStatus.textContent === macMediaMsg && d.files.map((m) => m && m.id).join() !== macMediaIds) cmpStatus.textContent = '';
-        c.files = d.files
-          .filter((m) => m && typeof m.id === 'string')
-          .slice(0, 4)
-          .map((m) => {
-            const f = macFiles.get(m.id) || was.get(m.id) || { name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0 };
-            f.__mac = m.id;
-            f.__alt = String(m.alt || '').slice(0, 1000);
-            return f;
-          });
-      }
+      renderThread();
       updateCount();
+      // A note of the window's own (“Write this post first.”) stays in the
+      // status line until the posts change.
+      const sig = JSON.stringify([c.at, c.thread.map((q) => [q.text, q.files.length, !!q.gif, !!q.poll]), c.when || null, cmpReply.value]);
+      if (typeof d.note === 'string' && d.note) {
+        cmpStatus.textContent = macNote = d.note.slice(0, 300);
+        macNoteSig = sig;
+      } else if (macNote && cmpStatus.textContent === macNote && sig !== macNoteSig) {
+        cmpStatus.textContent = '';
+        macNote = '';
+      }
       return true;
+    }
+    // One post from the window, as the sheet keeps it: text with bold and
+    // italic (UTF-16 ranges), the media as stand-ins (the bytes come only at
+    // Post: macFile) with their descriptions, a GIF (GIPHY's only), and a
+    // poll (none in an edit or a quote's own post). A part the window didn't
+    // send stays as it was (prev).
+    function macPostOf(p, kind, was, i, prev) {
+      const text = String((p && p.text) || '');
+      const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
+      const files = Array.isArray(p.files)
+        ? p.files
+            .filter((m) => m && typeof m.id === 'string')
+            .slice(0, 4)
+            .map((m) => {
+              const f = macFiles.get(m.id) || was.get(m.id) || { name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0 };
+              f.__mac = m.id;
+              f.__alt = String(m.alt || '').slice(0, 1000);
+              return f;
+            })
+        : (prev && prev.files) || [];
+      const pollOk = kind !== 'edit' && !(kind === 'quote' && i === 0);
+      return {
+        text,
+        styles: { bold: fit(p.bold), italic: fit(p.italic) },
+        files,
+        gif: 'gif' in p ? macGifOf(p.gif) : (prev && prev.gif) || null,
+        poll: 'poll' in p ? (p.poll && pollOk ? draftPoll(p.poll) : null) : (prev && prev.poll) || null,
+      };
     }
     // The last edit of a draft the window has just left (another post
     // opened before its pause ended): it goes into that draft, which was
     // saved from the sheet a moment before.
     function macLate(d) {
       if (typeof d.key !== 'string' || !/^(new|reply|quote|edit):/.test(d.key) || typeof d.text !== 'string') return;
+      const kind = d.key.split(':')[0];
       let old = drafts.get(d.key);
+      const was = new Map();
+      for (const p of old ? [old].concat(old.more || []) : []) for (const f of p.files || []) if (f.__mac) was.set(f.__mac, f);
+      const list = Array.isArray(d.thread) && d.thread.length ? d.thread.slice(0, THREAD_MAX) : [d];
+      const prevs = old ? [old].concat(old.more || []) : [];
+      const posts = list.map((p, i) => macPostOf(p, kind, was, i, prevs[i]));
       // Emptied, it is no draft, as keepDraft has it: an edit then opens on
       // the post's own text again.
-      const gif = 'gif' in d ? macGifOf(d.gif) : old ? old.gif : null;
-      const poll = 'poll' in d ? (d.poll && !/^edit:/.test(d.key) ? draftPoll(d.poll) : null) : old ? old.poll : null;
-      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !gif && !poll && !(old && (old.more || []).length)) {
+      if (!posts.some(postFilled)) {
         if (drafts.delete(d.key)) storeDrafts();
         return;
       }
@@ -7224,13 +7278,10 @@
         old = { text: '', styles: null, reply: 'Everyone', gif: null, poll: null, more: [], files: [] };
         drafts.set(d.key, old);
       }
-      const text = d.text;
-      const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
-      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, gif, poll, at: Date.now() });
-      if ('when' in d && !/^edit:/.test(d.key)) old.when = d.when && Sweeter.text.whenDate(d.when) ? Sweeter.text.whenOf(Sweeter.text.whenDate(d.when)) : null;
+      const one = (p) => ({ text: p.text, styles: p.styles, files: p.files, gif: p.gif, poll: p.poll });
+      Object.assign(old, one(posts[0]), { more: posts.slice(1).map(one), at: Date.now() });
       if (REPLY_OPTIONS.includes(d.reply)) old.reply = d.reply;
-      // The window's media, as stand-ins (the window keeps their bytes).
-      if (Array.isArray(d.files)) old.files = d.files.filter((m) => m && typeof m.id === 'string').slice(0, 4).map((m) => ({ name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0, __mac: m.id, __alt: String(m.alt || '').slice(0, 1000) }));
+      if ('when' in d && kind !== 'edit') old.when = d.when && Sweeter.text.whenDate(d.when) ? Sweeter.text.whenOf(Sweeter.text.whenDate(d.when)) : null;
       storeDrafts();
     }
     // A file's bytes from the window, in base64 parts, in order; the last
@@ -7321,13 +7372,14 @@
         }
         case 'post':
           // The window sends every file's bytes first.
-          if (!compose.files.every((f) => f instanceof File)) {
+          if (!compose.thread.every((p) => p.files.every((f) => f instanceof File))) {
             cmpStatus.textContent = 'Sweeter didn’t get the media from its window. Nothing was posted.';
             return reply();
           }
           cmpStatus.textContent = '';
           submitCompose();
-          return reply();
+          // A check that stopped on another post names it, for the window to open.
+          return JSON.stringify(Object.assign(macState(), { at: compose ? compose.at : 0 }));
         case 'close':
           // The window is closing itself.
           macCmp = false;
@@ -7336,28 +7388,9 @@
         case 'xpro':
           run({ location: 'cmp-location', grok: 'cmp-grok' }[arg.tool] || 'cmp-xpro', cmpBox);
           return null;
-        case 'web':
-          macToWeb(arg.tool);
-          return null;
         default:
           return null;
       }
-    }
-    // A tool the Mac window doesn't draw yet: this draft moves to the web
-    // window, which opens the tool (a file picker needs a click there).
-    async function macToWeb(tool) {
-      const c = compose;
-      macCmp = false;
-      native.composeHide(true);
-      c.web = true;
-      // The window sent its media's bytes first; they are the web window's now.
-      c.files = webFiles(c.files);
-      for (const f of c.files) delete f.__mac;
-      c.thread[c.at] = livePost();
-      renderMedia();
-      await showCompose();
-      const cmd = { gif: 'cmp-gif', poll: 'cmp-poll', schedule: 'cmp-schedule', thread: 'cmp-thread-add' }[tool];
-      if (cmd && compose === c) run(cmd, cmpBox);
     }
     // The sheet's changes reach the window as one state per turn.
     let macPush = false;

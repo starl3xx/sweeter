@@ -212,6 +212,27 @@ final class ComposeTextView: NSTextView {
     var placeholder = "" {
         didSet { needsDisplay = true }
     }
+
+    /// As tall as its text, its last empty line too, and never shorter
+    /// than this: the body around it scrolls, the window fits it.
+    var minHeight: CGFloat = 0 {
+        didSet { invalidateIntrinsicContentSize() }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        guard let lm = layoutManager, let tc = textContainer else { return super.intrinsicContentSize }
+        lm.ensureLayout(for: tc)
+        var used = lm.usedRect(for: tc)
+        if lm.extraLineFragmentTextContainer === tc, !lm.extraLineFragmentRect.isEmpty { used = used.union(lm.extraLineFragmentRect) }
+        return NSSize(width: NSView.noIntrinsicMetric, height: max(minHeight, ceil(used.height + textContainerInset.height * 2)))
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        let width = frame.width
+        super.setFrameSize(newSize)
+        // A new width wraps the text anew.
+        if newSize.width != width { invalidateIntrinsicContentSize() }
+    }
     var onEscape: (() -> Void)?
     var onStyle: ((ComposeStyle) -> Void)?
     /// Photos or a video pasted or dropped: files, or a pasted image as PNG.
@@ -337,6 +358,7 @@ final class ComposeTextView: NSTextView {
 
     override func didChangeText() {
         super.didChangeText()
+        invalidateIntrinsicContentSize()
         needsDisplay = true
     }
 }
@@ -393,7 +415,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private let mediaRow = NSStackView()
     private let mediaScroll = NSScrollView()
     private let textView = ComposeTextView(usingTextLayoutManager: false)
+    /// The body's scroll view, and the stack it scrolls.
     private let scroll = NSScrollView()
+    private var bodyStack: NSStackView?
     private let noteLabel = NSTextField(wrappingLabelWithString: "")
     private let contextLabel = NSTextField(labelWithString: "")
     private let quoteName = NSTextField(labelWithString: "")
@@ -492,11 +516,12 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         textView.isContinuousSpellCheckingEnabled = true
         textView.drawsBackground = false
         textView.textContainerInset = NSSize(width: 0, height: 4)
-        textView.isVerticallyResizable = true
+        // As tall as its text (ComposeTextView.intrinsicContentSize); the
+        // body around it scrolls.
+        textView.isVerticallyResizable = false
         textView.isHorizontallyResizable = false
-        textView.autoresizingMask = [.width]
-        textView.minSize = .zero
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.minHeight = Self.textMin
         textView.textContainer?.containerSize = NSSize(width: 500, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
         textView.onEscape = { [weak self] in self?.window?.performClose(nil) }
@@ -522,7 +547,6 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             mediaRow.leadingAnchor.constraint(equalTo: mediaScroll.contentView.leadingAnchor),
             mediaRow.topAnchor.constraint(equalTo: mediaScroll.contentView.topAnchor),
         ])
-        scroll.documentView = textView
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.drawsBackground = false
@@ -582,6 +606,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             self.poll = p
             if p == nil { self.pollView.isHidden = true }
             self.refreshDock()
+            self.fitSoon()
             self.sync()
         }
         whenPill.target = self
@@ -622,14 +647,39 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         nameRow.spacing = 6
         nameRow.alignment = .centerY
 
+        // The body: the thread's rows, the text, media, a poll, a card and
+        // Add Another Post, scrolling as one when it outgrows the window.
+        let body = NSStackView(views: [prevRows, textView, mediaScroll, pollView, cardBox, addRow, nextRows])
+        body.orientation = .vertical
+        body.alignment = .leading
+        body.spacing = 10
+        body.translatesAutoresizingMaskIntoConstraints = false
+        for v in [prevRows, textView, mediaScroll, pollView, cardBox, addRow, nextRows] as [NSView] {
+            v.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
+        }
+        let page = ComposeFlippedView()
+        page.translatesAutoresizingMaskIntoConstraints = false
+        page.addSubview(body)
+        scroll.documentView = page
+        NSLayoutConstraint.activate([
+            body.leadingAnchor.constraint(equalTo: page.leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: page.trailingAnchor),
+            body.topAnchor.constraint(equalTo: page.topAnchor),
+            body.bottomAnchor.constraint(equalTo: page.bottomAnchor, constant: -4),
+            page.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            page.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
+            page.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+        ])
+        bodyStack = body
+
         // The post: its column beside the picture.
-        let column = NSStackView(views: [nameRow, replyRow, noteLabel, contextLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, cardBox, addRow, nextRows, whenRow, statusRow])
+        let column = NSStackView(views: [nameRow, replyRow, noteLabel, contextLabel, quoteBox, scroll, whenRow, statusRow])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 10
         column.setCustomSpacing(6, after: nameRow)
         column.translatesAutoresizingMaskIntoConstraints = false
-        for v in [nameRow, noteLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, cardBox, addRow, nextRows, statusRow] as [NSView] {
+        for v in [nameRow, noteLabel, quoteBox, scroll, statusRow] as [NSView] {
             v.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         }
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
@@ -796,8 +846,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
                 w.setFrame(f, display: false)
             }
         }
+        // Fitted before it shows (no tall flash), and again once it has laid out.
+        fitHeight()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+        fitSoon()
         window?.makeFirstResponder(textView)
         textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
     }
@@ -823,6 +876,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private func apply(_ s: ComposeState) {
         if let look = s.look { applyTheme(look) }
         if let d = s.drafts { showDrafts(d) }
+        defer { fitSoon() }
         if let a = s.avatar, a != avatarShown {
             avatarShown = a
             avatarView.show(dataURL: a, handle: avatarHandle)
@@ -891,6 +945,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         textView.textStorage?.setAttributedString(text)
         textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: SweeterColor.text]
         textView.undoManager?.removeAllActions()
+        textView.invalidateIntrinsicContentSize()
         textView.needsDisplay = true
     }
 
@@ -1022,6 +1077,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             cardImage.isHidden = true
         }
         cardBox.isHidden = false
+        fitSoon()
     }
 
     // MARK: Edits go to the page
@@ -1029,6 +1085,71 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     func textDidChange(_ notification: Notification) {
         normalizeLooks()
         scheduleSync()
+        fitSoon()
+    }
+
+    // MARK: The window's height
+
+    /// The window fits what it holds (the text, media, a poll, a thread's
+    /// rows, a quote, a card), opening compact and growing as you write, up
+    /// to most of the screen, until you size it yourself (then until it
+    /// closes). The text area asks for its text's height at a priority just
+    /// above the window keeping its size (500) and below a person dragging
+    /// it (510), so Auto Layout sizes the window around everything in it.
+    private var userSized = false
+    private var fitQueued = false
+    private static let textMin: CGFloat = 96
+    /// The body asks for its whole height at a priority just above the
+    /// window keeping its size (500) and below a person dragging it (510).
+    private lazy var textHeight: NSLayoutConstraint = {
+        let c = scroll.heightAnchor.constraint(equalToConstant: Self.textMin)
+        c.priority = NSLayoutConstraint.Priority(505)
+        return c
+    }()
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        userSized = true
+        textHeight.isActive = false
+    }
+
+    private func fitSoon() {
+        guard !fitQueued else { return }
+        fitQueued = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.fitQueued = false
+            self.fitHeight()
+        }
+    }
+
+    private func fitHeight() {
+        guard isOpen, let w = window, !w.inLiveResize, let body = bodyStack else { return }
+        if userSized {
+            textHeight.isActive = false
+            return
+        }
+        // The screen most of the window is on (a hidden one has no screen yet).
+        let size = { (s: NSScreen) -> CGFloat in
+            let r = s.frame.intersection(w.frame)
+            return r.isNull ? 0 : r.width * r.height
+        }
+        let screen = w.screen ?? NSScreen.screens.filter { size($0) > 0 }.max { size($0) < size($1) } ?? NSScreen.main
+        let area = screen?.visibleFrame ?? w.frame
+        w.contentView?.layoutSubtreeIfNeeded()
+        // The whole body, up to what keeps the window within 80% of the
+        // screen with the rest of it (the header, the send time, the bar):
+        // beyond that the body scrolls.
+        let others = w.frame.height - scroll.frame.height
+        let want = max(80, min(ceil(body.frame.height) + 4, area.height * 0.8 - others))
+        if abs(textHeight.constant - want) > 0.5 { textHeight.constant = want }
+        textHeight.isActive = true
+        // The top stays where it was; the window grows down, and up only at the screen's bottom.
+        let top = w.frame.maxY
+        w.layoutIfNeeded()
+        var f = w.frame
+        f.origin.y = top - f.height
+        if f.minY < area.minY { f.origin.y = min(area.minY, area.maxY - f.height) }
+        if f.origin != w.frame.origin { w.setFrameOrigin(f.origin) }
     }
 
     @objc private func replyPressed() {
@@ -1138,6 +1259,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         pollView.isHidden = poll == nil
         refreshDock()
         rebuildRows()
+        fitSoon()
         window?.makeFirstResponder(textView)
         textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
     }
@@ -1363,6 +1485,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             mediaRow.addArrangedSubview(tile)
         }
         mediaScroll.isHidden = media.isEmpty && gif == nil
+        fitSoon()
     }
 
     // MARK: A poll and a send time
@@ -1376,6 +1499,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         pollView.show(.fresh)
         pollView.isHidden = false
         refreshDock()
+        fitSoon()
         pollView.focusFirstChoice()
         sync()
     }
@@ -1398,6 +1522,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         whenPill.title = when.map { "Sends " + $0.label } ?? ""
         whenRow.isHidden = when == nil
         refreshDock()
+        fitSoon()
         postButton.title = postTitle(lastPost)
     }
 
@@ -1512,6 +1637,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         closingFromPage = false
         closeDecided = false
         busy = false
+        userSized = false
+        textHeight.isActive = false
         if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
     }
 

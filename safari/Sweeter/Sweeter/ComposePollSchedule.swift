@@ -358,6 +358,9 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
         calendar.datePickerElements = .yearMonthDay
         calendar.isBezeled = false
         calendar.drawsBackground = false
+        // It takes the keyboard when the popover opens; its selected day
+        // shows where the keyboard is, so no ring around the whole month.
+        calendar.focusRingType = .none
         calendar.minDate = Calendar.current.startOfDay(for: now)
         calendar.maxDate = max
         calendar.dateValue = start

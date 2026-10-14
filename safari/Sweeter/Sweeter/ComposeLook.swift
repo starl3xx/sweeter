@@ -112,6 +112,11 @@ enum SweeterColor {
     static var discPinkText: NSColor { pick({ toward($0.solid, 0.45, $0) }, hex(0x8A_1F4B), hex(0xFF_D0E0)) }
 }
 
+/// A view whose content starts at the top (a scroll view's page).
+final class ComposeFlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
 /// The box's own background: the theme's, as a sheet of paper in the
 /// window.
 final class ComposeBackdrop: NSView {

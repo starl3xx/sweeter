@@ -6037,7 +6037,7 @@
       if (c === compose && stash !== false) stashPost();
       const t = c.thread;
       const unchanged = c.kind === 'edit' && editUnchanged(c, t[0]);
-      if (!unchanged && t.some(postFilled)) {
+      if (!unchanged && (t.some(postFilled) || (c.held && c.held.length))) {
         const old = drafts.get(key);
         const one = (p) => ({ text: p.text, files: p.files, gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
         const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null });
@@ -7112,6 +7112,7 @@
     let macCmp = false; // the Mac window shows the open post
     let macCard = null; // the link card the sheet shows
     let macMediaMsg = ''; // what the last add didn't take, while it shows
+    let macMediaIds = ''; // the media that add left, until they change
     const cmpOpen = () => !cmpBack.hidden || macCmp;
     function macFits(c) {
       if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
@@ -7175,7 +7176,7 @@
       // come only at Post (macFile); until then each is a stand-in.
       if (Array.isArray(d.files)) {
         const was = new Map(c.files.filter((f) => f.__mac).map((f) => [f.__mac, f]));
-        if (macMediaMsg && cmpStatus.textContent === macMediaMsg && d.files.map((m) => m && m.id).join() !== c.files.map((f) => f.__mac).join()) cmpStatus.textContent = '';
+        if (macMediaMsg && cmpStatus.textContent === macMediaMsg && d.files.map((m) => m && m.id).join() !== macMediaIds) cmpStatus.textContent = '';
         c.files = d.files
           .filter((m) => m && typeof m.id === 'string')
           .slice(0, 4)
@@ -7258,9 +7259,13 @@
         case 'add': {
           const incoming = (Array.isArray(arg.incoming) ? arg.incoming : []).map((f) => ({ type: String((f && f.type) || '') }));
           const r = mediaCheck(compose.files, incoming);
-          // Said in the status line, which the window shows, until the media change.
-          if (r.msg) cmpStatus.textContent = macMediaMsg = r.msg;
-          else if (macMediaMsg && cmpStatus.textContent === macMediaMsg) cmpStatus.textContent = '';
+          // Said in the status line, which the window shows, until the
+          // media change from what this add leaves.
+          if (r.msg) {
+            cmpStatus.textContent = macMediaMsg = r.msg;
+            const ids = compose.files.map((f) => f.__mac).concat(r.take.map((i) => String((arg.incoming[i] && arg.incoming[i].id) || '')));
+            macMediaIds = ids.join();
+          } else if (macMediaMsg && cmpStatus.textContent === macMediaMsg) cmpStatus.textContent = '';
           return JSON.stringify({ take: r.take, msg: r.msg });
         }
         case 'post':

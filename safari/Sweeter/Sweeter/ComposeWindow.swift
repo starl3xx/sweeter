@@ -818,7 +818,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         syncTimer?.invalidate()
         syncTimer = nil
         var d = draft()
-        d["incoming"] = items.map { ["name": $0.name, "type": $0.type, "size": $0.size] as [String: Any] }
+        d["incoming"] = items.map { ["id": $0.id, "name": $0.name, "type": $0.type, "size": $0.size] as [String: Any] }
         let key = self.key
         guard let vc = ViewController.shared else { return }
         adding = true

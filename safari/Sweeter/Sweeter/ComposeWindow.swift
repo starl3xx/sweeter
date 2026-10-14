@@ -338,6 +338,7 @@ enum ComposeStyle {
 final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSTextViewDelegate {
     static let shared = ComposeWindowController()
     static let baseFont = NSFont.systemFont(ofSize: 15)
+    static let minWidth: CGFloat = 600
     /// The window exists (a page reload or report may need to reach it).
     private(set) static var made = false
 
@@ -398,17 +399,23 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private let countRing = ComposeCountRing()
     private let countLabel = NSTextField(labelWithString: "")
     private let postButton = ComposeAccentButton(title: "Post", target: nil, action: nil)
+    /// Where a thread grows: right under the post being written.
+    private let addRow = ComposeAddRow("Add Another Post")
 
     private init() {
-        let panel = QuietPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 380), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: true)
+        let panel = QuietPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 420), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: true)
         panel.isReleasedWhenClosed = false
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = true
         // A window of its own to the person: Mission Control and ⌘` too.
         panel.collectionBehavior = [.managed, .participatesInCycle, .fullScreenAuxiliary]
         panel.becomesKeyOnlyIfNeeded = false
-        panel.contentMinSize = NSSize(width: 420, height: 240)
+        // Wide enough for every tool: nothing goes into the toolbar's ».
+        panel.contentMinSize = NSSize(width: Self.minWidth, height: 260)
         panel.toolbarStyle = .unified
+        // The toolbar's room is the tools'; the title stays in the Window
+        // menu and Mission Control.
+        panel.titleVisibility = .hidden
         super.init(window: panel)
         Self.made = true
         panel.delegate = self
@@ -570,14 +577,17 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         }
         let rule = NSBox()
         rule.boxType = .separator
-        let stack = NSStackView(views: [replyRow, noteLabel, contextLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, nextRows, cardBox, whenRow, rule, bar])
+        addRow.target = self
+        addRow.action = #selector(addPostPressed)
+        addRow.toolTip = "Add a post after this one, to make a thread"
+        let stack = NSStackView(views: [replyRow, noteLabel, contextLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, cardBox, addRow, nextRows, whenRow, rule, bar])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 14, left: 20, bottom: 10, right: 20)
         stack.setCustomSpacing(6, after: rule)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [noteLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, nextRows, cardBox, bar] as [NSView] {
+        for v in [noteLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, cardBox, addRow, nextRows, bar] as [NSView] {
             v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
         }
         rule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
@@ -620,7 +630,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         tools = snap.tools
         asked = ""
         window?.title = snap.title
-        window?.subtitle = snap.account
+        window?.subtitle = ""
         textView.placeholder = snap.placeholder
         noteLabel.stringValue = snap.note
         noteLabel.isHidden = snap.note.isEmpty
@@ -662,10 +672,30 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         reply = snap.replyOptions.contains(snap.reply) ? snap.reply : snap.replyOptions.first ?? "Everyone"
         replyPill.title = reply + " can reply"
         replyRow.isHidden = snap.replyHidden
+        addRow.isHidden = !snap.tools.contains("thread")
         rebuildToolbar()
         apply(snap.state)
         isOpen = true
         closingFromPage = false
+        // A size saved before the minimum grew: wide enough again.
+        if let w = window {
+            let inner = w.contentRect(forFrameRect: w.frame).width
+            if inner < Self.minWidth {
+                var f = w.frame
+                f.size.width += Self.minWidth - inner
+                // Still on its screen (the one most of the saved frame is on; a
+                // hidden window has no screen yet): by the right edge, it grows leftward.
+                let size = { (s: NSScreen) -> CGFloat in
+                    let r = s.frame.intersection(w.frame)
+                    return r.isNull ? 0 : r.width * r.height
+                }
+                let home = NSScreen.screens.filter { size($0) > 0 }.max { size($0) < size($1) } ?? NSScreen.main
+                if let area = home?.visibleFrame {
+                    f.origin.x = max(area.minX, min(f.origin.x, area.maxX - f.width))
+                }
+                w.setFrame(f, display: false)
+            }
+        }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(textView)
@@ -708,6 +738,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         postButton.isEnabled = !busy
         textView.isEditable = !busy
         replyPill.isEnabled = !busy
+        addRow.isEnabled = !busy
         whenRow.arrangedSubviews.forEach { ($0 as? NSControl)?.isEnabled = !busy }
         countLabel.stringValue = s.count
         countRing.show(s.count, level: s.level)
@@ -1040,6 +1071,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         sync()
     }
 
+    @objc private func addPostPressed() {
+        guard !busy else { return }
+        addPost()
+    }
+
     private func removePost(_ i: Int) {
         guard !busy, i < thread.count else { return }
         stash()
@@ -1067,6 +1103,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         postButton.isEnabled = false
         textView.isEditable = false
         replyPill.isEnabled = false
+        addRow.isEnabled = false
         let all = thread.flatMap(\.media)
         guard !all.isEmpty else { return send(op, d) }
         uploading = true
@@ -1085,6 +1122,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             self.postButton.isEnabled = true
             self.textView.isEditable = true
             self.replyPill.isEnabled = true
+            self.addRow.isEnabled = true
             self.spinner.stopAnimation(nil)
             self.statusLabel.stringValue = problem
             self.statusLabel.textColor = .systemRed
@@ -1388,7 +1426,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     private func identifiers() -> [NSToolbarItem.Identifier] {
         // Three groups (add, style, the post's shape), each its own piece of glass.
-        let groups: [[Tool]] = [[.photo, .gif, .emoji], [.bold, .italic], [.poll, .schedule, .thread]]
+        // Add Another Post lives in the box, under the post.
+        let groups: [[Tool]] = [[.photo, .gif, .emoji], [.bold, .italic], [.poll, .schedule]]
         var mine: [NSToolbarItem.Identifier] = []
         for g in groups {
             let ids = g.filter { tools.contains($0.rawValue) }.map { NSToolbarItem.Identifier($0.rawValue) }
@@ -1421,6 +1460,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             let item = NSToolbarItem(itemIdentifier: id)
             item.view = postButton
             item.label = "Post"
+            // Post never goes into the toolbar's ».
+            item.visibilityPriority = .user
             return item
         }
         if id == Self.moreID {
@@ -1429,6 +1470,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             item.label = "X Pro"
             item.toolTip = "Finish in X Pro’s own composer"
             item.showsIndicator = true
+            item.visibilityPriority = .high
             let menu = NSMenu()
             for (title, tool) in [("Open in X Pro", "xpro"), ("Tag a Location in X Pro", "location"), ("Make an Image with Grok in X Pro", "grok")] {
                 let m = NSMenuItem(title: title, action: #selector(xpro(_:)), keyEquivalent: "")

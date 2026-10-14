@@ -86,6 +86,55 @@
       }
     }
 
+    // X's drafts, newest first, as X Pro's Drafts column last listed them
+    // (null until one has), and the reader's saves, edits and deletes there
+    // since: X Pro asks for the list again only after a new save and on its
+    // poll. xSaved: the newest draft X made, for whoever waits on a save.
+    let xDrafts = null;
+    let xSaved = null;
+    const DRAFT_OPS = new Set(['FetchDraftTweets', 'CreateDraftTweet', 'EditDraftTweet', 'DeleteDraftTweet', 'DeleteDraftTweets']);
+    function ingestDrafts(msg) {
+      const v = msg.vars || {};
+      const data = msg.body.data || {};
+      switch (msg.op) {
+        case 'FetchDraftTweets': {
+          const list = N.drafts(msg.body);
+          if (!list) return false;
+          xDrafts = list;
+          return true;
+        }
+        case 'CreateDraftTweet': {
+          const id = data.tweet && data.tweet.rest_id;
+          if (!id) return false;
+          xSaved = { id: String(id), seq: msg.seq || 0 };
+          return true;
+        }
+        case 'EditDraftTweet': {
+          const id = String(v.draft_tweet_id || '');
+          const i = xDrafts ? xDrafts.findIndex((d) => d.id === id) : -1;
+          if (i < 0 || !data.drafttweet_put) return false;
+          const req = Object.assign({}, v.post_tweet_request || {}, { type: 'PostTweetRequest' });
+          const old = xDrafts[i];
+          const now = (N.drafts({ data: { viewer: { draft_list: { response_data: [{ rest_id: id, tweet_create_request: req }] } } } }) || [])[0];
+          if (!now) return false;
+          // The media X holds: the same ones while their count is, else as many unseen.
+          const n = Array.isArray(req.media_ids) ? req.media_ids.length : old.media.length;
+          now.media = n === old.media.length ? old.media : Array.from({ length: n }, () => ({ type: 'photo', url: '', alt: '' }));
+          now.replyTo = now.reply === old.reply ? old.replyTo : null;
+          xDrafts = xDrafts.slice(0, i).concat([now], xDrafts.slice(i + 1));
+          return true;
+        }
+        default: {
+          const ids = new Set((msg.op === 'DeleteDraftTweet' ? [v.draft_tweet_id] : v.draft_tweet_ids || []).map(String));
+          if (!xDrafts || !ids.size) return false;
+          const left = xDrafts.filter((d) => !ids.has(d.id));
+          if (left.length === xDrafts.length) return false;
+          xDrafts = left;
+          return true;
+        }
+      }
+    }
+
     // One captured response from the recorder: { op, vars, body }.
     function ingest(msg) {
       if (!msg || !msg.op || !msg.body) return null;
@@ -100,6 +149,11 @@
       if (Sweeter.decks.OPS.has(msg.op)) {
         if (decks.ingest(msg)) emit('decks');
         return 'decks';
+      }
+      if (DRAFT_OPS.has(msg.op)) {
+        if (!ingestDrafts(msg)) return null;
+        emit('xdrafts');
+        return 'xdrafts';
       }
       // X Pro's answer when the reader posts (CreateTweet, or CreateNoteTweet
       // for a long post). A reply shows at once in an open conversation of
@@ -494,6 +548,8 @@
       get: (key) => sources.get(key),
       detail: (id) => details.get(String(id)) || null,
       lastPosted: () => lastPosted,
+      xDrafts: () => xDrafts,
+      xSaved: () => xSaved,
       post: (id) => posts.get(String(id)) || null,
       profile: (handle) => profiles.get(String(handle).toLowerCase()) || null,
       // Route this person’s timelines to the profile, by id or (when only

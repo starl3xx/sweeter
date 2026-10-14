@@ -726,6 +726,54 @@
     });
   }
 
-  Sweeter.normalize = { sourceFor, user, post, notification, timeline, listInfo, profile, profileOf, PEOPLE_OPS: Object.keys(PEOPLE) };
+  // ---------- X's drafts ----------
+  // FetchDraftTweets, which X Pro's Drafts column sends as it opens and on
+  // its poll (verified 2026-10-14): data.viewer.draft_list.response_data,
+  // newest first. Each is what X's composer saved: the text, bold and italic
+  // as richtext tags in UTF-16 units (compose.styles' own units), the media
+  // X already holds, the post it answers or quotes, and a thread's later
+  // posts. X keeps no time, but the id is a snowflake: when it was saved.
+  // null: not a drafts list.
+  function drafts(body) {
+    const dl = body && body.data && body.data.viewer && body.data.viewer.draft_list;
+    const list = dl && dl.response_data;
+    if (!Array.isArray(list)) return null;
+    const out = [];
+    for (const d of list) {
+      const req = d && d.tweet_create_request;
+      if (!d || !d.rest_id || !req || req.type !== 'PostTweetRequest') continue;
+      const tags = (req.richtext_options && req.richtext_options.richtext_tags) || [];
+      const ranges = (type) =>
+        tags
+          .filter((t) => (t.richtext_types || []).some((x) => String(x).toLowerCase() === type))
+          .map((t) => [t.from_index | 0, t.to_index | 0])
+          .filter(([s, e]) => e > s);
+      const answered = unwrap(d.replied_tweet_results && d.replied_tweet_results.result);
+      const author = answered && answered.core ? userFromResults(answered.core.user_results) : null;
+      const media = (d.media_entities || [])
+        .map((m) => {
+          const i = (m && m.media_info) || {};
+          const type = i.__typename === 'ApiVideo' ? 'video' : i.__typename === 'ApiGif' ? 'gif' : 'photo';
+          const still = i.original_img_url || (i.preview_image && i.preview_image.original_img_url) || '';
+          return { type, url: /^https:\/\/pbs\.twimg\.com\//.test(still) ? still : '', alt: String(m.alt_text || '') };
+        })
+        .filter((m) => m.url || m.type !== 'photo');
+      const id = String(d.rest_id);
+      out.push({
+        id,
+        at: snowflakeMs(id) || 0,
+        text: String(req.status || ''),
+        styles: { bold: ranges('bold'), italic: ranges('italic') },
+        reply: req.in_reply_to_status_id ? String(req.in_reply_to_status_id) : null,
+        replyTo: author ? author.handle : null,
+        quote: req.attachment_url ? String(req.attachment_url) : null,
+        media,
+        more: (req.thread_tweets || []).map((t) => String((t && t.status) || '')),
+      });
+    }
+    return out;
+  }
+
+  Sweeter.normalize = { sourceFor, user, post, notification, timeline, listInfo, profile, profileOf, drafts, PEOPLE_OPS: Object.keys(PEOPLE) };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.normalize;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

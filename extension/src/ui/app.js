@@ -76,6 +76,7 @@
     composeCards: true, // Mac app: a link in the compose window shows its page’s preview card
     composeWindow: true, // Mac app: the compose window is a window of its own, above Sweeter
     composeNative: false, // Mac app: that window is a Mac window (ComposeWindow.swift), beta
+    xDrafts: true, // drafts on X show in Drafts, from X Pro's Drafts column, which stays out of sight
     articleReader: true, // an X Article opens in Sweeter’s reader (⌘-click: x.com)
     readerSize: 18, // the reader’s text size, in px (READER_SIZES)
     readerFont: 'sans', // the reader’s typeface (READER_FONTS)
@@ -424,6 +425,7 @@
       { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'Like Mail’s compose window: it keeps the size and place you give it, shows in Mission Control, and needs no room in the columns.', app: true },
       { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, polls, scheduling, threads, and a toolbar in the title bar.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
+      { k: 'check', key: 'xDrafts', label: 'Drafts', text: 'Show your drafts on X', note: 'From a Drafts column in your X Pro deck, which Sweeter keeps out of sight. A draft with only text opens here; one with media, a reply, a quote, or a thread opens in X Pro’s composer.' },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
       { k: 'check', key: 'articleReader', label: 'X Articles', text: 'Open in Sweeter’s reader', note: 'X Pro loads an article’s text with its conversation, which Sweeter opens in the post’s column and closes again. ⌘-click opens x.com.' },
@@ -463,7 +465,7 @@
     ['c  u', 'Undo removing a column'], ['c  o', 'Column menu'],
     ['c  1', 'Column 1 (c 0: the last one)'], ['c  d', 'Copy the column in X Pro'], [']  [', 'Next, previous column'],
     ['g  h', 'Go to Home (g n Notifications, g r Mentions, g i a list, g b Bookmarks, g l Likes)'],
-    ['g  e', 'Go to Explore (g f Drafts, g t Scheduled, g g Grok) when the deck has one'],
+    ['g  e', 'Go to Explore (g t Scheduled, g g Grok) when the deck has one'], ['g  f', 'Drafts, with your drafts on X'],
     ['g  p', 'Your profile (g s Settings, g d Display, g m X Chat on x.com)'], ['⌘ [', 'Back from a conversation or profile (Mac app)'],
     ['⌘ J', 'Next column with unread posts (⇧⌘J: previous)'], ['⌥ ⌘ K', 'Clear every column (Sweeter only)'],
     ['⌥ ⌘ ←', 'Move the column left in X Pro (⌥⌘→: right)'], ['d  1', 'Deck 1 (d n new, d e edit, d m manage)'],
@@ -2551,6 +2553,9 @@
       });
     }
 
+    // Columns X Pro keeps that Sweeter shows another way.
+    const offStage = (key) => key === 'x:drafts' && settings.xDrafts !== false;
+
     function renderTabs() {
       let n = 0;
       tabsEl.innerHTML = layout
@@ -2584,13 +2589,16 @@
           if (d) store.declare(d);
         }
       }
+      // X Pro's Drafts column feeds the Drafts list (xDraftList) and stays
+      // out of sight; Sweeter still acts in it (xpro.js, drafts).
+      const onStage = next.filter((m) => !offStage(m.key));
       // The deck is known and holds nothing Sweeter can show.
-      nocolsEl.hidden = next.length > 0 || !store.decks.ready();
-      for (const m of next) {
+      nocolsEl.hidden = onStage.length > 0 || !store.decks.ready();
+      for (const m of onStage) {
         const old = m.id && m.colId && m.colId !== m.id ? 'c:' + m.id : null;
         if (old && cols.has(old) && !cols.has(m.vid)) moveVid(old, m.vid);
       }
-      const lay = buildLayout(next);
+      const lay = buildLayout(onStage);
       const sig = lay.map((e) => e.vid + '=' + e.key).join('|');
       if (!force && sig === mapSig) {
         mapping = next;
@@ -2803,6 +2811,12 @@
     }
 
     store.subscribe((key) => {
+      // X's drafts changed: the Drafts list and the Mac window's menu.
+      if (key === 'xdrafts') {
+        renderDrafts();
+        if (macCmp && compose) native.composeState(macState());
+        return;
+      }
       // A post the reader made: the app's log says whether its reply
       // showed in an open conversation, and if not, why (field names only).
       if (key === 'posted') {
@@ -4539,7 +4553,7 @@
       }
       if (!r || r.ok === false) {
         endPassthrough();
-        return toast('X Pro didn’t open that. Nothing changed.', 'warn');
+        return toast((r && r.msg) || 'X Pro didn’t open that. Nothing changed.', 'warn');
       }
       const t0 = Date.now();
       const timer = setInterval(() => {
@@ -6017,7 +6031,7 @@
     const drafts = new Map(
       Object.entries(opts.drafts || {})
         .filter(([, d]) => d && typeof d.text === 'string' && Date.now() - (d.at || 0) < DRAFT_DAYS * 864e5)
-        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), more: draftMore(d.more), when: d.when || null, files: [], at: d.at, saved: true }]),
+        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), more: draftMore(d.more), when: d.when || null, files: [], at: d.at, saved: true, xid: d.xid || null, xtext: typeof d.xtext === 'string' ? d.xtext : null }]),
     );
     // A new post's key carries its own id ('new:' alone is a draft from
     // before there were many).
@@ -6047,7 +6061,7 @@
       const out = {};
       const kept = Array.from(drafts.entries()).filter(([, d]) => [d].concat(d.more || []).some((p) => (p.text || '').trim() || p.gif || p.poll));
       const slim = (p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: p.poll || null });
-      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = Object.assign(slim(d), { reply: d.reply || 'Everyone', more: (d.more || []).map(slim), when: d.when || null, at: d.at || Date.now() });
+      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = Object.assign(slim(d), { reply: d.reply || 'Everyone', more: (d.more || []).map(slim), when: d.when || null, at: d.at || Date.now() }, d.xid ? { xid: d.xid, xtext: d.xtext || '' } : null);
       save({ drafts: out });
       renderDrafts();
     }
@@ -6062,7 +6076,7 @@
         const old = drafts.get(key);
         // Media only the Mac window can show (held) go back with their post.
         const one = (p) => ({ text: p.text, files: (p.files || []).concat(p.held || []), gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
-        const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null });
+        const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null }, c.xid ? { xid: c.xid, xtext: c.xtext } : null);
         const sig = (x) => JSON.stringify([x].concat(x.more || []).map((p) => [p.text, p.gif || null, p.styles || null, p.poll || null]).concat([x.reply, x.when || null]));
         const same = old && sig(old) === sig(d);
         const files = (x) => [x.files].concat((x.more || []).map((p) => p.files));
@@ -6079,10 +6093,98 @@
     const draftFilled = (d) => [d].concat(d.more || []).some((p) => (p.text || '').trim() || p.gif || p.poll || (p.files && p.files.length));
     function draftList() {
       const open = compose ? draftKey(compose) : '';
-      return Array.from(drafts.entries())
+      const mine = Array.from(drafts.entries())
         .filter(([k, d]) => k !== open && !k.startsWith('edit:') && draftFilled(d))
-        .sort((a, b) => (b[1].at || 0) - (a[1].at || 0))
-        .map(([k, d]) => ({ key: k, title: draftTitle(d), info: draftInfo(k, d) }));
+        .map(([k, d]) => ({ key: k, title: draftTitle(d), info: draftInfo(k, d), at: d.at || 0 }));
+      const onX = xDraftList().map((d) => ({ key: 'xd:' + d.id, title: xDraftTitle(d), info: xDraftInfo(d), at: d.at }));
+      return mine
+        .concat(onX)
+        .sort((a, b) => b.at - a.at)
+        .map(({ key, title, info }) => ({ key, title, info }));
+    }
+
+    // ---------- drafts on X ----------
+    // X's own drafts (X Pro's Drafts column, store.xDrafts) beside the ones
+    // on this Mac. One opened here becomes a draft here that remembers it
+    // (xid, and xtext, its text on X then): X's copy is left out of the
+    // list while X still holds that text, and goes when this one is posted
+    // or deleted. An edit made on X since shows X's copy again.
+    function xDraftList() {
+      const list = settings.xDrafts !== false && store.xDrafts();
+      if (!list) return [];
+      const linked = new Map();
+      for (const d of drafts.values()) if (d.xid) linked.set(d.xid, d.xtext);
+      if (compose && compose.xid) linked.set(compose.xid, compose.xtext);
+      return list.filter((d) => !(linked.has(d.id) && linked.get(d.id) === d.text));
+    }
+    // A draft Sweeter's window can hold: text, with bold and italic, alone.
+    // X keeps the rest (its media, the post it answers or quotes, a thread)
+    // in its own composer.
+    const xDraftHere = (d) => !d.media.length && !d.reply && !d.quote && !d.more.length;
+    function xDraftTitle(d) {
+      const line = (d.text.trim().split('\n')[0] || '').trim();
+      if (line) return line.length > 60 ? line.slice(0, 59).trimEnd() + '…' : line;
+      return d.reply ? 'A reply' : d.media.length ? (d.media[0].type === 'video' ? 'A video' : d.media[0].type === 'gif' ? 'A GIF' : 'Photos') : 'A post';
+    }
+    function xDraftInfo(d) {
+      const parts = ['On X'];
+      const t = new Date(d.at || Date.now());
+      const today = new Date();
+      parts.push(t.toDateString() === today.toDateString() ? 'Today, ' + t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : t.toLocaleDateString([], { month: 'short', day: 'numeric' }));
+      if (d.reply) parts.push('Reply to ' + (d.replyTo ? '@' + d.replyTo : 'a post'));
+      else if (d.quote) parts.push('Quote');
+      if (d.more.length) parts.push('Thread of ' + (1 + d.more.length));
+      else if (d.media.length) parts.push(d.media.length === 1 ? '1 ' + (d.media[0].type === 'photo' ? 'photo' : d.media[0].type) : d.media.length + ' photos');
+      return parts.join(' · ');
+    }
+    // How xpro.js finds a draft in the column: its place in X's list.
+    function xDraftRef(id) {
+      const list = store.xDrafts() || [];
+      const at = list.findIndex((d) => d.id === id);
+      return at < 0 ? null : { at, text: list[at].text, replyTo: list[at].replyTo };
+    }
+    const X_DRAFT_FAIL = {
+      busy: 'X Pro is busy with another post or dialog. Try again in a moment.',
+      nodraft: 'Sweeter can’t find that draft in X Pro’s Drafts column. Nothing changed.',
+      noopen: 'X Pro’s composer didn’t open that draft.',
+      noload: 'X Pro opened that draft empty, so Sweeter closed it again. It’s still in your drafts on X.',
+      noedit: 'X Pro’s Drafts column didn’t start choosing. Nothing was deleted.',
+      notick: 'X Pro’s Drafts column didn’t take the choice. Nothing was deleted.',
+      noconfirm: 'X Pro didn’t ask to delete. Nothing was deleted.',
+      nochange: 'X Pro didn’t confirm the delete. Check Drafts in X Pro (⌥X).',
+      nocolumn: 'This deck has no Drafts column now.',
+    };
+    // A draft on X: text into Sweeter's window; anything else into X Pro's
+    // composer, where it opens with what X holds, as Open in X Pro does.
+    function openXDraft(id) {
+      const d = (store.xDrafts() || []).find((x) => x.id === id);
+      if (!d) return renderDrafts();
+      if (xDraftHere(d)) {
+        const draftId = newDraftId();
+        const styles = d.styles.bold.length || d.styles.italic.length ? { bold: d.styles.bold, italic: d.styles.italic } : null;
+        drafts.set('new:' + draftId, { text: d.text, styles, reply: 'Everyone', gif: null, poll: null, more: [], when: null, files: [], at: Date.now(), xid: d.id, xtext: d.text });
+        storeDrafts();
+        return openCompose('new', null, null, draftId);
+      }
+      const m = mappingFor('x:drafts');
+      const ref = xDraftRef(id);
+      if (!m || !m.id || !ref) return toast(X_DRAFT_FAIL.nocolumn, 'warn');
+      if (compose && cmpOpen()) closeCompose(true);
+      xproHandoff(
+        () => xpro.openXDraft(m.id, ref).then((r) => (r.ok ? r : Object.assign(r, { msg: X_DRAFT_FAIL[r.reason] || X_DRAFT_FAIL.noopen }))),
+        () => xpro.composerOpen() || xpro.dialogOpen(),
+      );
+    }
+    // Deletes drafts from X; a failure is said, and the list shows them still.
+    async function deleteXDrafts(ids) {
+      // Just after a post, X Pro's composer is still closing.
+      for (let i = 0; i < 30 && (xpro.composerOpen() || xpro.dialogOpen()); i++) await new Promise((r) => setTimeout(r, 200));
+      const m = mappingFor('x:drafts');
+      const refs = ids.map(xDraftRef).filter(Boolean);
+      if (!refs.length) return;
+      if (!m || !m.id) return toast(X_DRAFT_FAIL.nocolumn, 'warn');
+      const r = await xpro.deleteXDrafts(m.id, refs);
+      if (!r.ok) toast('Your draft on X is still there. ' + (X_DRAFT_FAIL[r.reason] || ''), 'warn');
     }
     function draftTitle(d) {
       const line = ((d.text || '').trim().split('\n')[0] || '').trim();
@@ -6122,6 +6224,12 @@
           .map((d) => '<div class="dl-row"><button class="dl-open" type="button" role="menuitem" data-cmd="cmp-draft-open" data-key="' + h(d.key) + '"><span class="dl-t">' + h(d.title) + '</span><span class="dl-i">' + h(d.info) + '</span></button><button class="dl-x" type="button" data-cmd="cmp-draft-del" data-key="' + h(d.key) + '" title="Delete this draft" aria-label="Delete draft: ' + h(d.title) + '">×</button></div>')
           .join('') + '<div class="dl-foot">Drafts stay on this Mac for ' + DRAFT_DAYS + ' days. ⌘S saves the open post.</div>';
     }
+    // g f: a compose window with its Drafts list open (the Mac window's
+    // Drafts are its pill's menu).
+    function showDraftList() {
+      if (!compose || !cmpOpen()) openCompose('new');
+      if (compose && !macCmp && cmpDl.hidden && draftList().length) toggleDraftList();
+    }
     function toggleDraftList() {
       if (!cmpDl.hidden) return closeDraftList();
       cmpDl.hidden = false;
@@ -6140,14 +6248,17 @@
       const i = key.indexOf(':');
       const kind = key.slice(0, i);
       const rest = key.slice(i + 1);
+      if (kind === 'xd') return openXDraft(rest);
       if (!drafts.has(key)) return renderDrafts();
       if (kind === 'new') return openCompose('new', null, null, rest);
       if (!findPost(rest)) return toast('Sweeter can’t find the post this draft ' + (kind === 'reply' ? 'replies to' : 'quotes') + '. Scroll to it in a column, then open the draft again.', 'warn');
       openCompose(kind, rest);
     }
     function deleteDraft(key) {
+      if (key.startsWith('xd:')) return deleteXDrafts([key.slice(3)]);
       const d = drafts.get(key);
       if (!d) return renderDrafts();
+      if (d.xid) deleteXDrafts([d.xid]);
       drafts.delete(key);
       dropFiles(d.files || []);
       for (const p of d.more || []) dropFiles(p.files || []);
@@ -6857,6 +6968,8 @@
       if (altAsk) answerAltText('back');
       compose = { kind, id: id || null, key: key || null, files: [] };
       if (kind === 'new') compose.draftId = draftId != null ? draftId : newDraftId();
+      const saved = drafts.get(draftKey(compose));
+      if (saved && saved.xid) Object.assign(compose, { xid: saved.xid, xtext: saved.xtext || '' });
       cmpSave.hidden = true;
       closeDraftList();
       // An edit starts from the post's own text; its media and quoted post
@@ -7061,6 +7174,9 @@
       if (compose) {
         if (keep) keepDraft(compose);
         else {
+          const was = drafts.get(draftKey(compose));
+          const xid = compose.xid || (was && was.xid);
+          if (xid) deleteXDrafts([xid]);
           drafts.delete(draftKey(compose));
           storeDrafts();
           dropFiles(compose.files);
@@ -10117,6 +10233,10 @@
       if (key === 'telemetry' && native && native.telemetry) native.telemetry(!!val);
       if (key === 'menuBar' && native && native.menuBar) native.menuBar(!!val);
       if (key === 'composeCards') queueCard();
+      if (key === 'xDrafts') {
+        remap(true);
+        renderDrafts();
+      }
     }
 
     pbody.addEventListener('input', (e) => {
@@ -10422,6 +10542,8 @@
           if (e.key === 's') return openPrefs(), true;
           if (e.key === 'd') return openPrefsTab('general'), true;
           if (e.key === 'm') return openUrl('https://x.com/i/chat'), true;
+          // Drafts, X's too, are in the compose window's Drafts list.
+          if (e.key === 'f' && settings.xDrafts !== false) return showDraftList(), true;
           const kindOf = (x) => (store.get(x.key) || {}).kind;
           const place = (type) => (x) => x.key === 'x:' + type || x.key.startsWith('x:' + type + ':');
           const want = {

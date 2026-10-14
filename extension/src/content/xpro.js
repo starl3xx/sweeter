@@ -1692,6 +1692,107 @@
     return !!document.querySelector('[role="dialog"], [role="alertdialog"], [data-testid="confirmationSheetConfirm"]');
   }
 
+  // ---------- X's drafts ----------
+  // X Pro's Drafts column (module 812560, verified 2026-10-14): a button per
+  // draft around an unsentTweet cell, in the order FetchDraftTweets gave
+  // (newest first). A cell carries no id, so a draft is named by its place
+  // in that list ({ at, text, replyTo }), and the cell must show its text
+  // (or, with none, who it answers). Pressed, a cell loads the draft into
+  // X Pro's composer at /compose/post, which then saves over it or posts it
+  // and deletes it. Edit makes each row a label with a checkbox, beside
+  // Done, Select all and Delete; Delete asks first ("Discard Draft Posts")
+  // and sends DeleteDraftTweets.
+  function draftCells(colId) {
+    const w = colId ? columnWrap(colId) : null;
+    return w ? Array.from(w.querySelectorAll('[data-testid="unsentTweet"]')) : [];
+  }
+  function draftCell(colId, ref) {
+    const c = draftCells(colId)[ref.at];
+    if (!c) return null;
+    const shown = norm(c.innerText);
+    const first = norm(ref.text).slice(0, 40);
+    if (first) return shown.includes(first) ? c : null;
+    return !ref.replyTo || shown.includes('@' + ref.replyTo) ? c : null;
+  }
+  function draftButton(colId, text) {
+    const w = columnWrap(colId);
+    return w ? Array.from(w.querySelectorAll('[role="button"], button')).find((b) => norm(b.textContent) === text) || null : null;
+  }
+
+  // The draft in X Pro's composer, for the person to finish there.
+  async function openXDraft(colId, ref) {
+    if (composerOpen() || dialogOpen()) return { ok: false, reason: 'busy' };
+    if (draftButton(colId, 'Select all') || draftButton(colId, 'Deselect all')) draftButton(colId, 'Done').click();
+    const c = await waitFor(() => draftCell(colId, ref), 3000);
+    if (!c) return { ok: false, reason: 'nodraft' };
+    (c.closest('[role="button"], button') || c).click();
+    const ed = await waitFor(() => {
+      const e = editor();
+      return e && e.closest('[role="dialog"]') ? e : null;
+    }, 4000);
+    if (!ed) return { ok: false, reason: 'noopen' };
+    // X Pro has opened a draft empty (seen once, cause unknown): then it
+    // goes away again, and the draft stays on X as it was.
+    const want = norm(ref.text);
+    if (want && !(await waitFor(() => editor() && norm(editor().innerText) === want, 2500))) {
+      await closePanel(true);
+      return { ok: false, reason: 'noload' };
+    }
+    return { ok: true };
+  }
+
+  // Deletes drafts from X: Edit, tick each, Delete, and X Pro's own Delete.
+  async function deleteXDrafts(colId, refs) {
+    if (!columnWrap(colId)) return { ok: false, reason: 'nocolumn' };
+    if (!refs.length || composerOpen() || dialogOpen()) return { ok: false, reason: 'busy' };
+    const before = draftCells(colId).length;
+    if (refs.some((r) => !draftCell(colId, r))) return { ok: false, reason: 'nodraft' };
+    const editing = () => draftButton(colId, 'Select all') || draftButton(colId, 'Deselect all');
+    const leave = () => {
+      const d = editing() && draftButton(colId, 'Done');
+      if (d) d.click();
+    };
+    if (!editing()) {
+      const e = draftButton(colId, 'Edit');
+      if (!e) return { ok: false, reason: 'noedit' };
+      e.click();
+      if (!(await waitFor(editing, 2000))) return { ok: false, reason: 'noedit' };
+    }
+    const box = (c) => {
+      const l = c && c.closest('label');
+      return l ? l.querySelector('input[type="checkbox"]') : null;
+    };
+    const mine = refs.map((r) => draftCell(colId, r));
+    if (mine.some((c) => !box(c))) {
+      leave();
+      return { ok: false, reason: 'nodraft' };
+    }
+    for (const c of draftCells(colId)) if (box(c) && box(c).checked && !mine.includes(c)) box(c).click();
+    for (const c of mine) if (!box(c).checked) box(c).click();
+    const ticked = await waitFor(() => {
+      const on = draftCells(colId).filter((c) => box(c) && box(c).checked);
+      return on.length === mine.length && mine.every((c) => on.includes(c)) ? true : null;
+    }, 1500);
+    const del = draftButton(colId, 'Delete');
+    if (!ticked || !del || del.getAttribute('aria-disabled') === 'true') {
+      leave();
+      return { ok: false, reason: 'notick' };
+    }
+    del.click();
+    const yes = await waitFor(() => {
+      const b = document.querySelector('[data-testid="confirmationSheetDialog"] [data-testid="confirmationSheetConfirm"]');
+      return b && norm(b.textContent) === 'Delete' ? b : null;
+    }, 2000);
+    if (!yes) {
+      leave();
+      return { ok: false, reason: 'noconfirm' };
+    }
+    yes.click();
+    const gone = await waitFor(() => draftCells(colId).length <= before - refs.length, 6000);
+    leave();
+    return gone ? { ok: true } : { ok: false, reason: 'nochange' };
+  }
+
   // ---------- column management (Release 1) ----------
   // Verified on a throwaway deck, 2026-09-30.
   // Each function is one person’s command and presses X Pro’s own controls.
@@ -2298,5 +2399,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts) };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

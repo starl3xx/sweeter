@@ -138,6 +138,13 @@
     // shows them; only each GIF's id, text, and GIPHY image is passed on.
     'GifSearch',
     'GifEnumerateCategory',
+    // X's drafts (X Pro's Drafts column, verified 2026-10-14): the list as
+    // the column asks for it, and each save, edit and delete X Pro sends.
+    'FetchDraftTweets',
+    'CreateDraftTweet',
+    'EditDraftTweet',
+    'DeleteDraftTweet',
+    'DeleteDraftTweets',
   ]);
 
   // The deck sync carries more than Sweeter needs (onboarding state, each

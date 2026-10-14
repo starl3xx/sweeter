@@ -544,7 +544,8 @@
   function postButton(from) {
     let box = from;
     for (let i = 0; i < 40 && box; i++) {
-      const b = Array.from(box.querySelectorAll('[role="button"], button')).find((x) => /^\s*(Post|Reply|Post all|Reply all)\s*$/.test(x.textContent || ''));
+      // “Schedule” once a time is set (module 327189).
+      const b = Array.from(box.querySelectorAll('[role="button"], button')).find((x) => /^\s*(Post|Reply|Post all|Reply all|Schedule)\s*$/.test(x.textContent || ''));
       if (b) return b;
       box = box.parentElement;
     }
@@ -701,13 +702,72 @@
     return took ? { ok: true } : { ok: false, reason: 'nopoll' };
   }
 
+  // ---------- a scheduled post ----------
+  // X Pro's schedule dialog (module 331158), opened by the active post's
+  // scheduleOption: a date (Month, Day, and Year selects, and the hidden
+  // date input its calendar button fills; module 217196), then a time
+  // (Hour and Minute selects, and AM/PM in a 12-hour locale, and a hidden
+  // time input where the browser has showPicker; module 620386). Its
+  // Confirm (scheduledConfirmationPrimaryAction) is disabled while the
+  // time is in the past, and goes back to the composer, whose button then
+  // reads Schedule. The dialog's labels are in X Pro's language, so its
+  // fields are found by kind and order. Every value is read back first.
+  const pad2 = (n) => String(n).padStart(2, '0');
+  async function setSchedule(when) {
+    const root = composerRoot();
+    const b = root && root.querySelector('[data-testid="scheduleOption"]');
+    if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true') return { ok: false, reason: 'noschedule' };
+    b.click();
+    const confirm = () => document.querySelector('[data-testid="scheduledConfirmationPrimaryAction"]');
+    const c0 = await waitFor(confirm, 4000);
+    if (!c0) return { ok: false, reason: 'noschedule' };
+    const dlg = c0.closest('[role="dialog"]') || document;
+    // A failed step leaves the composer as it was: the dialog closes unconfirmed.
+    const fail = async (reason) => {
+      const x = dlg.querySelector('[data-testid="app-bar-close"]');
+      if (x) x.click();
+      await waitFor(() => !confirm(), 1500);
+      return { ok: false, reason };
+    };
+    const sels = () => Array.from(dlg.querySelectorAll('select'));
+    if (sels().length < 5) return fail('noschedule');
+    const twelve = sels().length >= 6;
+    const h12 = String(when.h % 12 || 12);
+    const ampm = when.h < 12 ? 'am' : 'pm';
+    const pick = async (i, v) => {
+      const el = sels()[i];
+      if (!el || !Array.from(el.options).some((o) => o.value === String(v))) return false;
+      setField(el, v, 'change');
+      await wait(80);
+      return true;
+    };
+    // The date: all at once through the date input, or year, month, then
+    // day (a month change clears a day the new month doesn't have).
+    const dateIn = dlg.querySelector('input[type="date"]');
+    if (dateIn) setField(dateIn, when.y + '-' + pad2(when.mo) + '-' + pad2(when.d), 'input');
+    else if (!((await pick(2, when.y)) && (await pick(0, when.mo)) && (await pick(1, when.d)))) return fail('badtime');
+    // The time: the hour before AM/PM, which moves it into the right half.
+    const timeIn = dlg.querySelector('input[type="time"]');
+    if (timeIn) setField(timeIn, pad2(when.h) + ':' + pad2(when.mi), 'input');
+    else if (!((await pick(3, twelve ? h12 : when.h)) && (!twelve || (await pick(5, ampm))) && (await pick(4, when.mi)))) return fail('badtime');
+    await wait(150);
+    const s = sels();
+    const took = s[0].value === String(when.mo) && s[1].value === String(when.d) && s[2].value === String(when.y) && s[3].value === (twelve ? h12 : String(when.h)) && s[4].value === String(when.mi) && (!twelve || s[5].value === ampm);
+    const c = confirm();
+    if (!took || !c || c.disabled || c.getAttribute('aria-disabled') === 'true') return fail('badtime');
+    c.click();
+    const back = await waitFor(() => !confirm() && editor() && /^\s*Schedule\s*$/.test((postButton(editor()) || {}).textContent || ''), 3000);
+    return back ? { ok: true } : fail('noschedule');
+  }
+
   // X Pro's own answer to a post (the recorder reads CreateTweet's
   // response): the new post's id, or X's error. Read, never sent.
-  // A thread is one CreateTweet per post, in order, so every answer is kept.
+  // A thread is one CreateTweet per post, in order, so every answer is
+  // kept; a scheduled post or thread is one CreateScheduledTweet.
   let postResults = [];
   window.addEventListener('message', (e) => {
     const d = e.data;
-    if (e.source !== window || !d || d.__sweeter !== 1 || (d.op !== 'CreateTweet' && d.op !== 'CreateNoteTweet') || !d.body) return;
+    if (e.source !== window || !d || d.__sweeter !== 1 || (d.op !== 'CreateTweet' && d.op !== 'CreateNoteTweet' && d.op !== 'CreateScheduledTweet') || !d.body) return;
     postResults = postResults.slice(-49).concat([{ at: Date.now(), id: d.body.id || null, error: d.body.error || null, status: d.body.status || 0 }]);
   });
   // How many posts the last press of Post sends (a thread's length).
@@ -813,6 +873,13 @@
         const r = await addPost(i + 1, more[i]);
         if (!r.ok) return r;
       }
+      // A time covers the whole thread (X Pro sends it as one scheduled
+      // post with thread_tweets; module 309505). It is set from the active
+      // post, the only one with a toolbar.
+      if (o.when) {
+        const sr = await setSchedule(o.when);
+        if (!sr.ok) return sr;
+      }
     } finally {
       item = 0;
     }
@@ -824,7 +891,7 @@
     // A test run stops here, with nothing sent.
     if (o.dryRun) return { ok: true, dry: true };
     const t0 = Date.now();
-    pendingPosts = 1 + more.length;
+    pendingPosts = o.when ? 1 : 1 + more.length;
     btn.click();
     return sent(t0, true, pendingPosts);
   }
@@ -1053,7 +1120,7 @@
     return att ? { ok: true } : { ok: false, reason: 'gifgone' };
   }
 
-  async function prefill(text, files, tool, gif, styles, poll, more) {
+  async function prefill(text, files, tool, gif, styles, poll, more, when) {
     await waitFor(editor, 3000);
     if (files && files.length) await attach(files);
     if (gif) await attachGif(gif);
@@ -1074,6 +1141,9 @@
         if (!(await addPost(i + 1, more[i])).ok) break;
         added++;
       }
+      // A time set in Sweeter goes over set; if that fails, X Pro's own
+      // schedule dialog opens for the person to finish.
+      if (when && !(await setSchedule(when)).ok) tool = 'schedule';
       if (tool && TOOLS[tool]) {
         const root = composerRoot();
         const b = root && root.querySelector(TOOLS[tool]);

@@ -105,6 +105,8 @@
       // for a long post). A reply shows at once in an open conversation of
       // the post it answers, under that post, as on X: X Pro doesn't ask for
       // the conversation again (asked for in a user's report, 2026-10-07).
+      // A scheduled post isn't a post until X sends it: nothing to show.
+      if (msg.op === 'CreateScheduledTweet') return null;
       if (msg.op === 'CreateTweet' || msg.op === 'CreateNoteTweet') {
         const raw = msg.body && msg.body.post;
         if (!raw) {

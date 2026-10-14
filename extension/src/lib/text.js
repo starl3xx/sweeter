@@ -301,6 +301,50 @@
     return null;
   }
 
-  Sweeter.text = { richText, plainText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX };
+  // ---------- a scheduled post ----------
+  // X Pro's schedule (module 331158): a date and a time to the minute, in
+  // this Mac's time zone, after now and at most 18 months ahead (module
+  // 283530). A time is { y, mo, d, h, mi }, with months 1 to 12.
+  function whenDate(w) {
+    if (!w) return null;
+    const n = [w.y, w.mo, w.d, w.h, w.mi].map(Number);
+    if (!n.every(Number.isInteger)) return null;
+    const t = new Date(n[0], n[1] - 1, n[2], n[3], n[4]);
+    // A day that rolled over (February 30) or an hour a clock change
+    // skipped is not the time asked for.
+    return t.getFullYear() === n[0] && t.getMonth() === n[1] - 1 && t.getDate() === n[2] && t.getHours() === n[3] && t.getMinutes() === n[4] ? t : null;
+  }
+  const whenOf = (t) => ({ y: t.getFullYear(), mo: t.getMonth() + 1, d: t.getDate(), h: t.getHours(), mi: t.getMinutes() });
+  // Sending goes through X Pro's composer first, which takes a moment.
+  const SCHEDULE_LEAD_MIN = 2;
+  // Why X Pro would refuse to schedule this, in words, or null. X Pro
+  // schedules no poll, and only a post everyone can reply to (module 89438,
+  // _isSchedulingDisabled); a scheduled reply goes without bold or italic
+  // (module 309505 sends its richtext only for a post that isn't a reply).
+  function scheduleProblem(w, now, o) {
+    const t = whenDate(w);
+    if (!t) return 'Pick a date and time for the post.';
+    const at = new Date(now).getTime();
+    if (t.getTime() <= at) return 'You can’t schedule a post to send in the past.';
+    if (t.getTime() < at + SCHEDULE_LEAD_MIN * 60000) return 'Pick a time at least ' + SCHEDULE_LEAD_MIN + ' minutes from now.';
+    const max = new Date(at);
+    max.setMonth(max.getMonth() + 18);
+    if (t > max) return 'You can’t schedule a post more than 18 months in the future.';
+    if (o && o.poll) return 'X Pro can’t schedule a post with a poll.';
+    if (o && o.reply && o.reply !== 'Everyone') return 'X Pro schedules a post only when everyone can reply.';
+    if (o && o.styledReply) return 'X Pro schedules a reply without bold or italic. Remove them, or reply now.';
+    // X Pro schedules a long post only when it isn't a reply (module 89438).
+    if (o && o.longReply) return 'X Pro can’t schedule a reply longer than 280 characters.';
+    return null;
+  }
+  // “Tue, Oct 14 at 9:00 AM”, with the year when it isn't this one.
+  function whenLabel(w, now) {
+    const t = whenDate(w);
+    if (!t) return '';
+    const day = t.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: t.getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric' });
+    return day + ' at ' + t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  Sweeter.text = { richText, plainText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.text;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

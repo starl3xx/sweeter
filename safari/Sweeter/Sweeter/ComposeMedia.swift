@@ -87,10 +87,11 @@ final class ComposeMedia {
 }
 
 /// A thumbnail in the media row: the picture, cropped to fill, a GIF or
-/// VIDEO badge, ALT for a photo's description, and a remove button.
+/// VIDEO badge, ALT for a photo's description, and a remove button. A GIF
+/// from X Pro's search shows its still, with no ALT (X Pro gives it its own).
 final class ComposeMediaTile: NSView {
     static let height: CGFloat = 88
-    let media: ComposeMedia
+    let media: ComposeMedia?
     var onRemove: (() -> Void)?
     var onAlt: ((NSView) -> Void)?
     private let picture = CALayer()
@@ -99,7 +100,18 @@ final class ComposeMediaTile: NSView {
     private let badge = NSTextField(labelWithString: "")
     private var widthConstraint: NSLayoutConstraint?
 
-    init(media: ComposeMedia) {
+    convenience init(media: ComposeMedia) {
+        self.init(media: media, badge: media.badge, alt: media.isPhoto)
+        media.loadThumb { [weak self] img in self?.show(img) }
+    }
+
+    convenience init(gif: ComposeGif) {
+        self.init(media: nil, badge: "GIF", alt: false)
+        toolTip = gif.alt.isEmpty ? nil : gif.alt
+        GiphyImages.load(gif.still) { [weak self] img in self?.show(img) }
+    }
+
+    private init(media: ComposeMedia?, badge text: String?, alt: Bool) {
         self.media = media
         super.init(frame: .zero)
         wantsLayer = true
@@ -128,14 +140,14 @@ final class ComposeMediaTile: NSView {
         altButton.layer?.cornerRadius = 4
         altButton.target = self
         altButton.action = #selector(altPressed)
-        altButton.isHidden = !media.isPhoto
+        altButton.isHidden = !alt
 
         badge.font = .boldSystemFont(ofSize: 9)
         badge.textColor = .white
         badge.drawsBackground = true
         badge.backgroundColor = NSColor.black.withAlphaComponent(0.6)
-        badge.stringValue = media.badge.map { " \($0) " } ?? ""
-        badge.isHidden = media.badge == nil
+        badge.stringValue = text.map { " \($0) " } ?? ""
+        badge.isHidden = text == nil
 
         for v in [remove, altButton, badge] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
@@ -151,7 +163,6 @@ final class ComposeMediaTile: NSView {
             badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 5),
         ])
         refresh()
-        media.loadThumb { [weak self] img in self?.show(img) }
     }
 
     required init?(coder: NSCoder) { nil }
@@ -166,10 +177,11 @@ final class ComposeMediaTile: NSView {
 
     /// The description button: “ALT”, with a check once there is one.
     func refresh() {
-        let set = !media.alt.isEmpty
+        let alt = media?.alt ?? ""
+        let set = !alt.isEmpty
         altButton.attributedTitle = NSAttributedString(string: set ? "✓ ALT" : "ALT", attributes: [.font: NSFont.boldSystemFont(ofSize: 10), .foregroundColor: NSColor.white])
         altButton.layer?.backgroundColor = (set ? NSColor.controlAccentColor : NSColor.black.withAlphaComponent(0.6)).cgColor
-        altButton.toolTip = set ? media.alt : "Add a description"
+        altButton.toolTip = set ? alt : "Add a description"
         altButton.setAccessibilityLabel(set ? "Edit the description" : "Add a description")
     }
 

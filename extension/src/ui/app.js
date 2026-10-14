@@ -422,7 +422,7 @@
       { k: 'sep' },
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
       { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'It floats above Sweeter, keeps the size and place you give it, and needs no room in the columns.', app: true },
-      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, and a toolbar. For now, GIFs, polls, scheduling, and threads move the post to the other window.', app: true },
+      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, and a toolbar. For now, polls, scheduling, and threads move the post to the other window.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
@@ -6850,6 +6850,7 @@
       }
       macFiles.clear();
       macParts.clear();
+      macGifsClose();
       if (!cmpWin) return;
       const w = cmpWin;
       cmpWin = null;
@@ -7116,7 +7117,7 @@
     const cmpOpen = () => !cmpBack.hidden || macCmp;
     function macFits(c) {
       if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
-      return c.thread.length === 1 && c.files.every((f) => f.__mac) && !c.gif && !c.poll && !c.when;
+      return c.thread.length === 1 && c.files.every((f) => f.__mac) && !c.poll && !c.when;
     }
     function macSnapshot(c) {
       const p = c.id ? findPost(c.id, c.kind === 'edit') : null;
@@ -7133,6 +7134,7 @@
         bold: c.styles.bold,
         italic: c.styles.italic,
         files: c.files.filter((f) => f.__mac).map((f) => ({ id: f.__mac, alt: f.__alt || '' })),
+        gif: c.gif || null,
         reply: cmpReply.value,
         replyOptions: REPLY_OPTIONS,
         replyHidden: c.kind === 'reply' || c.kind === 'edit',
@@ -7172,6 +7174,8 @@
         cmpReply.value = d.reply;
         syncWho();
       }
+      // A GIF from X Pro's search (the recorder passes only GIPHY's).
+      if ('gif' in d) c.gif = macGifOf(d.gif);
       // The window's media: its own ids, with their descriptions. The bytes
       // come only at Post (macFile); until then each is a stand-in.
       if (Array.isArray(d.files)) {
@@ -7198,7 +7202,8 @@
       let old = drafts.get(d.key);
       // Emptied, it is no draft, as keepDraft has it: an edit then opens on
       // the post's own text again.
-      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !(old && ((old.more || []).length || old.poll || old.gif))) {
+      const gif = 'gif' in d ? macGifOf(d.gif) : old ? old.gif : null;
+      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !gif && !(old && ((old.more || []).length || old.poll))) {
         if (drafts.delete(d.key)) storeDrafts();
         return;
       }
@@ -7209,7 +7214,7 @@
       }
       const text = d.text;
       const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
-      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, at: Date.now() });
+      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, gif, at: Date.now() });
       if (REPLY_OPTIONS.includes(d.reply)) old.reply = d.reply;
       // The window's media, as stand-ins (the window keeps their bytes).
       if (Array.isArray(d.files)) old.files = d.files.filter((m) => m && typeof m.id === 'string').slice(0, 4).map((m) => ({ name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0, __mac: m.id, __alt: String(m.alt || '').slice(0, 1000) }));
@@ -7235,6 +7240,34 @@
       macFiles.set(a.id, new File(parts, String(a.name || 'media'), { type: String(a.type || '') }));
       return 'done';
     }
+    // A GIF from the window, as the sheet keeps it: GIPHY's only.
+    function macGifOf(g) {
+      return g && typeof g.id === 'string' && /^https:\/\/media\d?\.giphy\.com\//.test(String(g.url || '')) ? { query: String(g.query || ''), id: g.id, alt: String(g.alt || ''), url: String(g.url), still: String(g.still || ''), w: g.w | 0, h: g.h | 0 } : null;
+    }
+    // The Mac window's GIF picker: X Pro's own GIF search, one query after
+    // another (gifStep, as the web picker's), and closed again when the
+    // picker closes. The answer is JSON: the GIFs and what to say if none;
+    // stale when a newer query came first.
+    let macGifs = null; // { opened, query }
+    function macGifSearch(q) {
+      if (!macGifs) macGifs = { opened: false, query: '' };
+      const s = macGifs;
+      s.query = q;
+      return new Promise((resolve) => {
+        gifStep(async () => {
+          if (macGifs !== s || s.query !== q) return resolve(JSON.stringify({ stale: true }));
+          const r = await xpro.gifSearchOnce(q);
+          if (r.opened) s.opened = true;
+          if (r.ok) resolve(JSON.stringify({ items: r.items, empty: q ? 'No GIFs for “' + q + '”.' : 'No trending GIFs right now.' }));
+          else resolve(JSON.stringify({ items: [], empty: r.reason === 'noanswer' ? 'X Pro’s GIF search didn’t answer. Try again.' : 'X Pro’s GIF search didn’t open.' }));
+        }).then(() => resolve(JSON.stringify({ stale: true })));
+      });
+    }
+    function macGifsClose() {
+      const s = macGifs;
+      macGifs = null;
+      if (s) gifStep(() => xpro.gifClose(s.opened));
+    }
     // Only real files for the web window: the window's stand-ins have no bytes.
     function webFiles(list) {
       return (list || []).filter((f) => f instanceof File).map((f) => {
@@ -7252,6 +7285,11 @@
         return reply();
       }
       if (op === 'file') return macFile(arg);
+      if (op === 'gifs') return macGifSearch(String((arg && arg.q) || '').trim());
+      if (op === 'gifsClose') {
+        macGifsClose();
+        return null;
+      }
       if (!macSync(arg)) return null;
       switch (op) {
         case 'edit':

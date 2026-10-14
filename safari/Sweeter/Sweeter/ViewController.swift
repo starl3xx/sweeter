@@ -930,12 +930,16 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     /// Closing hides the window, so X Pro keeps refreshing for the Dock badge.
     /// The compose window's close button (or ⌘W) asks the page instead: it
     /// brings its sheet home, keeps the draft, and closes the window itself;
-    /// if it doesn't within a second, the window closes anyway.
+    /// if it doesn't within a second, the window closes anyway, unless the
+    /// page answered "ask" (it asks to save the draft, in the window).
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if sender === composePanel {
-            webView.evaluateJavaScript("Sweeter.native && Sweeter.native.composeClosed && Sweeter.native.composeClosed()", in: nil, in: world) { _ in }
+            var asked = false
+            webView.evaluateJavaScript("Sweeter.native && Sweeter.native.composeClosed && Sweeter.native.composeClosed(true)", in: nil, in: world) { result in
+                if case .success(let v) = result, v as? String == "ask" { asked = true }
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                guard let self, let panel = self.composePanel, panel === sender, panel.isVisible else { return }
+                guard !asked, let self, let panel = self.composePanel, panel === sender, panel.isVisible else { return }
                 panel.close()
             }
             return false

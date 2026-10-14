@@ -448,7 +448,7 @@
     ['r', 'Reply'], ['n', 'New post'],
     ['b', 'Bookmark or remove bookmark'],
     ['u', 'Mute the author on X'], ['x', 'Block the author on X (asks first)'],
-    ['⌘ Return', 'Send from the compose window'], ['Esc', 'Close compose, keep the draft'],
+    ['⌘ Return', 'Send from the compose window'], ['⌘ S', 'Save the post as a draft'], ['Esc', 'Close compose (it asks to save a draft)'],
     ['⌘ B', 'Bold selected text'], ['⌘ I', 'Italic selected text'],
     ['o', 'Open media or link'], ['Return  →', 'Open the conversation here'],
     ['⌘ Y', 'Quick Look the post’s photos (Mac app)'],
@@ -619,7 +619,9 @@
       '</div></div>' +
       '<div class="pop" hidden role="menu"></div>' +
       '<div class="cmp-back" hidden><div class="cmp" role="dialog" aria-modal="true" aria-label="Compose">' +
-      '<div class="cmp-head" title="Drag to move. Double-click to put it back."><span class="cmp-title">New post</span><button class="x" type="button" data-cmd="cmp-cancel" aria-label="Close and keep the draft" title="Close and keep the draft">×</button></div>' +
+      '<div class="cmp-head" title="Drag to move. Double-click to put it back."><button class="cmp-dr" type="button" data-cmd="cmp-drafts" aria-haspopup="menu" aria-expanded="false" title="Your saved drafts" hidden>Drafts<span class="cmp-dr-n"></span></button><span class="cmp-title">New post</span><button class="x" type="button" data-cmd="cmp-cancel" aria-label="Close" title="Close (Esc)">×</button></div>' +
+      // Saved drafts (renderDrafts), newest first, under the Drafts button.
+      '<div class="cmp-dl" hidden role="menu" aria-label="Drafts"></div>' +
       '<div class="cmp-ctx"></div>' +
       // A thread's other posts (renderThread): those before this one, then after.
       '<div class="cmp-prev"></div>' +
@@ -666,6 +668,8 @@
       '<input type="file" id="cmp-file" accept="' + ACCEPT.join(',') + '" multiple hidden>' +
       // X Pro's image description reminder, asked here (askAltText).
       '<div class="cmp-ask" hidden role="group" aria-label="Image descriptions"><span class="cmp-ask-t">X Pro reminds you to describe your images for people who can’t see them.</span><button class="cmp-ask-b" type="button" data-cmd="cmp-alt-back">Cancel</button><button class="cmp-ask-b" type="button" data-cmd="cmp-alt-post">Not This Time</button><button class="cmp-ask-go" type="button" data-cmd="cmp-alt-add">Describe in X Pro</button></div>' +
+      // Closing a window that holds something (askClose).
+      '<div class="cmp-ask cmp-save" hidden role="alertdialog" aria-label="Save draft"><span class="cmp-ask-t">Save this post as a draft? You can open it again from Drafts.</span><button class="cmp-ask-b cmp-save-del" type="button" data-cmd="cmp-save-delete">Delete Draft</button><button class="cmp-ask-b" type="button" data-cmd="cmp-save-cancel">Cancel</button><button class="cmp-ask-go" type="button" data-cmd="cmp-save-keep">Save</button></div>' +
       '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for a location, a Grok image, and more">Open in X Pro</button>' +
       '<span class="cmp-status" id="cmp-status" role="status"></span><span class="grow"></span><span class="cmp-count"></span>' +
       '<button class="cmp-post" type="button" data-cmd="cmp-post" title="Post (⌘Return)">Post</button></div>' +
@@ -756,6 +760,10 @@
     const cmpCount = shadow.querySelector('.cmp-count');
     const cmpStatus = shadow.querySelector('.cmp-status');
     const cmpAsk = shadow.querySelector('.cmp-ask');
+    const cmpSave = shadow.querySelector('.cmp-save');
+    const cmpDr = shadow.querySelector('.cmp-dr');
+    const cmpDrN = shadow.querySelector('.cmp-dr-n');
+    const cmpDl = shadow.querySelector('.cmp-dl');
     const cmpPost = shadow.querySelector('.cmp-post');
     const cmpBox = shadow.querySelector('.cmp');
     const cmpMedia = shadow.querySelector('.cmp-media');
@@ -5992,11 +6000,12 @@
     let compose = null;
     let posting = false;
     let altAsk = null; // the compose waiting on X Pro's image description reminder
-    // Drafts: one per kind and target (a new post, a reply to a post, a
-    // quote of a post). Saved on this Mac as you write, so a quit, a reload
-    // or a crash keeps them; X Pro saves a draft only when asked (its
-    // autosave is off). Attached files stay in memory only. A draft is kept
-    // 30 days, the newest 50 at most.
+    // Drafts: one per reply or quote target, and as many new posts as you
+    // keep (each New Post starts its own). Saved on this Mac as you write,
+    // so a quit, a reload or a crash keeps them; closing a window that holds
+    // something asks to Save or Delete it, and Drafts lists the rest. X Pro
+    // saves a draft only when asked (its autosave is off). Attached files
+    // stay in memory only. A draft is kept 30 days, the newest 50 at most.
     const DRAFT_DAYS = 30;
     const DRAFT_MAX = 50;
     const THREAD_MAX = 25; // posts in a thread, as X Pro allows (module 89438)
@@ -6005,7 +6014,10 @@
         .filter(([, d]) => d && typeof d.text === 'string' && Date.now() - (d.at || 0) < DRAFT_DAYS * 864e5)
         .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), more: draftMore(d.more), when: d.when || null, files: [], at: d.at, saved: true }]),
     );
-    const draftKey = (c) => c.kind + ':' + (c.id || '');
+    // A new post's key carries its own id ('new:' alone is a draft from
+    // before there were many).
+    const draftKey = (c) => c.kind + ':' + ((c.kind === 'new' ? c.draftId : c.id) || '');
+    const newDraftId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     // A saved poll, as far as it still makes sense: up to four choices of
     // text, and a length inside X Pro's rules.
     function draftPoll(p) {
@@ -6032,6 +6044,7 @@
       const slim = (p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: p.poll || null });
       for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = Object.assign(slim(d), { reply: d.reply || 'Everyone', more: (d.more || []).map(slim), when: d.when || null, at: d.at || Date.now() });
       save({ drafts: out });
+      renderDrafts();
     }
     // The open compose window's posts become its draft (or, emptied, drop it).
     // stash false: the text box is not to be trusted (pagehide).
@@ -6052,6 +6065,120 @@
         drafts.set(key, Object.assign(d, { at: same ? old.at : Date.now() }));
       } else if (!drafts.delete(key)) return;
       storeDrafts();
+    }
+
+    // ---------- the Drafts list ----------
+    // Every kept draft but the open one and edits (an edit's draft is the
+    // post itself), newest first: its first words, and when, what it
+    // answers, and what it holds.
+    const draftFilled = (d) => [d].concat(d.more || []).some((p) => (p.text || '').trim() || p.gif || p.poll || (p.files && p.files.length));
+    function draftList() {
+      const open = compose ? draftKey(compose) : '';
+      return Array.from(drafts.entries())
+        .filter(([k, d]) => k !== open && !k.startsWith('edit:') && draftFilled(d))
+        .sort((a, b) => (b[1].at || 0) - (a[1].at || 0))
+        .map(([k, d]) => ({ key: k, title: draftTitle(d), info: draftInfo(k, d) }));
+    }
+    function draftTitle(d) {
+      const line = ((d.text || '').trim().split('\n')[0] || '').trim();
+      if (line) return line.length > 60 ? line.slice(0, 59).trimEnd() + '…' : line;
+      return d.poll ? 'A poll' : d.gif ? 'A GIF' : d.files && d.files.length ? 'Photos' : 'A thread';
+    }
+    function draftInfo(k, d) {
+      const parts = [];
+      const t = new Date(d.at || Date.now());
+      const today = new Date();
+      const yest = new Date(today.getTime() - 864e5);
+      const same = (a, b) => a.toDateString() === b.toDateString();
+      parts.push(same(t, today) ? 'Today, ' + t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : same(t, yest) ? 'Yesterday' : t.toLocaleDateString([], { month: 'short', day: 'numeric' }));
+      const kind = k.slice(0, k.indexOf(':'));
+      if (kind === 'reply' || kind === 'quote') {
+        const p = findPost(k.slice(k.indexOf(':') + 1));
+        parts.push((kind === 'reply' ? 'Reply to ' : 'Quote of ') + (p ? '@' + p.author.handle : 'a post'));
+      }
+      const n = 1 + (d.more || []).length;
+      if (n > 1) parts.push('Thread of ' + n);
+      else if (d.poll) parts.push('Poll');
+      else if (d.gif) parts.push('GIF');
+      else if (d.files && d.files.length) parts.push(d.files.length === 1 ? '1 photo' : d.files.length + ' photos');
+      const due = Sweeter.text.whenDate(d.when);
+      if (due && due.getTime() > Date.now()) parts.push('Sends ' + due.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }));
+      return parts.join(' · ');
+    }
+    // The Drafts button's count, and the open list, as the drafts are now.
+    function renderDrafts() {
+      const list = draftList();
+      cmpDr.hidden = !compose || compose.kind === 'edit' || !list.length;
+      cmpDrN.textContent = list.length ? ' ' + list.length : '';
+      if (cmpDr.hidden) closeDraftList();
+      if (cmpDl.hidden) return;
+      cmpDl.innerHTML =
+        list
+          .map((d) => '<div class="dl-row"><button class="dl-open" type="button" role="menuitem" data-cmd="cmp-draft-open" data-key="' + h(d.key) + '"><span class="dl-t">' + h(d.title) + '</span><span class="dl-i">' + h(d.info) + '</span></button><button class="dl-x" type="button" data-cmd="cmp-draft-del" data-key="' + h(d.key) + '" title="Delete this draft" aria-label="Delete draft: ' + h(d.title) + '">×</button></div>')
+          .join('') + '<div class="dl-foot">Drafts stay on this Mac for ' + DRAFT_DAYS + ' days. ⌘S saves the open post.</div>';
+    }
+    function toggleDraftList() {
+      if (!cmpDl.hidden) return closeDraftList();
+      cmpDl.hidden = false;
+      cmpDr.setAttribute('aria-expanded', 'true');
+      renderDrafts();
+      const first = cmpDl.querySelector('.dl-open');
+      if (first) first.focus();
+    }
+    function closeDraftList() {
+      cmpDl.hidden = true;
+      cmpDr.setAttribute('aria-expanded', 'false');
+    }
+    // A draft from the list into the window; the open one is kept first.
+    function openDraft(key) {
+      closeDraftList();
+      const i = key.indexOf(':');
+      const kind = key.slice(0, i);
+      const rest = key.slice(i + 1);
+      if (!drafts.has(key)) return renderDrafts();
+      if (kind === 'new') return openCompose('new', null, null, rest);
+      if (!findPost(rest)) return toast('Sweeter can’t find the post this draft ' + (kind === 'reply' ? 'replies to' : 'quotes') + '. Scroll to it in a column, then open the draft again.', 'warn');
+      openCompose(kind, rest);
+    }
+    function deleteDraft(key) {
+      const d = drafts.get(key);
+      if (!d) return renderDrafts();
+      drafts.delete(key);
+      dropFiles(d.files || []);
+      for (const p of d.more || []) dropFiles(p.files || []);
+      storeDrafts();
+      renderDrafts();
+    }
+    // ⌘S: the open post is kept now, and the window says so.
+    function saveDraftNow() {
+      if (!compose) return;
+      keepDraft(compose);
+      cmpStatus.textContent = 'Draft saved';
+    }
+    // Closing a window that holds something asks first (Save, Cancel, or
+    // Delete Draft), as a Mac app asks about a document; an empty one, or an
+    // edit (its draft is the post itself), just closes. Asked again while
+    // asking: Cancel. true while it asks.
+    function askClose() {
+      if (!compose) return false;
+      if (!cmpSave.hidden) {
+        closeSave();
+        return true;
+      }
+      stashPost();
+      const filled = compose.kind !== 'edit' && compose.thread.some((p) => postFilled(p) || (p.held && p.held.length));
+      if (!filled) {
+        closeCompose(true);
+        return false;
+      }
+      closeDraftList();
+      cmpSave.hidden = false;
+      cmpSave.querySelector('.cmp-ask-go').focus();
+      return true;
+    }
+    function closeSave() {
+      cmpSave.hidden = true;
+      if (compose) cmpText.focus();
     }
 
     // ---------- a thread ----------
@@ -6706,7 +6833,9 @@
       return kind === 'reply' ? '<div class="rto">Replying to <b>@' + h(p.author.handle) + '</b></div>' + box : box;
     }
 
-    function openCompose(kind, id, key) {
+    // draftId: a saved new post to go on with (from Drafts); without one,
+    // New Post starts empty.
+    function openCompose(kind, id, key, draftId) {
       if (key && refuseDelegated(key)) return;
       closePop();
       const p = id ? findPost(id, kind === 'edit') : null;
@@ -6722,6 +6851,9 @@
       if (compose && cmpOpen()) keepDraft(compose);
       if (altAsk) answerAltText('back');
       compose = { kind, id: id || null, key: key || null, files: [] };
+      if (kind === 'new') compose.draftId = draftId != null ? draftId : newDraftId();
+      cmpSave.hidden = true;
+      closeDraftList();
       // An edit starts from the post's own text; its media and quoted post
       // stay as they are (X Pro's Edit keeps them).
       if (kind === 'edit') Object.assign(compose, { orig: (p.editable && p.editable.text) || '', origStyles: { bold: (p.editable && p.editable.bold) || [], italic: (p.editable && p.editable.italic) || [] }, media: !!(p.media && p.media.length), quotes: !!p.quote, editCtl: p.editCtl || null, lastEdit: !!(p.editCtl && p.editCtl.left === 1) });
@@ -6760,6 +6892,7 @@
       renderWhen();
       cmpStatus.textContent = restored ? 'Your saved draft' : '';
       updateCount();
+      renderDrafts();
       showCompose();
     }
 
@@ -6871,10 +7004,18 @@
     // The person asked to close the window (its close button, or ⌘W from
     // the app's menu), or the app closed it: the sheet comes home first and
     // the draft stays, as with Esc. Called by the app.
-    function composeWindowClosed() {
-      if (!cmpWin) return;
-      if (compose) closeCompose(true);
-      else releaseComposeWindow();
+    // The compose window's close button (mayAsk: it may still stay open)
+    // or the window gone. 'ask' while it asks to save; the app then leaves
+    // it open. A window already gone keeps the draft.
+    function composeWindowClosed(mayAsk) {
+      if (!cmpWin) return '';
+      if (compose) {
+        if (mayAsk === true) return askClose() ? 'ask' : '';
+        closeCompose(true);
+        return '';
+      }
+      releaseComposeWindow();
+      return '';
     }
 
     // Keys in the compose window: the compose window's own, nothing else.
@@ -6892,11 +7033,15 @@
         handled = true;
       } else if (t.id === 'gif-q' && gifKey(e)) {
         handled = true;
+      } else if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+        saveDraftNow();
+        handled = true;
       } else if (e.key === 'Escape' || (e.metaKey && e.key.toLowerCase() === 'w')) {
         if (!gifEl.hidden) closeGifs(true);
         else if (!emoEl.hidden) closeEmoji(true);
         else if (e.key === 'Escape' && !cmpDesc.hidden) closeDesc(true);
-        else closeCompose(true);
+        else if (e.key === 'Escape' && !cmpDl.hidden) closeDraftList();
+        else askClose();
         handled = true;
       }
       if (handled) {
@@ -6920,6 +7065,8 @@
       emoEl.hidden = true;
       closeGifs(false);
       closeDesc(false);
+      cmpSave.hidden = true;
+      closeDraftList();
       compose = null;
       queueCard();
       cmpBack.hidden = true;
@@ -7193,6 +7340,8 @@
       const status = cmpStatus.textContent || '';
       return {
         look: macLookNow || macLook(),
+        // Saved drafts for the window's Drafts menu (not the open one).
+        drafts: draftList(),
         status,
         busy: !!posting,
         post: cmpPost.textContent || 'Post',
@@ -7411,10 +7560,25 @@
           // A check that stopped on another post names it, for the window to open.
           return JSON.stringify(Object.assign(macState(), { at: compose ? compose.at : 0 }));
         case 'close':
-          // The window is closing itself.
+          // The window is closing itself (Save, or nothing to keep).
           macCmp = false;
           closeCompose(true);
           return null;
+        case 'discard':
+          // Closing with Delete Draft.
+          macCmp = false;
+          closeCompose(false);
+          return null;
+        case 'save':
+          saveDraftNow();
+          return reply();
+        case 'openDraft':
+          // The window's draft is kept first; the other one opens in it.
+          openDraft(String(arg.target || ''));
+          return null;
+        case 'deleteDraft':
+          deleteDraft(String(arg.target || ''));
+          return reply();
         case 'xpro':
           run({ location: 'cmp-location', grok: 'cmp-grok' }[arg.tool] || 'cmp-xpro', cmpBox);
           return null;
@@ -7458,7 +7622,7 @@
       if (pf && pf.of > pf.posts && more && more.length) {
         const rest = more.slice(pf.posts - 1);
         const one = (p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: p.poll ? draftPoll(p.poll) : null, files: p.files || [] });
-        drafts.set(draftKey({ kind, id }), Object.assign(one(rest[0]), { reply: reply || 'Everyone', more: rest.slice(1).map(one), when: when || null, at: Date.now() }));
+        drafts.set(draftKey({ kind, id, draftId: newDraftId() }), Object.assign(one(rest[0]), { reply: reply || 'Everyone', more: rest.slice(1).map(one), when: when || null, at: Date.now() }));
         storeDrafts();
         say('X Pro’s composer took ' + pf.posts + ' of ' + pf.of + ' posts. The rest are your draft in Sweeter.');
       }
@@ -8126,7 +8290,25 @@
           closeDetail(c);
           break;
         case 'cmp-cancel':
+          askClose();
+          break;
+        case 'cmp-save-keep':
           closeCompose(true);
+          break;
+        case 'cmp-save-delete':
+          closeCompose(false);
+          break;
+        case 'cmp-save-cancel':
+          closeSave();
+          break;
+        case 'cmp-drafts':
+          toggleDraftList();
+          break;
+        case 'cmp-draft-open':
+          openDraft(el.dataset.key || '');
+          break;
+        case 'cmp-draft-del':
+          deleteDraft(el.dataset.key || '');
           break;
         case 'cmp-post':
           submitCompose();
@@ -8652,7 +8834,8 @@
         // The first click outside closes a picker, the next the window.
         if (!gifEl.hidden) closeGifs(true);
         else if (!emoEl.hidden) closeEmoji(true);
-        else closeCompose(true);
+        else if (!cmpDl.hidden) closeDraftList();
+        else askClose();
         return;
       }
       if (t.closest('.prefs') || t.closest('.pop') || t.closest('.cmp') || t.closest('.emo') || t.closest('.gifp') || t.closest('.find')) return;
@@ -10129,7 +10312,12 @@
           if (!gifEl.hidden) closeGifs(true);
           else if (!emoEl.hidden) closeEmoji(true);
           else if (!cmpDesc.hidden) closeDesc(true);
-          else closeCompose(true);
+          else if (!cmpDl.hidden) closeDraftList();
+          else askClose();
+          return true;
+        }
+        if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+          saveDraftNow();
           return true;
         }
         return false;
@@ -10559,7 +10747,7 @@
         if (!gifEl.hidden) return closeGifs(true), true;
         if (!emoEl.hidden) return closeEmoji(true), true;
         if (cmpHere() && !cmpDesc.hidden) return closeDesc(true), true;
-        if (cmpHere()) return closeCompose(true), true;
+        if (cmpHere()) return askClose(), true;
         if (!prefsEl.hidden) return closePrefs(), true;
         if (!profBack.hidden) return closeProfile(), true;
         return false;

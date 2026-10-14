@@ -103,6 +103,14 @@ struct ComposeState: Decodable {
     let at: Int?
     /// The theme as Sweeter shows it now (app.js macLook).
     let look: ComposeTheme?
+    /// Saved drafts, newest first (app.js draftList), not the open one.
+    let drafts: [DraftRef]?
+
+    struct DraftRef: Decodable, Equatable {
+        let key: String
+        let title: String
+        let info: String
+    }
 }
 
 // MARK: - A post of the window
@@ -435,6 +443,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     private func build() {
         let content = ComposeBackdrop()
+        content.onSave = { [weak self] in self?.saveNow() }
 
         noteLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         noteLabel.textColor = SweeterColor.secondary
@@ -722,6 +731,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     private func apply(_ s: ComposeState) {
         if let look = s.look { applyTheme(look) }
+        if let d = s.drafts { showDrafts(d) }
         postButton.title = s.post.isEmpty ? "Post" : s.post
         if let t = s.title, !t.isEmpty { window?.title = t }
         if let a = s.at, a != at, a >= 0, a < thread.count, !uploading {
@@ -1338,12 +1348,45 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     // MARK: Closing
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if closingFromPage { return true }
-        // The page keeps the draft; the window closes whether or not it answers.
+        if closingFromPage || closeDecided { return true }
         syncTimer?.invalidate()
         syncTimer = nil
-        if isOpen { ViewController.shared?.composeOp("close", draft()) { _ in } }
+        guard isOpen else { return true }
+        // A window that holds something asks, as a Mac document does; an
+        // empty one, an edit (its draft is the post) or one posting closes.
+        stash()
+        if kind != "edit", !busy, thread.contains(where: \.filled) {
+            if sender.attachedSheet == nil { askSave(sender) }
+            return false
+        }
+        // The page keeps the draft; the window closes whether or not it answers.
+        ViewController.shared?.composeOp("close", draft()) { _ in }
         return true
+    }
+
+    /// Save (the page keeps it), Cancel, or Delete Draft.
+    private var closeDecided = false
+    private func askSave(_ w: NSWindow) {
+        let alert = NSAlert()
+        alert.messageText = "Save this post as a draft?"
+        alert.informativeText = "You can open it again from Drafts."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Delete Draft").hasDestructiveAction = true
+        alert.beginSheetModal(for: w) { [weak self] response in
+            guard let self, self.isOpen, response != .alertSecondButtonReturn else { return }
+            ViewController.shared?.composeOp(response == .alertFirstButtonReturn ? "close" : "discard", self.draft()) { _ in }
+            self.closeDecided = true
+            w.close()
+        }
+    }
+
+    /// ⌘S: the page keeps the draft now and says so.
+    private func saveNow() {
+        guard isOpen, !busy else { return }
+        syncTimer?.invalidate()
+        syncTimer = nil
+        send("save", draft())
     }
 
     /// Escape anywhere in the window closes it and keeps the draft.
@@ -1355,6 +1398,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         endUpload()
         isOpen = false
         closingFromPage = false
+        closeDecided = false
         busy = false
         if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
     }
@@ -1422,6 +1466,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     }
 
     private static let moreID = NSToolbarItem.Identifier("more")
+    private static let draftsID = NSToolbarItem.Identifier("drafts")
+    private weak var draftsItem: NSMenuToolbarItem?
+    private var draftsShown: [ComposeState.DraftRef]?
     private static let postID = NSToolbarItem.Identifier("post")
 
     private func identifiers() -> [NSToolbarItem.Identifier] {
@@ -1435,7 +1482,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             if !mine.isEmpty { mine.append(.space) }
             mine += ids
         }
-        return mine + [.flexibleSpace] + (tools.contains("xpro") ? [Self.moreID] : []) + [Self.postID]
+        // Drafts for a post, reply or quote (not an edit, which has no thread tool).
+        return mine + [.flexibleSpace] + (tools.contains("thread") ? [Self.draftsID] : []) + (tools.contains("xpro") ? [Self.moreID] : []) + [Self.postID]
     }
 
     /// The items for this draft (an edit has fewer), in order.
@@ -1448,7 +1496,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        Tool.allCases.map { NSToolbarItem.Identifier($0.rawValue) } + [.space, .flexibleSpace, Self.moreID, Self.postID]
+        Tool.allCases.map { NSToolbarItem.Identifier($0.rawValue) } + [.space, .flexibleSpace, Self.draftsID, Self.moreID, Self.postID]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -1462,6 +1510,18 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             item.label = "Post"
             // Post never goes into the toolbar's ».
             item.visibilityPriority = .user
+            return item
+        }
+        if id == Self.draftsID {
+            let item = NSMenuToolbarItem(itemIdentifier: id)
+            item.image = NSImage(systemSymbolName: "tray.full", accessibilityDescription: "Drafts")
+            item.label = "Drafts"
+            item.toolTip = "Your saved drafts"
+            item.showsIndicator = true
+            item.visibilityPriority = .high
+            draftsItem = item
+            draftsShown = nil
+            showDrafts(lastDrafts)
             return item
         }
         if id == Self.moreID {
@@ -1515,6 +1575,68 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         case .thread:
             addPost()
         }
+    }
+
+    // MARK: Drafts
+
+    private var lastDrafts: [ComposeState.DraftRef] = []
+
+    /// The Drafts menu: Save Draft, each saved one (⌥ turns it into
+    /// Delete), and a count on the button where the Mac shows one.
+    private func showDrafts(_ list: [ComposeState.DraftRef]) {
+        lastDrafts = list
+        guard let item = draftsItem, list != draftsShown else { return }
+        draftsShown = list
+        let menu = NSMenu()
+        let save = NSMenuItem(title: "Save Draft", action: #selector(saveDraftPicked), keyEquivalent: "s")
+        save.target = self
+        menu.addItem(save)
+        menu.addItem(.separator())
+        if list.isEmpty {
+            let none = NSMenuItem(title: "No Saved Drafts", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            menu.addItem(none)
+        }
+        for d in list {
+            let open = NSMenuItem(title: d.title, action: #selector(openDraftPicked(_:)), keyEquivalent: "")
+            open.target = self
+            open.representedObject = d.key
+            if #available(macOS 14.4, *) { open.subtitle = d.info } else { open.toolTip = d.info }
+            menu.addItem(open)
+            let del = NSMenuItem(title: "Delete “" + d.title + "”", action: #selector(deleteDraftPicked(_:)), keyEquivalent: "")
+            del.target = self
+            del.representedObject = d.key
+            del.isAlternate = true
+            del.keyEquivalentModifierMask = [.option]
+            menu.addItem(del)
+        }
+        if !list.isEmpty {
+            menu.addItem(.separator())
+            let hint = NSMenuItem(title: "Hold ⌥ to delete a draft.", action: nil, keyEquivalent: "")
+            hint.isEnabled = false
+            menu.addItem(hint)
+        }
+        item.menu = menu
+        item.toolTip = list.isEmpty ? "Your saved drafts" : list.count == 1 ? "1 saved draft" : "\(list.count) saved drafts"
+        if #available(macOS 26.0, *) { item.badge = list.isEmpty ? nil : .count(list.count) }
+    }
+
+    @objc private func saveDraftPicked() {
+        saveNow()
+    }
+
+    @objc private func openDraftPicked(_ sender: NSMenuItem) {
+        guard isOpen, !busy, let key = sender.representedObject as? String else { return }
+        var d = draft()
+        d["target"] = key
+        send("openDraft", d)
+    }
+
+    @objc private func deleteDraftPicked(_ sender: NSMenuItem) {
+        guard isOpen, let key = sender.representedObject as? String else { return }
+        var d = draft()
+        d["target"] = key
+        send("deleteDraft", d)
     }
 
     @objc private func xpro(_ sender: NSMenuItem) {

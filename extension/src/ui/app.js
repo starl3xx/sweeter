@@ -6037,15 +6037,11 @@
       if (c === compose && stash !== false) stashPost();
       const t = c.thread;
       const unchanged = c.kind === 'edit' && editUnchanged(c, t[0]);
-      if (!unchanged && (t.some(postFilled) || (c.held && c.held.some((h) => h.length)))) {
+      if (!unchanged && t.some((p) => postFilled(p) || (p.held && p.held.length))) {
         const old = drafts.get(key);
-        const one = (p) => ({ text: p.text, files: p.files, gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
+        // Media only the Mac window can show (held) go back with their post.
+        const one = (p) => ({ text: p.text, files: (p.files || []).concat(p.held || []), gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
         const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null });
-        // Media only the Mac window can show, kept for it, post by post.
-        if (c.held) {
-          d.files = (d.files || []).concat(c.held[0] || []);
-          d.more.forEach((m, i) => (m.files = (m.files || []).concat(c.held[i + 1] || [])));
-        }
         const sig = (x) => JSON.stringify([x].concat(x.more || []).map((p) => [p.text, p.gif || null, p.styles || null, p.poll || null]).concat([x.reply, x.when || null]));
         const same = old && sig(old) === sig(d);
         const files = (x) => [x.files].concat((x.more || []).map((p) => p.files));
@@ -6062,8 +6058,10 @@
     // X Pro takes up to THREAD_MAX posts in a thread (module 89438).
     const emptyPost = () => ({ text: '', styles: { bold: [], italic: [] }, files: [], gif: null, poll: null });
     const postFilled = (p) => !!(p && ((p.text || '').trim() || (p.files && p.files.length) || p.gif || p.poll));
+    // held: the Mac window's media this post keeps while the web window shows it.
     function livePost() {
-      return { text: cmpText.value, styles: syncedStyles(), files: compose.files, gif: compose.gif, poll: compose.poll };
+      const was = compose.thread && compose.thread[compose.at];
+      return { text: cmpText.value, styles: syncedStyles(), files: compose.files, gif: compose.gif, poll: compose.poll, held: (was && was.held) || null };
     }
     function stashPost() {
       if (compose && compose.thread) compose.thread[compose.at] = livePost();
@@ -6785,12 +6783,12 @@
       }
       // Media the Mac window holds (its bytes are there) stay in the draft
       // but not in this window, which says so.
+      // Each post holds its own (held), so they move with it.
       const held = c ? c.thread.map((p, i) => (i === c.at ? c.files : p.files || []).filter((f) => !(f instanceof File))) : [];
       const nHeld = held.reduce((n, h) => n + h.length, 0);
       if (nHeld) {
         c.files = webFiles(c.files);
-        c.thread = c.thread.map((p, i) => Object.assign({}, p, { files: i === c.at ? c.files : webFiles(p.files) }));
-        c.held = held;
+        c.thread = c.thread.map((p, i) => Object.assign({}, p, { files: i === c.at ? c.files : webFiles(p.files), held: (p.held || []).concat(held[i]) }));
         renderMedia();
         renderThread();
         const one = nHeld === 1;

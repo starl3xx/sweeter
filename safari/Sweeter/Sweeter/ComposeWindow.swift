@@ -131,9 +131,10 @@ final class ComposePost {
 
 /// Another post of the thread, above or below the open one: its number,
 /// the start of its text, what it carries, and a remove button.
-final class ComposeThreadRow: NSView {
+final class ComposeThreadRow: NSView, NSGestureRecognizerDelegate {
     var onOpen: (() -> Void)?
     var onRemove: (() -> Void)?
+    private var removeButton: NSButton?
 
     init(number: Int, post: ComposePost) {
         super.init(frame: .zero)
@@ -159,6 +160,7 @@ final class ComposeThreadRow: NSView {
         x.toolTip = "Remove post \(number)"
         x.target = self
         x.action = #selector(removePressed)
+        removeButton = x
         let row = NSStackView(views: [n, t, c, x])
         row.spacing = 8
         row.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 4, right: 6)
@@ -173,7 +175,15 @@ final class ComposeThreadRow: NSView {
         toolTip = "Edit post \(number)"
         setAccessibilityRole(.button)
         setAccessibilityLabel("Post \(number): " + (words.isEmpty ? "empty" : words))
-        addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(openPressed)))
+        let click = NSClickGestureRecognizer(target: self, action: #selector(openPressed))
+        click.delegate = self
+        addGestureRecognizer(click)
+    }
+
+    // A click on the remove button only removes.
+    func gestureRecognizer(_ g: NSGestureRecognizer, shouldAttemptToRecognizeWith event: NSEvent) -> Bool {
+        guard let x = removeButton else { return true }
+        return !x.bounds.contains(x.convert(event.locationInWindow, from: nil))
     }
 
     required init?(coder: NSCoder) { nil }
@@ -684,9 +694,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         // While bytes go to the page, the window stays as the upload set it.
         if uploading { return }
         busy = s.busy
-        statusLabel.stringValue = s.status
-        statusLabel.textColor = s.invalid ? .systemRed : .secondaryLabelColor
-        statusLabel.toolTip = s.status.isEmpty ? nil : s.status
+        if !(s.status.isEmpty && Date.now < noteUntil) {
+            statusLabel.stringValue = s.status
+            statusLabel.textColor = s.invalid ? .systemRed : .secondaryLabelColor
+            statusLabel.toolTip = s.status.isEmpty ? nil : s.status
+        }
         if busy { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         postButton.isEnabled = !busy
         textView.isEditable = !busy
@@ -982,6 +994,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         stash()
         thread.remove(at: i)
         if thread.isEmpty { thread = [ComposePost()] }
+        // A quote's own post takes no poll: one that has moved up loses it, and says so.
+        if kind == "quote", thread[0].poll != nil {
+            thread[0].poll = nil
+            say("A quote post can’t have a poll, so the poll of the post that is now first was removed.")
+        }
         load(i < at || (i == at && i > 0) ? at - 1 : at)
         sync()
     }
@@ -1190,11 +1207,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     // MARK: GIFs
 
-    /// A note in the status line, until the page's next state.
+    /// A note of the window's own in the status line: it stays a few
+    /// seconds, unless the page has something to say.
+    private var noteUntil = Date.distantPast
     private func say(_ s: String) {
         statusLabel.stringValue = s
         statusLabel.textColor = .systemRed
         statusLabel.toolTip = s
+        noteUntil = Date.now.addingTimeInterval(4)
     }
 
     private func chooseGif(from item: NSToolbarItem) {

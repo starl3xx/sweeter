@@ -625,6 +625,10 @@
       '<div class="cmp-body"><div class="cmp-av"></div><div class="cmp-field"><div id="cmp-text" class="cmp-ed" contenteditable="plaintext-only" role="textbox" aria-multiline="true" spellcheck="true" aria-label="Post text" aria-describedby="cmp-status" data-placeholder="What’s happening?"></div></div></div>' +
       '<div class="cmp-card" hidden></div>' +
       '<div class="cmp-media"></div>' +
+      // One image's description (openDesc), as X calls alt text.
+      '<div class="cmp-desc" hidden role="group" aria-label="Image description"><img class="cd-img" alt=""><div class="cd-f">' +
+      '<textarea class="cd-t" rows="3" maxlength="1000" spellcheck="true" placeholder="Describe this image for people who can’t see it" aria-label="Image description"></textarea>' +
+      '<div class="cd-foot"><span class="cd-n"></span><button class="cd-done" type="button" data-cmd="cmp-desc-done">Done</button></div></div></div>' +
       // A poll (renderPoll): X Pro's choices and length, filled in at Post.
       '<div class="cmp-poll" hidden role="group" aria-label="Poll"><div class="pl-cs"></div>' +
       '<div class="pl-len"><span class="pl-l">Poll length</span>' +
@@ -753,6 +757,7 @@
     const cmpPost = shadow.querySelector('.cmp-post');
     const cmpBox = shadow.querySelector('.cmp');
     const cmpMedia = shadow.querySelector('.cmp-media');
+    const cmpDesc = shadow.querySelector('.cmp-desc');
     const cmpPoll = shadow.querySelector('.cmp-poll');
     const cmpPollBtn = shadow.querySelector('[data-cmd="cmp-poll"]');
     const cmpPrev = shadow.querySelector('.cmp-prev');
@@ -6057,6 +6062,7 @@
     function loadPost(i) {
       const c = compose;
       const p = c.thread[i];
+      closeDesc(false);
       c.at = i;
       cmpText.value = p.text;
       c.styles = { bold: (p.styles && p.styles.bold) || [], italic: (p.styles && p.styles.italic) || [] };
@@ -6415,8 +6421,9 @@
       cmpMedia.innerHTML =
         (compose ? compose.files : [])
           .map((f, i) => {
-            const preview = /^video\//.test(f.type) ? '<video src="' + h(f.__url) + '" muted playsinline></video><span class="kind">VIDEO</span>' : '<img src="' + h(f.__url) + '" alt="">' + (f.type === 'image/gif' ? '<span class="kind">GIF</span>' : '');
-            return '<div class="cm">' + preview + '<button type="button" data-cmd="cmp-unfile" data-i="' + i + '" title="Remove" aria-label="Remove">' + icon('x') + '</button></div>';
+            const preview = /^video\//.test(f.type) ? '<video src="' + h(f.__url) + '" muted playsinline></video><span class="kind">VIDEO</span>' : '<img src="' + h(f.__url) + '" alt="' + h(f.__alt || '') + '">' + (f.type === 'image/gif' ? '<span class="kind">GIF</span>' : '');
+            const alt = /^image\//.test(f.type) ? '<button class="cm-alt' + (f.__alt ? ' on' : '') + '" type="button" data-cmd="cmp-desc" data-i="' + i + '" title="' + h(f.__alt || 'Add a description') + '" aria-label="' + (f.__alt ? 'Edit the description' : 'Add a description') + '">' + (f.__alt ? '✓ ALT' : 'ALT') + '</button>' : '';
+            return '<div class="cm">' + preview + alt + '<button type="button" data-cmd="cmp-unfile" data-i="' + i + '" title="Remove" aria-label="Remove">' + icon('x') + '</button></div>';
           })
           .join('') + (g ? '<div class="cm" title="' + h(g.alt) + '"><img src="' + h(g.url) + '" alt="' + h(g.alt) + '"><span class="kind">GIF</span><button type="button" data-cmd="cmp-ungif" title="Remove" aria-label="Remove the GIF">' + icon('x') + '</button></div>' : '');
     }
@@ -6484,6 +6491,43 @@
     function dropFiles(files) {
       for (const f of files || []) if (f.__url) URL.revokeObjectURL(f.__url);
     }
+
+    // ---------- image descriptions ----------
+    // A description for each image (X's alt text), kept on its file
+    // (f.__alt) as its preview is, so it goes with the file through a
+    // thread and to X Pro: its media editor gets them at Post (xpro.js
+    // setAltTexts). Up to 1,000 characters, as X Pro takes. Files stay in
+    // memory only, and their descriptions with them.
+    const cdText = cmpDesc.querySelector('.cd-t');
+    let descFile = null;
+    function openDesc(i) {
+      const f = compose && compose.files[i];
+      if (!f || !/^image\//.test(f.type)) return;
+      descFile = f;
+      cmpDesc.querySelector('.cd-img').src = f.__url;
+      cdText.value = f.__alt || '';
+      descCount();
+      cmpDesc.hidden = false;
+      fitCompose();
+      cdText.focus();
+    }
+    function closeDesc(focusText) {
+      if (cmpDesc.hidden) return;
+      cmpDesc.hidden = true;
+      descFile = null;
+      cmpDesc.querySelector('.cd-img').removeAttribute('src');
+      if (compose) renderMedia();
+      fitCompose();
+      if (focusText) cmpText.focus();
+    }
+    function descCount() {
+      cmpDesc.querySelector('.cd-n').textContent = cdText.value.length.toLocaleString() + ' / 1,000';
+    }
+    cdText.addEventListener('input', () => {
+      if (!descFile) return;
+      descFile.__alt = cdText.value.trim() ? cdText.value : '';
+      descCount();
+    });
 
     // ---------- a scheduled post ----------
     // A date and a time in this Mac's time zone (compose.when), for the
@@ -6637,6 +6681,7 @@
       cmpReply.closest('.cmp-who').hidden = kind === 'reply';
       emoEl.hidden = true;
       closeGifs(false);
+      closeDesc(false);
       renderMedia();
       renderPoll();
       renderThread();
@@ -6743,6 +6788,7 @@
       } else if (e.key === 'Escape' || (e.metaKey && e.key.toLowerCase() === 'w')) {
         if (!gifEl.hidden) closeGifs(true);
         else if (!emoEl.hidden) closeEmoji(true);
+        else if (e.key === 'Escape' && !cmpDesc.hidden) closeDesc(true);
         else closeCompose(true);
         handled = true;
       }
@@ -6766,6 +6812,7 @@
       }
       emoEl.hidden = true;
       closeGifs(false);
+      closeDesc(false);
       compose = null;
       queueCard();
       cmpBack.hidden = true;
@@ -6789,6 +6836,7 @@
       noreply: 'X Pro’s reply setting didn’t open. Nothing was posted.',
       nopoll: 'X Pro’s poll didn’t open or didn’t take the choices and length. Nothing was posted.',
       nothread: 'X Pro didn’t add the next post of the thread. Nothing was posted.',
+      noalt: 'X Pro’s image description editor didn’t take the descriptions. Nothing was posted.',
       noschedule: 'X Pro’s schedule didn’t open for this post. Nothing was scheduled.',
       badtime: 'X Pro’s schedule didn’t take that date and time. Nothing was scheduled.',
     };
@@ -7761,9 +7809,16 @@
           else if (gifEl.hidden) openGifs();
           else closeGifs(true);
           break;
+        case 'cmp-desc':
+          if (compose) openDesc(Number(el.dataset.i));
+          break;
+        case 'cmp-desc-done':
+          closeDesc(true);
+          break;
         case 'cmp-unfile':
           if (compose) {
             const [f] = compose.files.splice(Number(el.dataset.i), 1);
+            if (f && f === descFile) closeDesc(false);
             dropFiles([f]);
             renderMedia();
             updateCount();
@@ -9633,6 +9688,7 @@
         if (e.key === 'Escape') {
           if (!gifEl.hidden) closeGifs(true);
           else if (!emoEl.hidden) closeEmoji(true);
+          else if (!cmpDesc.hidden) closeDesc(true);
           else closeCompose(true);
           return true;
         }
@@ -10060,6 +10116,7 @@
         if (!addBack.hidden) return closeAddSheet(), true;
         if (!gifEl.hidden) return closeGifs(true), true;
         if (!emoEl.hidden) return closeEmoji(true), true;
+        if (cmpHere() && !cmpDesc.hidden) return closeDesc(true), true;
         if (cmpHere()) return closeCompose(true), true;
         if (!prefsEl.hidden) return closePrefs(), true;
         if (!profBack.hidden) return closeProfile(), true;

@@ -667,7 +667,7 @@
   // what the hours and minutes allow, so they are set in that order, and
   // every value is read back before Post.
   function setField(el, value, event) {
-    const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, String(value));
     el.dispatchEvent(new Event(event, { bubbles: true }));
   }
@@ -700,6 +700,86 @@
     const sel = (id) => root.querySelector('select[data-testid="' + id + '"]');
     const took = choices.every((c, i) => field(i + 1) && field(i + 1).value === c) && sel('selectPollDays').value === String(len.days) && sel('selectPollHours').value === String(len.hours) && sel('selectPollMinutes').value === String(len.minutes);
     return took ? { ok: true } : { ok: false, reason: 'nopoll' };
+  }
+
+  // ---------- image descriptions ----------
+  // X Pro's media editor (module 282378, at /compose/post/media): the
+  // composer's altTextWrapper opens it on the first image's Alt text tab.
+  // Its altTextInput (a textarea of up to 1,000 characters) is drawn anew
+  // for each image, its arrows step through the post's media in order, and
+  // Save (endEditingButton) keeps every description. A first visit can show
+  // X's explainer, whose “Sure” (altTextEducationSheetPrimaryAction) only
+  // closes it. The descriptions are in the files' order, as attached.
+  const ALT_MAX = 1000;
+  const altsOf = (files) => (files || []).map((f) => (f && typeof f.__alt === 'string' ? f.__alt : ''));
+  async function setAltTexts(alts) {
+    const last = (alts || []).map((a) => !!(a && a.trim())).lastIndexOf(true);
+    if (last < 0) return { ok: true };
+    const label = () => {
+      const r = composerRoot();
+      const l = r && r.querySelector('[data-testid="altTextLabel"]');
+      return l ? norm(l.textContent) : null;
+    };
+    const root = composerRoot();
+    const open = root && root.querySelector('[data-testid="altTextWrapper"]');
+    if (!open) return { ok: false, reason: 'noalt' };
+    const before = label();
+    open.click();
+    const input = () => {
+      const x = document.querySelector('[data-testid="altTextInput"]');
+      return x && x.tagName !== 'TEXTAREA' ? x.querySelector('textarea') : x;
+    };
+    const save = () => document.querySelector('[data-testid="endEditingButton"]');
+    if (!(await waitFor(() => input() && save(), 4000))) return { ok: false, reason: 'noalt' };
+    const sure = document.querySelector('[data-testid="altTextEducationSheetPrimaryAction"]');
+    if (sure) {
+      sure.click();
+      await wait(150);
+    }
+    // A failed step closes the editor with nothing kept.
+    const fail = async () => {
+      const d = save() && save().closest('[role="dialog"]');
+      const x = d && d.querySelector('[data-testid="app-bar-close"]');
+      if (x) x.click();
+      await waitFor(() => !input(), 1500);
+      return { ok: false, reason: 'noalt' };
+    };
+    // The next image: by its label, or, in another language, the button
+    // just before Save (module 282378 draws previous, next, Save).
+    const next = () => {
+      const s = save();
+      const named = s && (s.closest('[role="dialog"]') || document).querySelector('[aria-label="Next image"]');
+      if (named) return named;
+      let box = s;
+      for (let i = 0; i < 4 && box; i++) {
+        const bs = Array.from(box.querySelectorAll('[role="button"], button'));
+        if (bs.length >= 3) return bs[bs.indexOf(s) - 1] || null;
+        box = box.parentElement;
+      }
+      return null;
+    };
+    for (let i = 0; i <= last; i++) {
+      if (i > 0) {
+        const was = input();
+        const n = next();
+        if (!n || n.disabled || n.getAttribute('aria-disabled') === 'true') return fail();
+        n.click();
+        if (!(await waitFor(() => input() && input() !== was, 2000))) return fail();
+      }
+      const want = String(alts[i] || '').slice(0, ALT_MAX);
+      if (!want.trim()) continue;
+      setField(input(), want, 'input');
+      await wait(60);
+      if (input().value !== want) return fail();
+    }
+    const ready = await waitFor(() => {
+      const b = save();
+      return b && !b.disabled && b.getAttribute('aria-disabled') !== 'true' ? b : null;
+    }, 3000);
+    if (!ready) return fail();
+    ready.click();
+    const back = await waitFor(() => !input() && composerRoot() && label() !== before, 3000);
+    return back ? { ok: true } : { ok: false, reason: 'noalt' };
   }
 
   // ---------- a scheduled post ----------
@@ -843,6 +923,11 @@
       clearEditor();
       return media;
     }
+    const alt = await setAltTexts(altsOf(o.files));
+    if (!alt.ok) {
+      clearEditor();
+      return alt;
+    }
     if (text && text.trim() && !(await paste(text))) {
       clearEditor();
       return { ok: false, reason: 'mismatch' };
@@ -909,6 +994,8 @@
     if (!(await waitFor(() => editor() && composerRoot(), 3000))) return { ok: false, reason: 'nothread' };
     const media = p.gif ? await attachGif(p.gif) : await attach(p.files);
     if (!media.ok) return media;
+    const alt = await setAltTexts(altsOf(p.files));
+    if (!alt.ok) return alt;
     if (p.text && p.text.trim() && !(await paste(p.text))) return { ok: false, reason: 'mismatch' };
     if (p.styles && p.text && p.text.trim()) {
       const st = await applyStyles(p.text, p.styles);
@@ -1122,7 +1209,7 @@
 
   async function prefill(text, files, tool, gif, styles, poll, more, when) {
     await waitFor(editor, 3000);
-    if (files && files.length) await attach(files);
+    if (files && files.length && (await attach(files)).ok) await setAltTexts(altsOf(files));
     if (gif) await attachGif(gif);
     let styled = null;
     if (text && text.trim() && (await paste(text)) && styles) styled = (await applyStyles(text, styles)).ok;

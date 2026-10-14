@@ -783,6 +783,17 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cm button{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;display:grid;place-items:center;cursor:pointer}
 .cm button svg{width:14px;height:14px}
 .cm .kind{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px}
+.cm .cm-alt{left:5px;right:auto;width:auto;height:20px;border-radius:5px;padding:0 6px;font-size:10.5px;font-weight:700;letter-spacing:.02em}
+.cm .cm-alt.on{background:var(--accent-solid);color:var(--on-accent)}
+/* One image's description, under the media. */
+.cmp-desc{display:flex;gap:10px;margin:0 14px 10px 64px;border:1px solid var(--div);border-radius:12px;padding:10px}
+.cmp-desc[hidden]{display:none}
+.cmp-desc .cd-img{width:72px;height:72px;object-fit:cover;border-radius:8px;flex:0 0 auto;background:var(--sub)}
+.cmp-desc .cd-f{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6px}
+.cmp-desc .cd-t{font:inherit;font-size:13.5px;line-height:1.35;color:var(--t1);background:transparent;border:1px solid var(--div);border-radius:6px;padding:7px 9px;resize:vertical;min-height:58px}
+.cmp-desc .cd-t:focus{outline:none;border-color:var(--accent-solid)}
+.cmp-desc .cd-foot{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--t2)}
+.cmp-desc .cd-done{background:none;border:0;padding:2px 0;color:var(--accent-solid);font-size:12.5px;font-weight:600;cursor:pointer}
 .cmp.dragging{box-shadow:0 0 0 3px var(--accent-solid),0 24px 70px var(--shadow)}
 .cmp-drop{display:none}
 .cmp-grip{position:absolute;left:0;right:0;bottom:0;height:7px;z-index:2;cursor:ns-resize;touch-action:none}

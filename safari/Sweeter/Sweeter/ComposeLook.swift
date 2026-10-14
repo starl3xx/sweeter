@@ -115,7 +115,18 @@ enum SweeterColor {
 /// The box's own background: the theme's, as a sheet of paper in the
 /// window.
 final class ComposeBackdrop: NSView {
+    /// ⌘S anywhere in the window.
+    var onSave: (() -> Void)?
+
     override var wantsUpdateLayer: Bool { true }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command, event.charactersIgnoringModifiers?.lowercased() == "s", let onSave {
+            onSave()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 
     override func updateLayer() {
         layer?.backgroundColor = SweeterColor.paper.cgColor

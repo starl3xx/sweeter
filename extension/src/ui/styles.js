@@ -712,6 +712,23 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-ask-b,.cmp-ask-go{flex:0 0 auto;white-space:nowrap;cursor:pointer}
 .cmp-ask-b{background:none;border:1px solid var(--div);color:var(--t2);border-radius:6px;padding:5px 10px;font-size:12px}
 .cmp-ask-go{background:var(--accent-solid);color:var(--on-accent);border:0;border-radius:16px;padding:6px 14px;font-weight:600;font-size:12.5px}
+.cmp-save-del{color:#E64545}
+/* Drafts (renderDrafts): a pill at the head's left, and its list below. */
+.cmp-dr{position:absolute;left:8px;display:flex;align-items:center;height:22px;padding:0 9px;border:0;border-radius:11px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.cmp-dr[hidden]{display:none}
+.cmp-dr-n{font-variant-numeric:tabular-nums}
+.cmp-dl{position:absolute;z-index:6;left:8px;top:40px;width:min(320px,calc(100% - 16px));max-height:min(340px,calc(100% - 52px));overflow:auto;background:var(--sheet);color:var(--t1);border-radius:10px;box-shadow:0 12px 32px var(--shadow),0 0 0 1px var(--div);padding:6px}
+.cmp-dl[hidden]{display:none}
+.dl-row{display:flex;align-items:center;border-radius:7px}
+.dl-row:hover,.dl-row:focus-within{background:var(--sel)}
+.dl-open{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:7px 8px;border:0;background:none;text-align:left;cursor:pointer;color:var(--t1);font:inherit}
+.dl-t{font-size:13px;font-weight:600;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dl-i{font-size:11.5px;color:var(--t3)}
+.dl-x{flex:0 0 auto;width:26px;height:26px;margin-right:4px;border:0;border-radius:13px;background:none;color:var(--t3);font-size:16px;line-height:1;cursor:pointer;opacity:0}
+.dl-row:hover .dl-x,.dl-x:focus-visible{opacity:1}
+@media (hover:none){.dl-x{opacity:1}}
+.dl-x:hover{background:var(--div);color:var(--t1)}
+.dl-foot{padding:8px 8px 4px;margin-top:4px;border-top:1px solid var(--div);font-size:11px;color:var(--t3)}
 .cmp{position:relative}
 .cmp-tools{display:flex;align-items:center;gap:1px;padding:0 12px 8px 60px;flex-wrap:wrap}
 .cmp-tools .tb{width:32px;height:32px;border:0;border-radius:50%;background:none;color:var(--accent-solid);display:grid;place-items:center;cursor:pointer}

@@ -753,6 +753,8 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .pl-len label{display:inline-flex;align-items:center;gap:6px}
 .pl-len select{font:inherit;font-size:12.5px;color:var(--t1);background:transparent;border:1px solid var(--div);border-radius:6px;padding:3px 4px}
 .cmp-tools .tb.on{background:var(--tint)}
+/* An edit: text, emoji, bold and italic only (X Pro's Edit keeps the rest). */
+.cmp.editing .cmp-tools [data-cmd="cmp-photo"],.cmp.editing .cmp-tools [data-cmd="cmp-gif"],.cmp.editing .cmp-tools [data-cmd="cmp-poll"],.cmp.editing .cmp-tools [data-cmd="cmp-schedule"],.cmp.editing .cmp-tools .tb-add,.cmp.editing .cmp-tools .sepv,.cmp.editing .cmp-tools .xp-l,.cmp.editing .cmp-tools .tb.xp{display:none}
 /* A thread's other posts, above and below the one being written. */
 .cmp-prev,.cmp-next{display:flex;flex-direction:column;gap:4px;padding:0 14px 0 64px}
 .cmp-prev{padding-top:8px}

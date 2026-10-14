@@ -302,6 +302,33 @@ test('a posted reply without the __typename fields X’s answer may leave out st
   ok(!/secret|starl3xx/.test(s.lastPosted().shape), 'no content in the log line');
 });
 
+test('an edit the reader made takes the old version’s place, as a repost and a quote too', () => {
+  const s = createStore();
+  const v1 = F.tweet({ text: 'teh first' });
+  const other = F.tweet({ text: 'stays' });
+  const rt = F.tweet({ text: 'RT', retweetOf: v1, user: F.user('ivycodes', 'Ivy Chen') });
+  const qt = F.tweet({ text: 'look', quote: v1, user: F.user('ivycodes', 'Ivy Chen') });
+  s.ingest(homeMsg([F.tweetEntry(v1, '100'), F.tweetEntry(other, '90'), F.tweetEntry(rt, '80'), F.tweetEntry(qt, '70')]));
+  const v2 = F.tweet({ text: 'the first' });
+  v2.edit_control = { edit_control_initial: { edit_tweet_ids: [v1.rest_id, v2.rest_id], editable_until_msecs: '1', edits_remaining: '4', is_edit_eligible: true } };
+  const seen = [];
+  s.subscribe((k) => seen.push(k));
+  eq(s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 200, id: v2.rest_id, post: v2, error: null } }), 'edited');
+  const home = s.get('home').sorted;
+  eq(home.map((b) => b.post.plain), ['the first', 'stays', 'the first', 'look']);
+  eq(home.map((b) => b.sortIndex), ['100', '90', '80', '70']);
+  eq(home[0].post.id, v2.rest_id);
+  ok(home[2].post.repostedBy, 'still a repost');
+  eq(home[3].post.quote.plain, 'the first');
+  eq(home[0].post.editCtl, { left: 4, until: 1 });
+  ok(seen.includes('home') && seen.includes('posted'));
+  // A new post (one version) is not an edit.
+  const fresh = F.tweet({ text: 'new' });
+  fresh.edit_control = { edit_tweet_ids: [fresh.rest_id], editable_until_msecs: '5', edits_remaining: '5', is_edit_eligible: true };
+  eq(s.ingest({ op: 'CreateTweet', vars: {}, body: { status: 200, id: fresh.rest_id, post: fresh, error: null } }), null);
+  eq(s.get('home').sorted.length, 4);
+});
+
 test('forget: a deleted post leaves every column, and a repost of it too', () => {
   const s = createStore();
   const mine = F.tweet({ text: 'oops' });

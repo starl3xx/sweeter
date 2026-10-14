@@ -5793,17 +5793,18 @@
     // updatePost’s count flips must not run twice on one record.
     function eachPost(visit) {
       const seen = new Set();
-      const fn = (p) => {
+      // quoted: the copy inside another post, which carries less of it.
+      const fn = (p, quoted) => {
         if (!p || seen.has(p)) return;
         seen.add(p);
-        visit(p);
+        visit(p, !!quoted);
       };
       for (const s of store.all()) {
         for (const b of s.sorted) {
           if (b.kind === 'post') {
             fn(b.post);
-            if (b.post.quote) fn(b.post.quote);
-          } else if (b.kind === 'thread') b.posts.forEach(fn);
+            if (b.post.quote) fn(b.post.quote, true);
+          } else if (b.kind === 'thread') b.posts.forEach((p) => fn(p));
           else if (b.kind === 'notification' && b.n.target) fn(b.n.target);
         }
       }
@@ -5814,17 +5815,18 @@
         for (const b of d ? d.blocks : []) {
           if (b.kind === 'post') {
             fn(b.post);
-            if (b.post.quote) fn(b.post.quote);
-          } else if (b.kind === 'thread') b.posts.forEach(fn);
+            if (b.post.quote) fn(b.post.quote, true);
+          } else if (b.kind === 'thread') b.posts.forEach((p) => fn(p));
         }
       }
       if (rd) fn(rd.post);
     }
 
-    function findPost(id) {
+    // whole: not a quoted copy (which has no quote of its own).
+    function findPost(id, whole) {
       let found = null;
-      eachPost((p) => {
-        if (!found && p && p.id === id) found = p;
+      eachPost((p, quoted) => {
+        if (!found && p && p.id === id && !(whole && quoted)) found = p;
       });
       return found;
     }
@@ -6032,7 +6034,8 @@
       const key = draftKey(c);
       if (c === compose && stash !== false) stashPost();
       const t = c.thread;
-      if (t.some(postFilled)) {
+      const unchanged = c.kind === 'edit' && editUnchanged(c, t[0]);
+      if (!unchanged && t.some(postFilled)) {
         const old = drafts.get(key);
         const one = (p) => ({ text: p.text, files: p.files, gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
         const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null });
@@ -6085,7 +6088,7 @@
       const c = compose;
       const t = (c && c.thread) || [];
       const many = t.length > 1;
-      const base = c && c.kind === 'reply' ? 'Reply' : c && c.kind === 'quote' ? 'Quote post' : 'New post';
+      const base = c && c.kind === 'reply' ? 'Reply' : c && c.kind === 'quote' ? 'Quote post' : c && c.kind === 'edit' ? 'Edit post' : 'New post';
       if (c) cmpTitle.textContent = many ? base + ' · ' + (c.at + 1) + ' of ' + t.length : base;
       if (cmpWin && !cmpWin.closed) cmpWin.document.title = cmpTitle.textContent;
       postLabel();
@@ -6116,7 +6119,7 @@
     }
     function addThreadPost() {
       const c = compose;
-      if (!c) return;
+      if (!c || c.kind === 'edit') return;
       stashPost();
       // X Pro adds no post after an empty one.
       if (!postFilled(c.thread[c.at])) return toast('Write this post first.', 'info');
@@ -6394,6 +6397,7 @@
 
     function addFiles(list) {
       if (!compose) return;
+      if (compose.kind === 'edit') return toast('An edit keeps the post’s media as it is.', 'info');
       if (compose.poll) return toast('A post can have a poll or media, not both.', 'warn');
       if (compose.gif) return toast('A post can have photos or a video, or one GIF.', 'warn');
       const incoming = Array.from(list || []).filter((f) => f && f.type);
@@ -6477,6 +6481,7 @@
       const c = compose;
       if (!c) return;
       if (c.poll) return cmpPoll.querySelector('.pl-c').focus();
+      if (c.kind === 'edit') return;
       if (c.kind === 'quote' && c.at === 0) return toast('A quote post can’t have a poll.', 'warn');
       if (c.files.length || c.gif) return toast('A post can have a poll or media, not both.', 'warn');
       if (c.when) return toast('X Pro can’t schedule a post with a poll. Clear the time first.', 'warn');
@@ -6541,7 +6546,7 @@
       const c = compose;
       if (!c) return;
       const many = c.thread && c.thread.length > 1;
-      cmpPost.textContent = c.when ? 'Schedule' : c.kind === 'reply' ? (many ? 'Reply all' : 'Reply') : many ? 'Post all' : 'Post';
+      cmpPost.textContent = c.kind === 'edit' ? 'Update' : c.when ? 'Schedule' : c.kind === 'reply' ? (many ? 'Reply all' : 'Reply') : many ? 'Post all' : 'Post';
     }
     function renderWhen() {
       const w = compose && compose.when;
@@ -6571,7 +6576,7 @@
     }
     function setWhen() {
       const c = compose;
-      if (!c) return;
+      if (!c || c.kind === 'edit') return;
       if (c.when) return whD.focus();
       stashPost();
       if (c.thread.some((p) => p.poll)) return toast('X Pro can’t schedule a post with a poll. Remove the poll first.', 'warn');
@@ -6633,6 +6638,53 @@
       updateCount();
     }
 
+    // ---------- an edit ----------
+    // Sweeter's window holds the new text; Update opens X Pro's own Edit
+    // for the post (xpro.js openEdit), puts the text in, and presses its
+    // Update. X counts edits and closes them after a time (edit_control).
+    function editNote(c) {
+      const ctl = c.editCtl || {};
+      const until = ctl.until ? new Date(ctl.until) : null;
+      const bits = [c.media && c.quotes ? 'Its media and the post it quotes stay as they are.' : c.media ? 'Its media stay as they are.' : c.quotes ? 'The post it quotes stays as it is.' : ''];
+      if (until && until.getTime() > Date.now()) bits.push('You can edit until ' + until.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + '.');
+      if (c.lastEdit) bits.push('This is your last edit: after it, the post can’t be updated again.');
+      const text = bits.filter(Boolean).join(' ');
+      return text ? '<div class="rto edn">' + h(text) + '</div>' : '';
+    }
+    // The post as it was: the same text, bold and italic.
+    function editUnchanged(c, p) {
+      const st = (x) => JSON.stringify([Sweeter.text.normRanges((x && x.bold) || []), Sweeter.text.normRanges((x && x.italic) || [])]);
+      return p.text === (c.orig || '') && st(p.styles) === st(c.origStyles);
+    }
+    async function submitEdit(c) {
+      const p = c.thread[0];
+      const styled = (x) => (x.styles && (x.styles.bold.length || x.styles.italic.length) ? x.styles : null);
+      const until = c.editCtl && c.editCtl.until;
+      let problem = null;
+      if (!p.text.trim() && !c.media && !c.quotes) problem = 'Write something first.';
+      else if (editUnchanged(c, p)) problem = 'Change something first: each edit makes a new version of the post.';
+      else if (weighted(p.text) > 25000) problem = 'This post is over 25,000 characters.';
+      else if (until && Date.now() > until) problem = 'The time to edit this post is over.';
+      if (problem) {
+        cmpStatus.textContent = problem;
+        cmpText.setAttribute('aria-invalid', 'true');
+        cmpText.focus();
+        return;
+      }
+      posting = true;
+      updateCount();
+      cmpStatus.textContent = 'Updating through X Pro…';
+      let r = await xpro.openComposer('edit', c.id, target(c.key).m, hintFor(c.id, c.key));
+      if (r.ok) r = await xpro.fillAndPost(p.text, { styles: styled(p), edit: true, lastEdit: !!c.lastEdit });
+      if (r.reason === 'alttext') return askAltText(c);
+      // X Pro knew it was the last edit before Sweeter did: the next Update confirms it.
+      if (r.reason === 'lastedit' && !c.lastEdit) {
+        c.lastEdit = true;
+        if (compose === c) cmpCtx.innerHTML = editNote(c);
+      }
+      composeResult(c, r);
+    }
+
     function contextHTML(kind, p) {
       const box = '<div class="qbox"><span class="nm">' + h(p.author.name) + '</span> <span class="hd">@' + h(p.author.handle) + '</span><div>' + (p.html || '') + '</div></div>';
       return kind === 'reply' ? '<div class="rto">Replying to <b>@' + h(p.author.handle) + '</b></div>' + box : box;
@@ -6641,7 +6693,7 @@
     function openCompose(kind, id, key) {
       if (key && refuseDelegated(key)) return;
       closePop();
-      const p = id ? findPost(id) : null;
+      const p = id ? findPost(id, kind === 'edit') : null;
       if (id && (!p || p.unavailable)) return;
       // X limits who can reply and this account isn't one of them: X Pro's
       // own Reply would refuse, so say who can instead.
@@ -6654,12 +6706,16 @@
       if (compose && !cmpBack.hidden) keepDraft(compose);
       if (altAsk) answerAltText('back');
       compose = { kind, id: id || null, key: key || null, files: [] };
-      cmpTitle.textContent = kind === 'reply' ? 'Reply' : kind === 'quote' ? 'Quote post' : 'New post';
+      // An edit starts from the post's own text; its media and quoted post
+      // stay as they are (X Pro's Edit keeps them).
+      if (kind === 'edit') Object.assign(compose, { orig: (p.editable && p.editable.text) || '', origStyles: { bold: (p.editable && p.editable.bold) || [], italic: (p.editable && p.editable.italic) || [] }, media: !!(p.media && p.media.length), quotes: !!p.quote, editCtl: p.editCtl || null, lastEdit: !!(p.editCtl && p.editCtl.left === 1) });
+      cmpTitle.textContent = kind === 'reply' ? 'Reply' : kind === 'quote' ? 'Quote post' : kind === 'edit' ? 'Edit post' : 'New post';
       cmpPost.textContent = kind === 'reply' ? 'Reply' : 'Post';
-      cmpCtx.innerHTML = p ? contextHTML(kind, p) : '';
+      cmpCtx.innerHTML = kind === 'edit' ? editNote(compose) : p ? contextHTML(kind, p) : '';
+      cmpBox.classList.toggle('editing', kind === 'edit');
       if (viewer && viewer.avatar) cmpAv.style.backgroundImage = 'url("' + safeUrl(viewer.avatar.replace(/_(normal|bigger|mini|x96)\./, '_200x200.')) + '")';
-      cmpText.placeholder = kind === 'reply' ? 'Post your reply' : kind === 'quote' ? 'Add a comment' : 'What’s happening?';
-      const draft = drafts.get(draftKey(compose)) || { text: '', files: [], reply: 'Everyone' };
+      cmpText.placeholder = kind === 'reply' ? 'Post your reply' : kind === 'quote' ? 'Add a comment' : kind === 'edit' ? 'Edit your post' : 'What’s happening?';
+      const draft = drafts.get(draftKey(compose)) || { text: kind === 'edit' ? compose.orig : '', styles: kind === 'edit' ? compose.origStyles : null, files: [], reply: 'Everyone' };
       // A draft from an earlier session says so once.
       const restored = !!draft.saved;
       delete draft.saved;
@@ -6668,17 +6724,17 @@
       compose.prev = draft.text;
       compose.files = draft.files.slice();
       compose.gif = draft.gif || null;
-      compose.poll = kind !== 'quote' && draft.poll ? draftPoll(draft.poll) : null;
+      compose.poll = kind !== 'quote' && kind !== 'edit' && draft.poll ? draftPoll(draft.poll) : null;
       // A saved time that has passed is dropped.
       const due = Sweeter.text.whenDate(draft.when);
-      compose.when = due && due.getTime() > Date.now() ? draft.when : null;
+      compose.when = kind !== 'edit' && due && due.getTime() > Date.now() ? draft.when : null;
       // A thread's later posts, as the draft kept them; this window starts on its first.
       compose.at = 0;
       compose.thread = [null].concat((draft.more || []).map((p) => Object.assign({}, p, { files: (p.files || []).slice() })));
       compose.thread[0] = livePost();
       cmpReply.value = draft.reply;
       syncWho();
-      cmpReply.closest('.cmp-who').hidden = kind === 'reply';
+      cmpReply.closest('.cmp-who').hidden = kind === 'reply' || kind === 'edit';
       emoEl.hidden = true;
       closeGifs(false);
       closeDesc(false);
@@ -6839,6 +6895,9 @@
       noalt: 'X Pro’s image description editor didn’t take the descriptions. Nothing was posted.',
       noschedule: 'X Pro’s schedule didn’t open for this post. Nothing was scheduled.',
       badtime: 'X Pro’s schedule didn’t take that date and time. Nothing was scheduled.',
+      noedit: 'X Pro doesn’t offer Edit for this post now. Nothing changed; your text is still here.',
+      expired: 'The time to edit this post is over. Nothing changed.',
+      lastedit: 'X Pro says this is your last edit: after it, the post can’t be updated again. Press Update again to send it.',
     };
 
     async function submitCompose() {
@@ -6848,6 +6907,7 @@
       // opens would move them against a text that is no longer the one sent.
       // Empty posts in a thread are left out, as X Pro leaves them out.
       stashPost();
+      if (c.kind === 'edit') return submitEdit(c);
       const at = c.thread.map((p, i) => (postFilled(p) ? i : -1)).filter((i) => i >= 0);
       const posts = at.map((i) => c.thread[i]);
       const many = posts.length > 1;
@@ -6899,6 +6959,7 @@
         const thread = r.ids && r.ids.length > 1;
         closeCompose(false);
         if (c.when) return toast('Scheduled for ' + Sweeter.text.whenLabel(c.when, Date.now()), 'schedule');
+        if (c.kind === 'edit') return toast('Post updated', 'pencil');
         toast(c.kind === 'reply' ? (thread ? 'Replies sent' : 'Reply sent') : thread ? 'Thread posted' : 'Posted', 'compose');
         return;
       }
@@ -7805,6 +7866,7 @@
           }
           break;
         case 'cmp-gif':
+          if (compose && compose.kind === 'edit') break;
           if (gifEl.hidden && compose && compose.poll) toast('A post can have a poll or media, not both.', 'warn');
           else if (gifEl.hidden) openGifs();
           else closeGifs(true);
@@ -8561,14 +8623,15 @@
     // once; 'xpro' X Pro shows what it opens (a report, the lists, an edit)
     // until it closes; 'embed' Sweeter opens X's embed page itself (X Pro's
     // own new window is blocked while Sweeter covers it); 'skip' Sweeter has
-    // its own. An item no pattern knows is pressed as 'now', and anything it
+    // its own; 'edit' Sweeter's compose window, sent through X Pro's Edit.
+    // An item no pattern knows is pressed as 'now', and anything it
     // opens shows in X Pro.
     const author = (p) => '@' + p.author.handle;
     const XPOST = [
       [/^Delete$/, 'ask', 'trash', 'Post deleted', ['Delete post?', 'This can’t be undone, and it will be removed from your profile, the timeline of any accounts that follow you, and from search results.', 'Delete']],
       [/^Pin to your profile$/, 'ask', 'pin', 'Pinned to your profile', ['Pin post to profile?', 'This will appear at the top of your profile and replace any previously pinned post.', 'Pin']],
       [/^Unpin from profile$/, 'ask', 'pin.slash', 'Unpinned from your profile', ['Unpin post from profile?', 'This will no longer appear automatically at the top of your profile.', 'Unpin']],
-      [/^Edit( post)?$/, 'xpro', 'pencil'],
+      [/^Edit( post)?$/, 'edit', 'pencil'],
       [/^Change who can reply$/, 'xpro', 'bubble.left.and.bubble.right'],
       [/content disclosure/i, 'xpro', 'info.circle'],
       [/Highlights?\b/, 'xpro', 'sparkles'],
@@ -8614,7 +8677,7 @@
         if (r[1] === 'skip') return;
         if (last && last !== it.menu) rows.push({ separator: true });
         last = it.menu;
-        rows.push({ id: 'x' + i, title: it.text + (r[1] === 'ask' || r[1] === 'xpro' ? '…' : ''), symbol: r[2] || 'ellipsis' });
+        rows.push({ id: 'x' + i, title: it.text + (r[1] === 'ask' || r[1] === 'xpro' || r[1] === 'edit' ? '…' : ''), symbol: r[2] || 'ellipsis' });
       });
       if (!rows.length) return toast('X Pro offers nothing more for this post.', 'info');
       const run = (choice) => {
@@ -8634,6 +8697,7 @@
       const how = rule[1];
       const say = (x) => (typeof x === 'function' ? x(p) : x);
       if (how === 'embed') return openUrl('https://publish.twitter.com/?url=' + encodeURIComponent(p.url));
+      if (how === 'edit') return openCompose('edit', p.id, key);
       const press = (confirmed) => xpro.postAction(p.id, target(key).m, hintFor(p.id, key), menu, match, confirmed);
       const still = () => xpro.dialogOpen() || xpro.composerOpen();
       if (how === 'xpro') return xproHandoff(() => press(false), still);

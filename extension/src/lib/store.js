@@ -115,6 +115,18 @@
           return null;
         }
         const p = N.post(typed(raw), 0);
+        // An edit: X's answer is the new version, and its edit_control
+        // names every version. It takes the old ones' places; it is never
+        // a new reply.
+        const tw = raw.tweet || raw;
+        const ec = tw.edit_control;
+        const vids = ec && ((ec.edit_control_initial && ec.edit_control_initial.edit_tweet_ids) || ec.edit_tweet_ids);
+        if (p && !p.unavailable && p.id && Array.isArray(vids) && vids.length > 1) {
+          swapEdited(new Set(vids.map(String).filter((x) => x !== String(p.id))), p);
+          lastPosted = { shown: true, why: '', shape: 'edit' };
+          emit('posted');
+          return 'edited';
+        }
         let hit = null;
         if (p && !p.unavailable && p.id && p.replyToId) {
           for (const [fid, d] of details) {
@@ -333,6 +345,70 @@
       const keys = (o) => (o && typeof o === 'object' ? Object.keys(o).sort().join(',') : String(typeof o));
       const u = raw && raw.core && raw.core.user_results && raw.core.user_results.result;
       return 'post[' + keys(raw) + '] typename=' + (raw && raw.__typename) + ' user[' + keys(u) + '] usertype=' + (u && u.__typename) + ' usercore[' + keys(u && u.core) + '] reply=' + !!(raw && raw.legacy && raw.legacy.in_reply_to_status_id_str);
+    }
+
+    // The reader's edit (CreateTweet's answer, the new version np): it takes
+    // the old versions' places in every column, conversation, and profile,
+    // as itself, a repost of it, or the post another one quotes.
+    function swapEdited(oldIds, np) {
+      const swap = (p) => {
+        if (!p) return p;
+        let q = p;
+        if (oldIds.has(p.id)) q = Object.assign({}, np, { repostedBy: p.repostedBy, repostId: p.repostId });
+        if (q.quote && oldIds.has(q.quote.id)) q = Object.assign({}, q, { quote: Object.assign({}, np, { quote: null }) });
+        return q;
+      };
+      const swapBlock = (b) => {
+        if (b.kind === 'post' && b.post) {
+          const q = swap(b.post);
+          return q === b.post ? b : Object.assign({}, b, { post: q });
+        }
+        if (b.kind === 'thread' && b.posts) {
+          const ps = b.posts.map(swap);
+          return ps.every((x, i) => x === b.posts[i]) ? b : Object.assign({}, b, { posts: ps });
+        }
+        return b;
+      };
+      const inMap = (map) => {
+        let changed = false;
+        for (const [k, b] of map) {
+          const nb = swapBlock(b);
+          if (nb === b) continue;
+          map.set(k, nb);
+          changed = true;
+        }
+        return changed;
+      };
+      for (const src of sources.values()) {
+        if (!inMap(src.blocks)) continue;
+        resort(src);
+        emit(src.key);
+      }
+      for (const [fid, d] of details) {
+        const next = d.blocks.map(swapBlock);
+        if (next.every((b, i) => b === d.blocks[i])) continue;
+        d.blocks = next;
+        d.updated = Date.now();
+        emit('detail:' + fid);
+      }
+      for (const [uid, byOp] of timelines) {
+        let changed = false;
+        for (const t of byOp.values()) {
+          const pin = t.pinned ? swapBlock(t.pinned) : null;
+          const pinChanged = !!t.pinned && pin !== t.pinned;
+          if (!inMap(t.blocks) && !pinChanged) continue;
+          changed = true;
+          if (pinChanged) t.pinned = pin;
+          t.sorted = Array.from(t.blocks.values()).sort((a, b) => compareSort(b.sortIndex, a.sortIndex));
+          if (t.pinned) t.sorted = [t.pinned].concat(t.sorted.filter((b) => b.key !== t.pinned.key));
+        }
+        if (changed) emit('timeline:' + uid);
+      }
+      for (const id of oldIds) {
+        if (!posts.has(id)) continue;
+        posts.delete(id);
+        posts.set(np.id, np);
+      }
     }
 
     function postsOf(b) {

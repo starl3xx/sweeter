@@ -162,6 +162,59 @@
     return unescapeEntities(cps.slice(s, e).join(''));
   }
 
+  // A post's text as its author wrote it, for an edit: in its display
+  // range, each link as its full address (X shortens it again), and the
+  // links X shows another way (a quoted post, an article) left out, as X
+  // Pro's own Edit does (module 714377). Its bold and italic come along
+  // (styles: normalize's { s, e, bold, italic } in code points), as
+  // ranges in UTF-16 units of the new text, as the compose window keeps
+  // them. Indices count code points.
+  function editableText(text, range, entities, hide, styles) {
+    const cps = Array.from(String(text || ''));
+    const s = range ? Math.max(0, range[0]) : 0;
+    const e = range ? Math.min(range[1], cps.length) : cps.length;
+    const urls = ((entities && entities.urls) || []).filter((u) => u && Array.isArray(u.indices) && u.indices[0] >= s && u.indices[1] <= e && u.indices[1] > u.indices[0]).sort((a, b) => a.indices[0] - b.indices[0]);
+    // The text in pieces: plain runs and links, each with what it becomes.
+    const pieces = [];
+    let at = s;
+    for (const u of urls) {
+      const [a, b] = u.indices;
+      if (a < at) continue;
+      if (a > at) pieces.push({ a: at, b: a, out: unescapeEntities(cps.slice(at, a).join('')) });
+      pieces.push({ a, b, link: true, out: (hide || []).includes(u.url) ? '' : String(u.expanded_url || u.url || '') });
+      at = b;
+    }
+    if (e > at) pieces.push({ a: at, b: e, out: unescapeEntities(cps.slice(at, e).join('')) });
+    const full = pieces.map((x) => x.out).join('');
+    // Where code point cp of the post lands in the new text; a style edge
+    // inside a link goes to the link's start (from) or end (to).
+    const off = (cp, end) => {
+      let n = 0;
+      for (const x of pieces) {
+        if (cp >= x.b) {
+          n += x.out.length;
+          continue;
+        }
+        if (cp <= x.a) return n;
+        return n + (x.link ? (end ? x.out.length : 0) : unescapeEntities(cps.slice(x.a, cp).join('')).length);
+      }
+      return n;
+    };
+    const lead = full.length - full.trimStart().length;
+    const out = full.trim();
+    const fit = (v) => Math.max(0, Math.min(out.length, v - lead));
+    const bold = [];
+    const italic = [];
+    for (const st of styles || []) {
+      const a = fit(off(Math.max(st.s, s), false));
+      const b = fit(off(Math.min(st.e, e), true));
+      if (b <= a) continue;
+      if (st.bold) bold.push([a, b]);
+      if (st.italic) italic.push([a, b]);
+    }
+    return { text: out, bold: normRanges(bold), italic: normRanges(italic) };
+  }
+
   // Links typed in the compose window: the http(s) addresses X counts as 23
   // characters, less the punctuation that ends a sentence (a closing
   // bracket stays when the link opened one). Offsets count UTF-16 units,
@@ -345,6 +398,6 @@
     return day + ' at ' + t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   }
 
-  Sweeter.text = { richText, plainText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem };
+  Sweeter.text = { richText, plainText, editableText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.text;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

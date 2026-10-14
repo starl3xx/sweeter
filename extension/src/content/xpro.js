@@ -451,8 +451,9 @@
     return !!editor();
   }
 
-  // Opens X Pro’s own composer: a reply, a quote, or a new post.
+  // Opens X Pro’s own composer: a reply, a quote, a new post, or an edit.
   async function openComposer(kind, id, mapping, hint) {
+    if (kind === 'edit') return openEdit(id, mapping, hint);
     if (kind === 'new') {
       // The button toggles X Pro’s compose panel, so press it only when closed.
       if (!composerOpen()) {
@@ -490,6 +491,34 @@
     }
     const open = await waitFor(composerOpen, 3000);
     return { ok: !!open };
+  }
+
+  // An edit opens from the post's More menu: X Pro's item (testID edit,
+  // module 714377) opens its composer at /compose/post with the post's
+  // text, its media and quoted post kept, and an Update button. X Pro
+  // offers it only while the post can still be edited.
+  async function openEdit(id, mapping, hint) {
+    if (composerOpen()) {
+      closePanel();
+      await waitFor(() => !composerOpen(), 1500);
+    }
+    const open = await openPostMenu(id, mapping, hint, 'more');
+    if (!open) return { ok: false, reason: 'notfound' };
+    const item = menuItems(open.menu).find((m) => m.getAttribute('data-testid') === 'edit' || /^Edit( post)?$/.test((m.textContent || '').trim()));
+    if (!item) {
+      await closeMenu(open.btn);
+      open.restore();
+      return { ok: false, reason: 'noedit' };
+    }
+    item.click();
+    try {
+      if (!(await waitFor(composerOpen, 3000))) return { ok: false, reason: 'noedit' };
+      // The post's own text arrives a moment after the editor.
+      await waitFor(() => editor() && norm(editor().innerText), 1500);
+      return { ok: true };
+    } finally {
+      open.restore();
+    }
   }
 
   // ---------- Sweeter’s compose window, posted through X Pro ----------
@@ -544,8 +573,8 @@
   function postButton(from) {
     let box = from;
     for (let i = 0; i < 40 && box; i++) {
-      // “Schedule” once a time is set (module 327189).
-      const b = Array.from(box.querySelectorAll('[role="button"], button')).find((x) => /^\s*(Post|Reply|Post all|Reply all|Schedule)\s*$/.test(x.textContent || ''));
+      // “Schedule” once a time is set, “Update” in an edit (module 327189).
+      const b = Array.from(box.querySelectorAll('[role="button"], button')).find((x) => /^\s*(Post|Reply|Post all|Reply all|Schedule|Update)\s*$/.test(x.textContent || ''));
       if (b) return b;
       box = box.parentElement;
     }
@@ -932,6 +961,11 @@
       clearEditor();
       return { ok: false, reason: 'mismatch' };
     }
+    // An edit to no text at all (a post that keeps its media).
+    if (o.edit && !(text && text.trim())) {
+      clearEditor();
+      if (!(await waitFor(() => editor() && !norm(editor().innerText), 1500))) return { ok: false, reason: 'mismatch' };
+    }
     if (o.styles && text && text.trim()) {
       const st = await applyStyles(text, o.styles);
       if (!st.ok) {
@@ -978,7 +1012,52 @@
     const t0 = Date.now();
     pendingPosts = o.when ? 1 : 1 + more.length;
     btn.click();
-    return sent(t0, true, pendingPosts);
+    return o.edit ? edited(t0, o.lastEdit) : sent(t0, true, pendingPosts);
+  }
+
+  // After Update in an edit, only X's answer counts: X Pro's “Your edit
+  // time expired” sheet (no cancel button; module 89438) closes the
+  // composer with nothing sent. Its “This is your last edit” sheet is
+  // confirmed only when Sweeter's window said so before Update (lastEdit);
+  // otherwise it is cancelled, and Sweeter says so for the next Update.
+  async function edited(t0, lastEdit) {
+    const answer = () => postResults.find((r) => r.at >= t0);
+    const sheet = () => document.querySelector('[data-testid="confirmationSheetDialog"]');
+    let confirmed = false;
+    const step = await waitFor(() => {
+      if (answer()) return 'answer';
+      if (altPrompt()) return 'alttext';
+      const s = sheet();
+      if (!s) return null;
+      if (!s.querySelector('[data-testid="confirmationSheetCancel"]')) return 'expired';
+      if (!lastEdit) return 'lastedit';
+      const ok = s.querySelector('[data-testid="confirmationSheetConfirm"]');
+      if (ok && !confirmed) {
+        confirmed = true;
+        ok.click();
+      }
+      return null;
+    }, 45000);
+    if (step === 'alttext') return { ok: false, reason: 'alttext' };
+    if (step === 'expired' || step === 'lastedit') {
+      const s = sheet();
+      const b = s && s.querySelector(step === 'expired' ? '[data-testid="confirmationSheetConfirm"]' : '[data-testid="confirmationSheetCancel"]');
+      if (b) b.click();
+      await waitFor(() => !sheet(), 1500);
+      return { ok: false, reason: step };
+    }
+    const res = answer();
+    if (!res) {
+      const t = document.querySelector('[data-testid="toast"]');
+      return { ok: false, reason: 'unsent', detail: t ? norm(t.innerText).slice(0, 200) : '' };
+    }
+    if (!res.id) {
+      const e = res.error || {};
+      return { ok: false, reason: 'xerror', detail: (e.message || 'HTTP ' + res.status) + (e.code ? ' (code ' + e.code + ')' : '') };
+    }
+    await waitFor(() => !composerOpen(), 3000);
+    closePanel();
+    return { ok: true, id: res.id, ids: [res.id] };
   }
 
   // Post i of a thread (i ≥ 1), after post i-1 is filled and active. X Pro

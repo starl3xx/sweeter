@@ -7,7 +7,7 @@
   'use strict';
   const Sweeter = root.Sweeter || (root.Sweeter = {});
   const { escapeHtml, snowflakeMs } = Sweeter.util;
-  const { richText, plainText } = Sweeter.text;
+  const { richText, plainText, editableText } = Sweeter.text;
 
   // ---------- sources (one per X Pro column) ----------
 
@@ -382,6 +382,18 @@
     return { latest, stale: latest !== String(id), firstMs: isFinite(first) ? first : null };
   }
 
+  // What X allows the author still: edits left and until when (ms), from
+  // edit_control (or its edit_control_initial on an edited post), as X
+  // Pro's own Edit reads them (module 714377). null when X says nothing.
+  function editControl(r) {
+    const ec = r.edit_control;
+    const c = ec && (ec.edit_control_initial || ec);
+    if (!c) return null;
+    const left = c.edits_remaining != null ? Number(c.edits_remaining) : null;
+    const until = c.editable_until_msecs != null ? Number(c.editable_until_msecs) : null;
+    return { left: isFinite(left) ? left : null, until: isFinite(until) ? until : null };
+  }
+
   // Who can reply: conversation_control's policy, and whether the signed-in
   // account may. X marks a reply it would refuse with the limited action
   // "Reply", on the post or on its TweetWithVisibilityResults wrapper.
@@ -482,6 +494,8 @@
       createdMs: isFinite(createdMs) ? createdMs : Date.parse(legacy.created_at),
       html: richText(text, entities, range, { hideUrls, styles }),
       plain: plainText(text, range, entities),
+      // For an edit: the text as written, with its bold and italic.
+      editable: editableText(text, range, entities, hideUrls, styles),
       lang: legacy.lang || '',
       source: sourceName(r.source),
       replyTo: legacy.in_reply_to_screen_name || null,
@@ -507,6 +521,7 @@
       article: art,
       quote: quoted,
       edit: editInfo(r, id),
+      editCtl: editControl(r),
       replyLimit: replyLimit(result !== r ? result : null, r),
       note: communityNote(r),
       repostedBy: null,

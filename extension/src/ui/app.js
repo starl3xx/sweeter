@@ -6175,6 +6175,13 @@
         () => xpro.composerOpen() || xpro.dialogOpen(),
       );
     }
+    // A post is on its way (sent, partly sent, or going on in X Pro's
+    // composer to be sent) or its draft deleted: the X copy it came from goes.
+    function xCopyGone(c) {
+      const was = drafts.get(draftKey(c));
+      const xid = c.xid || (was && was.xid);
+      if (xid) deleteXDrafts([xid]);
+    }
     // Deletes drafts from X; a failure is said, and the list shows them still.
     async function deleteXDrafts(ids) {
       // Just after a post, X Pro's composer is still closing.
@@ -7174,9 +7181,7 @@
       if (compose) {
         if (keep) keepDraft(compose);
         else {
-          const was = drafts.get(draftKey(compose));
-          const xid = compose.xid || (was && was.xid);
-          if (xid) deleteXDrafts([xid]);
+          xCopyGone(compose);
           drafts.delete(draftKey(compose));
           storeDrafts();
           dropFiles(compose.files);
@@ -7289,6 +7294,7 @@
         const msg = 'X posted ' + r.posted + ' of ' + r.of + ' posts, then stopped' + (r.detail ? ': “' + r.detail + '”.' : '.') + ' The rest are in X Pro’s composer.';
         lastProblem = { msg: msg + ' [' + c.kind + ': partial]', at: Date.now() };
         noteProblem(lastProblem.msg);
+        xCopyGone(c);
         drafts.delete(draftKey(c));
         storeDrafts();
         if (compose === c) {
@@ -7355,6 +7361,7 @@
         }
         // As Open in X Pro does: the post goes on in X Pro (its media editor,
         // then its composer), and Sweeter comes back when both close.
+        xCopyGone(c);
         drafts.delete(draftKey(c));
         storeDrafts();
         if (compose === c) {

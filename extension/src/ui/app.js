@@ -7113,8 +7113,7 @@
     // hidden and holds the open post as before (each edit from the window
     // writes it: macSync), so the drafts, the count, the checks, posting and
     // X Pro's questions run as they do for the web window, and the window
-    // hears what the sheet would show (macState). What it can't hold yet
-    // (photos, a GIF, a poll, a time, a thread) goes to the web window.
+    // hears what the sheet would show (macState).
     let macCmp = false; // the Mac window shows the open post
     let macCard = null; // the link card the sheet shows
     let macMediaMsg = ''; // what the last add didn't take, while it shows
@@ -7379,29 +7378,9 @@
         case 'xpro':
           run({ location: 'cmp-location', grok: 'cmp-grok' }[arg.tool] || 'cmp-xpro', cmpBox);
           return null;
-        case 'web':
-          macToWeb(arg.tool);
-          return null;
         default:
           return null;
       }
-    }
-    // A tool the Mac window doesn't draw yet: this draft moves to the web
-    // window, which opens the tool (a file picker needs a click there).
-    async function macToWeb(tool) {
-      const c = compose;
-      macCmp = false;
-      native.composeHide(true);
-      c.web = true;
-      // The window sent its media's bytes first; they are the web window's now.
-      c.thread = c.thread.map((p) => Object.assign({}, p, { files: webFiles(p.files) }));
-      for (const p of c.thread) for (const f of p.files) delete f.__mac;
-      c.files = c.thread[c.at].files;
-      renderMedia();
-      renderThread();
-      await showCompose();
-      const cmd = { gif: 'cmp-gif', poll: 'cmp-poll', schedule: 'cmp-schedule', thread: 'cmp-thread-add' }[tool];
-      if (cmd && compose === c) run(cmd, cmpBox);
     }
     // The sheet's changes reach the window as one state per turn.
     let macPush = false;

@@ -9,8 +9,7 @@
 //  with a snapshot of the draft (composeShow), hears every edit
 //  (Sweeter.native.cw), saves the draft, counts the text, posts it through
 //  X Pro, reports back while it does (composeState), and closes the window
-//  when the post is done (composeHide). A tool this window doesn't draw
-//  yet hands the draft to the web compose window.
+//  when the post is done (composeHide).
 //
 
 import Cocoa
@@ -869,7 +868,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         stash()
         let s = Self.styles(textView.textStorage ?? NSAttributedString())
         return [
-            "thread": thread.map(Self.dict),
+            "thread": thread.map { Self.dict($0) },
             "at": at,
             "key": key,
             "text": textView.string,
@@ -1394,12 +1393,6 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             schedule(from: sender, or: nil)
         case .thread:
             addPost()
-        default:
-            // Not drawn here yet: the web compose window takes the draft
-            // (with its media) and opens the tool.
-            var d = draft()
-            d["tool"] = tool.rawValue
-            withMedia("web", d)
         }
     }
 

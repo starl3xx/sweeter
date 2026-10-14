@@ -75,6 +75,7 @@
     composeHeight: 0, // the compose text box’s least height in px (0: the usual 120)
     composeCards: true, // Mac app: a link in the compose window shows its page’s preview card
     composeWindow: true, // Mac app: the compose window is a window of its own, above Sweeter
+    composeNative: false, // Mac app: that window is a Mac window (ComposeWindow.swift), beta
     articleReader: true, // an X Article opens in Sweeter’s reader (⌘-click: x.com)
     readerSize: 18, // the reader’s text size, in px (READER_SIZES)
     readerFont: 'sans', // the reader’s typeface (READER_FONTS)
@@ -421,6 +422,7 @@
       { k: 'sep' },
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
       { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'It floats above Sweeter, keeps the size and place you give it, and needs no room in the columns.', app: true },
+      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, and a toolbar. For now, photos, GIFs, polls, scheduling, and threads move the post to the other window.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
@@ -6142,7 +6144,7 @@
     function draftSoon() {
       clearTimeout(draftSoonTimer);
       draftSoonTimer = setTimeout(() => {
-        if (compose && !cmpBack.hidden) keepDraft(compose);
+        if (compose && cmpOpen()) keepDraft(compose);
       }, 600);
     }
     // The last keystrokes, when the page goes (a reload, a closed tab).
@@ -6151,7 +6153,7 @@
     // An empty text box leaves the open post as last stashed, and the rest
     // of a thread is still kept.
     window.addEventListener('pagehide', () => {
-      if (!compose || cmpBack.hidden) return;
+      if (!compose || !cmpOpen()) return;
       if (cmpText.value.trim()) keepDraft(compose);
       else if (compose.thread.some((p, i) => i !== compose.at && postFilled(p))) keepDraft(compose, false);
     });
@@ -6236,6 +6238,7 @@
       }, 700);
     }
     function showCard(card) {
+      macCard = card && (card.title || card.image) ? { host: String(card.host || ''), title: String(card.title || ''), image: String(card.image || '') } : null;
       if (!card || !(card.title || card.image)) {
         if (!cmpCard.hidden) {
           cmpCard.hidden = true;
@@ -6703,7 +6706,7 @@
       }
       // A compose window already open keeps its text as a draft, and an
       // open image description reminder goes back to X Pro's composer.
-      if (compose && !cmpBack.hidden) keepDraft(compose);
+      if (compose && cmpOpen()) keepDraft(compose);
       if (altAsk) answerAltText('back');
       compose = { kind, id: id || null, key: key || null, files: [] };
       // An edit starts from the post's own text; its media and quoted post
@@ -6755,6 +6758,18 @@
     // the posting itself still happens in X Pro, in the main window.
     async function showCompose() {
       const c = compose;
+      if (macFits(c)) {
+        if (cmpWin) releaseComposeWindow();
+        macCmp = true;
+        cmpBack.hidden = true;
+        native.composeShow(macSnapshot(c));
+        return;
+      }
+      // A draft the Mac window can't hold yet: the web window, and the Mac one closes.
+      if (macCmp) {
+        macCmp = false;
+        native.composeHide();
+      }
       if (native && native.allowPopup && settings.composeWindow !== false) {
         const w = await composeWindow();
         // Closed or replaced while the window opened.
@@ -6806,6 +6821,10 @@
 
     // The sheet goes home to Sweeter and the window closes.
     function releaseComposeWindow() {
+      if (macCmp) {
+        macCmp = false;
+        native.composeHide();
+      }
       if (!cmpWin) return;
       const w = cmpWin;
       cmpWin = null;
@@ -7056,6 +7075,153 @@
         cmpText.focus();
       }
     }
+
+    // ---------- the Mac compose window (ComposeWindow.swift, beta) ----------
+    // With Settings ▸ Media ▸ Compose ▸ Make it a Mac window, the window is
+    // native and this page stays the owner of the post: the sheet stays
+    // hidden and holds the open post as before (each edit from the window
+    // writes it: macSync), so the drafts, the count, the checks, posting and
+    // X Pro's questions run as they do for the web window, and the window
+    // hears what the sheet would show (macState). What it can't hold yet
+    // (photos, a GIF, a poll, a time, a thread) goes to the web window.
+    let macCmp = false; // the Mac window shows the open post
+    let macCard = null; // the link card the sheet shows
+    const cmpOpen = () => !cmpBack.hidden || macCmp;
+    function macFits(c) {
+      if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
+      return c.thread.length === 1 && !c.files.length && !c.gif && !c.poll && !c.when;
+    }
+    function macSnapshot(c) {
+      const p = c.id ? findPost(c.id, c.kind === 'edit') : null;
+      const quoted = p && (c.kind === 'reply' || c.kind === 'quote');
+      return {
+        key: draftKey(c),
+        kind: c.kind,
+        title: cmpTitle.textContent,
+        account: viewer && viewer.handle ? '@' + viewer.handle : '',
+        placeholder: c.kind === 'reply' ? 'Post your reply' : c.kind === 'quote' ? 'Add a comment' : c.kind === 'edit' ? 'Edit your post' : 'What’s happening?',
+        context: quoted ? { label: (c.kind === 'reply' ? 'Replying to @' : 'Quoting @') + p.author.handle, name: p.author.name || '', handle: '@' + p.author.handle, text: p.plain || '' } : null,
+        note: c.kind === 'edit' ? cmpCtx.textContent.trim() : '',
+        text: cmpText.value,
+        bold: c.styles.bold,
+        italic: c.styles.italic,
+        reply: cmpReply.value,
+        replyOptions: REPLY_OPTIONS,
+        replyHidden: c.kind === 'reply' || c.kind === 'edit',
+        tools: c.kind === 'edit' ? ['emoji', 'bold', 'italic'] : ['photo', 'gif', 'emoji', 'bold', 'italic'].concat(c.kind === 'quote' ? [] : ['poll'], ['schedule', 'thread', 'xpro']),
+        state: macState(),
+      };
+    }
+    // What the sheet shows now. Progress ends in “…”; any other note but
+    // the restored draft's is a problem.
+    function macState() {
+      const status = cmpStatus.textContent || '';
+      return {
+        status,
+        busy: !!posting,
+        post: cmpPost.textContent || 'Post',
+        count: cmpCount.textContent || '',
+        level: cmpCount.classList.contains('over') ? 'over' : cmpCount.classList.contains('long') ? 'long' : '',
+        links: Sweeter.text.draftLinks(cmpText.value).map((l) => [l.start, l.end]),
+        invalid: !!status && !/…$/.test(status) && status !== 'Your saved draft',
+        ask: cmpAsk.hidden ? '' : 'alttext',
+        card: macCard,
+      };
+    }
+    // The window's draft into the sheet: its text, bold and italic (UTF-16
+    // ranges, as the sheet keeps them), and who can reply. false when it is
+    // another draft's (the window moved on).
+    function macSync(d) {
+      const c = compose;
+      if (d && c && d.key !== draftKey(c)) macLate(d);
+      if (!c || !macCmp || !d || d.key !== draftKey(c)) return false;
+      const text = String(d.text || '');
+      const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
+      cmpText.value = text;
+      c.prev = text;
+      c.styles = { bold: fit(d.bold), italic: fit(d.italic) };
+      if (REPLY_OPTIONS.includes(d.reply) && cmpReply.value !== d.reply) {
+        cmpReply.value = d.reply;
+        syncWho();
+      }
+      updateCount();
+      return true;
+    }
+    // The last edit of a draft the window has just left (another post
+    // opened before its pause ended): it goes into that draft, which was
+    // saved from the sheet a moment before.
+    function macLate(d) {
+      if (typeof d.key !== 'string' || !/^(new|reply|quote|edit):/.test(d.key) || typeof d.text !== 'string') return;
+      let old = drafts.get(d.key);
+      // Emptied, it is no draft, as keepDraft has it: an edit then opens on
+      // the post's own text again.
+      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !(old && ((old.more || []).length || old.poll || old.gif))) {
+        if (drafts.delete(d.key)) storeDrafts();
+        return;
+      }
+      // A post that wasn't a draft yet becomes one.
+      if (!old) {
+        old = { text: '', styles: null, reply: 'Everyone', gif: null, poll: null, more: [], files: [] };
+        drafts.set(d.key, old);
+      }
+      const text = d.text;
+      const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
+      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, at: Date.now() });
+      if (REPLY_OPTIONS.includes(d.reply)) old.reply = d.reply;
+      storeDrafts();
+    }
+    // The window's requests (ViewController composeOp): its reply is the
+    // state, as JSON, or null.
+    function macRequest(op, arg) {
+      const reply = () => JSON.stringify(macState());
+      if (!compose || !macCmp) return null;
+      if (op === 'alt') {
+        answerAltText(arg && (arg.choice === 'add' || arg.choice === 'post') ? arg.choice : 'back');
+        return reply();
+      }
+      if (!macSync(arg)) return null;
+      switch (op) {
+        case 'edit':
+          return reply();
+        case 'post':
+          submitCompose();
+          return reply();
+        case 'close':
+          // The window is closing itself.
+          macCmp = false;
+          closeCompose(true);
+          return null;
+        case 'xpro':
+          run({ location: 'cmp-location', grok: 'cmp-grok' }[arg.tool] || 'cmp-xpro', cmpBox);
+          return null;
+        case 'web':
+          macToWeb(arg.tool);
+          return null;
+        default:
+          return null;
+      }
+    }
+    // A tool the Mac window doesn't draw yet: this draft moves to the web
+    // window, which opens the tool (a file picker needs a click there).
+    async function macToWeb(tool) {
+      const c = compose;
+      macCmp = false;
+      native.composeHide();
+      c.web = true;
+      await showCompose();
+      const cmd = { photo: 'cmp-photo', gif: 'cmp-gif', poll: 'cmp-poll', schedule: 'cmp-schedule', thread: 'cmp-thread-add' }[tool];
+      if (cmd && cmd !== 'cmp-photo' && compose === c) run(cmd, cmpBox);
+    }
+    // The sheet's changes reach the window as one state per turn.
+    let macPush = false;
+    new MutationObserver(() => {
+      if (!macCmp || macPush) return;
+      macPush = true;
+      queueMicrotask(() => {
+        macPush = false;
+        if (macCmp) native.composeState(macState());
+      });
+    }).observe(cmpBox, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'disabled', 'aria-invalid', 'class'] });
 
     // “Open in X Pro”: Sweeter steps aside and shows X Pro’s own composer with
     // the text already in it, then comes back when that composer closes.
@@ -10165,6 +10331,8 @@
       prefs: prefsDo,
       // The Mac app: the compose window was closed with its own button.
       composeClosed: composeWindowClosed,
+      // The Mac compose window's requests (ComposeWindow.swift).
+      cw: macRequest,
       // ⌘W in the Mac app: the top sheet closes first, as on a Mac; false
       // when nothing was open, and the window closes instead.
       closeTop() {

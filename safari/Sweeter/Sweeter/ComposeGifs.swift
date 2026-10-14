@@ -175,13 +175,15 @@ final class ComposeGifPicker: NSViewController, NSSearchFieldDelegate, NSCollect
         view = v
     }
 
-    func show(from item: NSToolbarItem) {
+    /// Above (or below) the button that asked.
+    func show(from anchor: NSView) {
         let p = NSPopover()
         p.behavior = .transient
         p.contentViewController = self
         p.delegate = self
         popover = p
-        p.show(relativeTo: item)
+        // The top edge, in the anchor's own coordinates (a button's are flipped).
+        p.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: anchor.isFlipped ? .minY : .maxY)
         view.window?.makeFirstResponder(field)
         run("")
     }

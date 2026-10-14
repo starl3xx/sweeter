@@ -3,8 +3,9 @@
 //  Sweeter
 //
 //  The compose window as a Mac window (Settings ▸ Media ▸ Compose, beta):
-//  a toolbar in the title bar, a native text view with real bold and
-//  italic, and a pop-up button for who can reply. The page stays the owner
+//  Sweeter's own look on plain paper (your picture and name, a pill for
+//  who can reply, the tools in a floating bar at the bottom), a native
+//  text view with real bold and italic. The page stays the owner
 //  of the post (app.js, “the Mac compose window”): it opens the window
 //  with a snapshot of the draft (composeShow), hears every edit
 //  (Sweeter.native.cw), saves the draft, counts the text, posts it through
@@ -34,6 +35,8 @@ struct ComposeSnapshot: Decodable {
     let kind: String
     let title: String
     let account: String
+    /// The person's display name (app.js macSnapshot); empty when unknown.
+    let name: String?
     let placeholder: String
     let context: Context?
     let note: String
@@ -105,6 +108,9 @@ struct ComposeState: Decodable {
     let look: ComposeTheme?
     /// Saved drafts, newest first (app.js draftList), not the open one.
     let drafts: [DraftRef]?
+    /// The person's picture as a data: URL, sent once when it changes
+    /// ("" when the page can't make one).
+    let avatar: String?
 
     struct DraftRef: Decodable, Equatable {
         let key: String
@@ -343,10 +349,10 @@ enum ComposeStyle {
 
 // MARK: - The window
 
-final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSTextViewDelegate {
+final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTextViewDelegate {
     static let shared = ComposeWindowController()
-    static let baseFont = NSFont.systemFont(ofSize: 15)
-    static let minWidth: CGFloat = 600
+    static let baseFont = NSFont.systemFont(ofSize: 16)
+    static let minWidth: CGFloat = 620
     /// The window exists (a page reload or report may need to reach it).
     private(set) static var made = false
 
@@ -409,30 +415,38 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private let postButton = ComposeAccentButton(title: "Post", target: nil, action: nil)
     /// Where a thread grows: right under the post being written.
     private let addRow = ComposeAddRow("Add Another Post")
+    /// Who is posting: the picture, the name and the handle.
+    private let avatarView = ComposeAvatar()
+    private let nameLabel = NSTextField(labelWithString: "")
+    private let handleLabel = NSTextField(labelWithString: "")
+    private let draftsPill = ComposePill("Drafts", tone: .chip, symbol: "tray.full")
+    private var draftsMenu = NSMenu()
+    private let statusRow = NSStackView()
+    /// The floating bar: the tools, X Pro's, the count and Post.
+    private let dock = ComposeCapsule()
+    private var dockButtons: [Tool: ComposeDockButton] = [:]
+    private let moreButton = ComposeDockButton(symbol: "ellipsis", label: "X Pro", tip: "Finish in X Pro’s own composer")
+    private let moreMenu = NSMenu()
 
     private init() {
-        let panel = QuietPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 420), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: true)
+        let panel = QuietPanel(contentRect: NSRect(x: 0, y: 0, width: 660, height: 460), styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: true)
         panel.isReleasedWhenClosed = false
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = true
         // A window of its own to the person: Mission Control and ⌘` too.
         panel.collectionBehavior = [.managed, .participatesInCycle, .fullScreenAuxiliary]
         panel.becomesKeyOnlyIfNeeded = false
-        // Wide enough for every tool: nothing goes into the toolbar's ».
-        panel.contentMinSize = NSSize(width: Self.minWidth, height: 260)
-        panel.toolbarStyle = .unified
-        // The toolbar's room is the tools'; the title stays in the Window
-        // menu and Mission Control.
+        // Wide enough for the floating bar's every tool.
+        panel.contentMinSize = NSSize(width: Self.minWidth, height: 320)
+        // Plain paper to the top: the window's buttons sit on it, and the
+        // title stays in the Window menu and Mission Control.
+        panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
+        panel.isMovableByWindowBackground = true
         super.init(window: panel)
         Self.made = true
         panel.delegate = self
         build()
-        let toolbar = NSToolbar(identifier: "SweeterCompose")
-        toolbar.delegate = self
-        toolbar.displayMode = .iconOnly
-        toolbar.allowsUserCustomization = false
-        panel.toolbar = toolbar
         if !panel.setFrameUsingName("SweeterComposeMac") { panel.center() }
         panel.setFrameAutosaveName("SweeterComposeMac")
     }
@@ -553,20 +567,19 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         statusLabel.lineBreakMode = .byTruncatingTail
         statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         statusLabel.allowsExpansionToolTips = true
+        for v in [spinner, statusLabel] as [NSView] { statusRow.addArrangedSubview(v) }
+        statusRow.spacing = 6
         countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         countLabel.textColor = SweeterColor.secondary
-        countLabel.alignment = .right
         countLabel.setContentHuggingPriority(.required, for: .horizontal)
+        countLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         countRing.setContentHuggingPriority(.required, for: .horizontal)
-        let bar = NSStackView(views: [spinner, statusLabel, countRing, countLabel])
-        bar.spacing = 6
-        bar.setHuggingPriority(.defaultLow, for: .horizontal)
-        statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         pollView.onChange = { [weak self] p in
             guard let self else { return }
             self.poll = p
             if p == nil { self.pollView.isHidden = true }
+            self.refreshDock()
             self.sync()
         }
         whenPill.target = self
@@ -584,37 +597,107 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             rows.alignment = .leading
             rows.spacing = 4
         }
-        let rule = NSBox()
-        rule.boxType = .separator
         addRow.target = self
         addRow.action = #selector(addPostPressed)
         addRow.toolTip = "Add a post after this one, to make a thread"
-        let stack = NSStackView(views: [replyRow, noteLabel, contextLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, cardBox, addRow, nextRows, whenRow, rule, bar])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 14, left: 20, bottom: 10, right: 20)
-        stack.setCustomSpacing(6, after: rule)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [noteLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, cardBox, addRow, nextRows, bar] as [NSView] {
-            v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
+
+        // Who is posting, and the Drafts pill at the right.
+        nameLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        nameLabel.textColor = SweeterColor.text
+        nameLabel.lineBreakMode = .byTruncatingTail
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        handleLabel.font = .systemFont(ofSize: 14)
+        handleLabel.textColor = SweeterColor.secondary
+        handleLabel.lineBreakMode = .byTruncatingTail
+        handleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        draftsPill.trailingSymbol = "chevron.down"
+        draftsPill.target = self
+        draftsPill.action = #selector(draftsPressed)
+        draftsPill.toolTip = "Your saved drafts"
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let nameRow = NSStackView(views: [nameLabel, handleLabel, spacer, draftsPill])
+        nameRow.spacing = 6
+        nameRow.alignment = .centerY
+
+        // The post: its column beside the picture.
+        let column = NSStackView(views: [nameRow, replyRow, noteLabel, contextLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, cardBox, addRow, nextRows, whenRow, statusRow])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 10
+        column.setCustomSpacing(6, after: nameRow)
+        column.translatesAutoresizingMaskIntoConstraints = false
+        for v in [nameRow, noteLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, cardBox, addRow, nextRows, statusRow] as [NSView] {
+            v.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         }
-        rule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
         scroll.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
-        content.addSubview(stack)
+        content.addSubview(avatarView)
+        content.addSubview(column)
+
+        // The floating bar: the tools in three groups, X Pro's, the count and Post.
+        dock.radius = 27
+        dock.lift = (0.14, 15, 6)
+        dock.translatesAutoresizingMaskIntoConstraints = false
+        let bar = NSStackView()
+        bar.spacing = 2
+        bar.alignment = .centerY
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        for group in [[Tool.photo, .gif, .emoji], [.bold, .italic], [.poll, .schedule]] {
+            if !bar.arrangedSubviews.isEmpty { bar.setCustomSpacing(8, after: bar.arrangedSubviews[bar.arrangedSubviews.count - 1]) }
+            for t in group {
+                let b = ComposeDockButton(symbol: t.symbol, label: t.label, tip: t.tip)
+                b.identifier = NSUserInterfaceItemIdentifier(t.rawValue)
+                b.target = self
+                b.action = #selector(dockPressed(_:))
+                dockButtons[t] = b
+                bar.addArrangedSubview(b)
+            }
+        }
+        for (title, tool) in [("Open in X Pro", "xpro"), ("Tag a Location in X Pro", "location"), ("Make an Image with Grok in X Pro", "grok")] {
+            let m = NSMenuItem(title: title, action: #selector(xpro(_:)), keyEquivalent: "")
+            m.target = self
+            m.representedObject = tool
+            moreMenu.addItem(m)
+        }
+        moreButton.target = self
+        moreButton.action = #selector(morePressed)
+        let divider = NSBox()
+        divider.boxType = .separator
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        divider.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        for v in [moreButton, divider, countRing, countLabel, postButton] as [NSView] { bar.addArrangedSubview(v) }
+        bar.setCustomSpacing(8, after: moreButton)
+        bar.setCustomSpacing(10, after: divider)
+        bar.setCustomSpacing(6, after: countRing)
+        bar.setCustomSpacing(12, after: countLabel)
+        dock.addSubview(bar)
+        content.addSubview(dock)
+
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: content.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            avatarView.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            avatarView.topAnchor.constraint(equalTo: content.topAnchor, constant: 40),
+            column.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 14),
+            column.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
+            column.topAnchor.constraint(equalTo: content.topAnchor, constant: 40),
+            column.bottomAnchor.constraint(equalTo: dock.topAnchor, constant: -12),
+            nameRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 26),
+            bar.leadingAnchor.constraint(equalTo: dock.leadingAnchor, constant: 8),
+            bar.trailingAnchor.constraint(equalTo: dock.trailingAnchor, constant: -9),
+            bar.centerYAnchor.constraint(equalTo: dock.centerYAnchor),
+            dock.heightAnchor.constraint(equalToConstant: 54),
+            dock.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            dock.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+            dock.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: 12),
+            dock.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
         ])
         window?.contentView = content
 
         postButton.bezelStyle = .push
         postButton.controlSize = .large
-        postButton.font = .systemFont(ofSize: NSFont.systemFontSize(for: .large), weight: .medium)
+        postButton.font = .systemFont(ofSize: NSFont.systemFontSize(for: .large), weight: .semibold)
         postButton.repaint()
         postButton.keyEquivalent = "\r"
         postButton.keyEquivalentModifierMask = [.command]
@@ -682,7 +765,13 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         replyPill.title = reply + " can reply"
         replyRow.isHidden = snap.replyHidden
         addRow.isHidden = !snap.tools.contains("thread")
-        rebuildToolbar()
+        let handle = snap.account
+        nameLabel.stringValue = (snap.name ?? "").isEmpty ? String(handle.drop { $0 == "@" }) : snap.name ?? ""
+        handleLabel.stringValue = handle
+        handleLabel.isHidden = handle.isEmpty
+        avatarHandle = handle
+        if avatarShown == nil { avatarView.show(dataURL: nil, handle: handle) }
+        refreshTools()
         apply(snap.state)
         isOpen = true
         closingFromPage = false
@@ -732,7 +821,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private func apply(_ s: ComposeState) {
         if let look = s.look { applyTheme(look) }
         if let d = s.drafts { showDrafts(d) }
-        postButton.title = s.post.isEmpty ? "Post" : s.post
+        if let a = s.avatar, a != avatarShown {
+            avatarShown = a
+            avatarView.show(dataURL: a, handle: avatarHandle)
+        }
+        postButton.title = postTitle(s.post)
         if let t = s.title, !t.isEmpty { window?.title = t }
         if let a = s.at, a != at, a >= 0, a < thread.count, !uploading {
             stash()
@@ -744,8 +837,12 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         statusLabel.stringValue = s.status
         statusLabel.textColor = s.invalid ? .systemRed : SweeterColor.secondary
         statusLabel.toolTip = s.status.isEmpty ? nil : s.status
+        statusRow.isHidden = s.status.isEmpty && !busy
         if busy { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         postButton.isEnabled = !busy
+        for b in dockButtons.values { b.isEnabled = !busy }
+        moreButton.isEnabled = !busy
+        draftsPill.isEnabled = !busy
         textView.isEditable = !busy
         replyPill.isEnabled = !busy
         addRow.isEnabled = !busy
@@ -1037,6 +1134,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         rebuildMediaRow()
         if let poll { pollView.show(poll) }
         pollView.isHidden = poll == nil
+        refreshDock()
         rebuildRows()
         window?.makeFirstResponder(textView)
         textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
@@ -1114,6 +1212,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         textView.isEditable = false
         replyPill.isEnabled = false
         addRow.isEnabled = false
+        for b in dockButtons.values { b.isEnabled = false }
         let all = thread.flatMap(\.media)
         guard !all.isEmpty else { return send(op, d) }
         uploading = true
@@ -1133,6 +1232,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             self.textView.isEditable = true
             self.replyPill.isEnabled = true
             self.addRow.isEnabled = true
+            for b in self.dockButtons.values { b.isEnabled = true }
             self.spinner.stopAnimation(nil)
             self.statusLabel.stringValue = problem
             self.statusLabel.textColor = .systemRed
@@ -1271,7 +1371,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         sync()
     }
 
-    private func schedule(from item: NSToolbarItem?, or view: NSView?) {
+    private func schedule(from view: NSView) {
         if poll != nil { return say("X Pro can’t schedule a post with a poll. Remove the poll first.") }
         // X Pro's own first choice: an hour from now.
         let picker = ComposeSchedulePicker(start: when?.date ?? Date.now.addingTimeInterval(3600), had: when != nil)
@@ -1282,17 +1382,19 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             self.showWhen()
             self.sync()
         }
-        if let item { picker.show(from: item) } else if let view { picker.show(from: view) }
+        picker.show(from: view)
     }
 
     private func showWhen() {
         whenPill.title = when.map { "Sends " + $0.label } ?? ""
         whenRow.isHidden = when == nil
+        refreshDock()
+        postButton.title = postTitle(lastPost)
     }
 
     @objc private func changeWhen(_ sender: NSButton) {
         guard !busy else { return }
-        schedule(from: nil, or: sender)
+        schedule(from: sender)
     }
 
     @objc private func clearWhen() {
@@ -1316,7 +1418,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         sync()
     }
 
-    private func chooseGif(from item: NSToolbarItem) {
+    private func chooseGif(from view: NSView) {
         guard media.isEmpty else { return say("A post can have photos or a video, or one GIF.") }
         guard poll == nil else { return say("A post can have a poll or media, not both.") }
         let picker = ComposeGifPicker()
@@ -1342,7 +1444,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         picker.onClose = {
             ViewController.shared?.composeOp("gifsClose", nil) { _ in }
         }
-        picker.show(from: item)
+        picker.show(from: view)
     }
 
     // MARK: Closing
@@ -1465,95 +1567,35 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         }
     }
 
-    private static let moreID = NSToolbarItem.Identifier("more")
-    private static let draftsID = NSToolbarItem.Identifier("drafts")
-    private weak var draftsItem: NSMenuToolbarItem?
-    private var draftsShown: [ComposeState.DraftRef]?
-    private static let postID = NSToolbarItem.Identifier("post")
+    private var avatarShown: String?
+    private var avatarHandle = ""
+    /// The page's word for Post (Post, Reply, Post all, Schedule, Update).
+    private var lastPost = "Post"
 
-    private func identifiers() -> [NSToolbarItem.Identifier] {
-        // Three groups (add, style, the post's shape), each its own piece of glass.
-        // Add Another Post lives in the box, under the post.
-        let groups: [[Tool]] = [[.photo, .gif, .emoji], [.bold, .italic], [.poll, .schedule]]
-        var mine: [NSToolbarItem.Identifier] = []
-        for g in groups {
-            let ids = g.filter { tools.contains($0.rawValue) }.map { NSToolbarItem.Identifier($0.rawValue) }
-            if ids.isEmpty { continue }
-            if !mine.isEmpty { mine.append(.space) }
-            mine += ids
-        }
-        // Drafts for a post, reply or quote (not an edit, which has no thread tool).
-        return mine + [.flexibleSpace] + (tools.contains("thread") ? [Self.draftsID] : []) + (tools.contains("xpro") ? [Self.moreID] : []) + [Self.postID]
+    /// Post says what it will do: “Schedule for Thu 9:05 PM”.
+    private func postTitle(_ word: String) -> String {
+        lastPost = word.isEmpty ? "Post" : word
+        if lastPost == "Schedule", let w = when { return "Schedule for " + w.short }
+        return lastPost
     }
 
-    /// The items for this draft (an edit has fewer), in order.
-    private func rebuildToolbar() {
-        guard let toolbar = window?.toolbar else { return }
-        let want = identifiers()
-        if toolbar.items.map(\.itemIdentifier) == want { return }
-        while !toolbar.items.isEmpty { toolbar.removeItem(at: 0) }
-        for (i, id) in want.enumerated() { toolbar.insertItem(withItemIdentifier: id, at: i) }
+    /// The bar's tools for this draft (an edit has only its text tools),
+    /// and X Pro's and Drafts where they apply.
+    private func refreshTools() {
+        for (t, b) in dockButtons { b.isHidden = !tools.contains(t.rawValue) }
+        moreButton.isHidden = !tools.contains("xpro")
+        draftsPill.isHidden = !tools.contains("thread")
+        refreshDock()
     }
 
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        Tool.allCases.map { NSToolbarItem.Identifier($0.rawValue) } + [.space, .flexibleSpace, Self.draftsID, Self.moreID, Self.postID]
+    /// The poll and schedule tools show when they're on.
+    private func refreshDock() {
+        dockButtons[.poll]?.on = poll != nil
+        dockButtons[.schedule]?.on = when != nil
     }
 
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        identifiers()
-    }
-
-    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
-        if id == Self.postID {
-            let item = NSToolbarItem(itemIdentifier: id)
-            item.view = postButton
-            item.label = "Post"
-            // Post never goes into the toolbar's ».
-            item.visibilityPriority = .user
-            return item
-        }
-        if id == Self.draftsID {
-            let item = NSMenuToolbarItem(itemIdentifier: id)
-            item.image = NSImage(systemSymbolName: "tray.full", accessibilityDescription: "Drafts")
-            item.label = "Drafts"
-            item.toolTip = "Your saved drafts"
-            item.showsIndicator = true
-            item.visibilityPriority = .high
-            draftsItem = item
-            draftsShown = nil
-            showDrafts(lastDrafts)
-            return item
-        }
-        if id == Self.moreID {
-            let item = NSMenuToolbarItem(itemIdentifier: id)
-            item.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "X Pro")
-            item.label = "X Pro"
-            item.toolTip = "Finish in X Pro’s own composer"
-            item.showsIndicator = true
-            item.visibilityPriority = .high
-            let menu = NSMenu()
-            for (title, tool) in [("Open in X Pro", "xpro"), ("Tag a Location in X Pro", "location"), ("Make an Image with Grok in X Pro", "grok")] {
-                let m = NSMenuItem(title: title, action: #selector(xpro(_:)), keyEquivalent: "")
-                m.target = self
-                m.representedObject = tool
-                menu.addItem(m)
-            }
-            item.menu = menu
-            return item
-        }
-        guard let tool = Tool(rawValue: id.rawValue) else { return nil }
-        let item = NSToolbarItem(itemIdentifier: id)
-        item.image = NSImage(systemSymbolName: tool.symbol, accessibilityDescription: tool.label)
-        item.label = tool.label
-        item.toolTip = tool.tip
-        item.isBordered = true
-        item.target = self
-        item.action = #selector(toolPressed(_:))
-        return item
-    }
-
-    @objc private func toolPressed(_ sender: NSToolbarItem) {
-        guard !busy, let tool = Tool(rawValue: sender.itemIdentifier.rawValue) else { return }
+    @objc private func dockPressed(_ sender: ComposeDockButton) {
+        guard !busy, let id = sender.identifier?.rawValue, let tool = Tool(rawValue: id) else { return }
         switch tool {
         case .bold:
             window?.makeFirstResponder(textView)
@@ -1571,21 +1613,30 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         case .poll:
             addPoll()
         case .schedule:
-            schedule(from: sender, or: nil)
+            schedule(from: sender)
         case .thread:
             addPost()
         }
     }
 
+    @objc private func morePressed() {
+        guard !busy else { return }
+        moreMenu.popUp(positioning: nil, at: NSPoint(x: 0, y: moreButton.isFlipped ? -4 : moreButton.bounds.height + 4), in: moreButton)
+    }
+
+    @objc private func draftsPressed() {
+        guard !busy else { return }
+        draftsMenu.popUp(positioning: nil, at: NSPoint(x: 0, y: draftsPill.isFlipped ? draftsPill.bounds.height + 4 : -4), in: draftsPill)
+    }
+
     // MARK: Drafts
 
-    private var lastDrafts: [ComposeState.DraftRef] = []
+    private var draftsShown: [ComposeState.DraftRef]?
 
-    /// The Drafts menu: Save Draft, each saved one (⌥ turns it into
-    /// Delete), and a count on the button where the Mac shows one.
+    /// The Drafts menu: Save Draft, then each saved one (⌥ turns it into
+    /// Delete), and the count on the pill.
     private func showDrafts(_ list: [ComposeState.DraftRef]) {
-        lastDrafts = list
-        guard let item = draftsItem, list != draftsShown else { return }
+        guard list != draftsShown else { return }
         draftsShown = list
         let menu = NSMenu()
         let save = NSMenuItem(title: "Save Draft", action: #selector(saveDraftPicked), keyEquivalent: "s")
@@ -1618,9 +1669,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             hint.isEnabled = false
             menu.addItem(hint)
         }
-        item.menu = menu
-        item.toolTip = list.isEmpty ? "Your saved drafts" : list.count == 1 ? "1 saved draft" : "\(list.count) saved drafts"
-        if #available(macOS 26.0, *) { item.badge = list.isEmpty ? nil : .count(list.count) }
+        draftsMenu = menu
+        draftsPill.title = list.isEmpty ? "Drafts" : "Drafts \(list.count)"
+        draftsPill.toolTip = list.isEmpty ? "Your saved drafts" : list.count == 1 ? "1 saved draft" : "\(list.count) saved drafts"
     }
 
     @objc private func saveDraftPicked() {

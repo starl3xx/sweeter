@@ -797,7 +797,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
                 w.setFrame(f, display: false)
             }
         }
-        if !isOpen { userSized = false }
+        // Fitted before it shows (no tall flash), and again once it has laid out.
+        fitHeight()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         fitSoon()
@@ -1040,14 +1041,23 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     // MARK: The window's height
 
     /// The window fits what it holds (the text, media, a poll, a thread's
-    /// rows), opening compact and growing as you write, up to most of the
-    /// screen, until you size it yourself (then until it closes).
+    /// rows, a quote, a card), opening compact and growing as you write, up
+    /// to most of the screen, until you size it yourself (then until it
+    /// closes). The text area asks for its text's height at a priority just
+    /// above the window keeping its size (500) and below a person dragging
+    /// it (510), so Auto Layout sizes the window around everything in it.
     private var userSized = false
     private var fitQueued = false
     private static let textMin: CGFloat = 96
+    private lazy var textHeight: NSLayoutConstraint = {
+        let c = scroll.heightAnchor.constraint(equalToConstant: Self.textMin)
+        c.priority = NSLayoutConstraint.Priority(505)
+        return c
+    }()
 
     func windowDidEndLiveResize(_ notification: Notification) {
         userSized = true
+        textHeight.isActive = false
     }
 
     private func fitSoon() {
@@ -1061,22 +1071,25 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     }
 
     private func fitHeight() {
-        guard isOpen, !userSized, let w = window, w.inLiveResize == false, let lm = textView.layoutManager, let tc = textView.textContainer else { return }
-        w.contentView?.layoutSubtreeIfNeeded()
+        guard isOpen, let w = window, !w.inLiveResize, let lm = textView.layoutManager, let tc = textView.textContainer else { return }
+        if userSized {
+            textHeight.isActive = false
+            return
+        }
+        let area = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
+        w.contentMaxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: (area.height * 0.8).rounded())
         lm.ensureLayout(for: tc)
         let text = ceil(lm.usedRect(for: tc).height + textView.textContainerInset.height * 2)
-        let delta = max(Self.textMin, text) - scroll.frame.height
-        guard abs(delta) > 1 else { return }
-        let area = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
-        let lowest = w.frameRect(forContentRect: NSRect(origin: .zero, size: w.contentMinSize)).height
+        let want = max(Self.textMin, text)
+        if abs(textHeight.constant - want) > 0.5 { textHeight.constant = want }
+        textHeight.isActive = true
+        w.layoutIfNeeded()
+        // Grown past the screen's bottom: up as far as it needs.
         var f = w.frame
-        let h = min(area.height * 0.8, max(lowest, f.height + delta)).rounded()
-        guard abs(h - f.height) > 1 else { return }
-        // The top stays put; the window grows down, and up only at the screen's bottom.
-        f.origin.y += f.height - h
-        f.size.height = h
-        if f.minY < area.minY { f.origin.y = area.minY }
-        w.setFrame(f, display: true)
+        if f.minY < area.minY {
+            f.origin.y = min(area.minY, area.maxY - f.height)
+            w.setFrameOrigin(f.origin)
+        }
     }
 
     @objc private func replyPressed() {
@@ -1565,6 +1578,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         closeDecided = false
         busy = false
         userSized = false
+        textHeight.isActive = false
         if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
     }
 

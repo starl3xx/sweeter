@@ -996,12 +996,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         thread.remove(at: i)
         if thread.isEmpty { thread = [ComposePost()] }
         // A quote's own post takes no poll: one that has moved up loses it, and says so.
-        if kind == "quote", thread[0].poll != nil {
-            thread[0].poll = nil
-            say("A quote post can’t have a poll, so the poll of the post that is now first was removed.")
-        }
+        let lost = kind == "quote" && thread[0].poll != nil
+        if lost { thread[0].poll = nil }
         load(i < at || (i == at && i > 0) ? at - 1 : at)
-        sync()
+        if lost { say("A quote post can’t have a poll, so the poll of the post that is now first was removed.") } else { sync() }
     }
 
     @objc private func post() {
@@ -1208,15 +1206,16 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     // MARK: GIFs
 
-    /// A note of the window's own: shown now, and sent with the next edit
-    /// to the page, which keeps it in its status line until the post changes.
+    /// A note of the window's own: shown now, and sent at once with the
+    /// draft as it is, so the page keeps it in its status line until the
+    /// draft changes from that.
     private var pendingNote: String?
     private func say(_ s: String) {
         statusLabel.stringValue = s
         statusLabel.textColor = .systemRed
         statusLabel.toolTip = s
         pendingNote = s
-        scheduleSync()
+        sync()
     }
 
     private func chooseGif(from item: NSToolbarItem) {

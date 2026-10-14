@@ -7217,7 +7217,7 @@
       updateCount();
       // A note of the window's own (“Write this post first.”) stays in the
       // status line until the posts change.
-      const sig = JSON.stringify([c.at, c.thread.map((q) => [q.text, q.files.length, !!q.gif, !!q.poll])]);
+      const sig = JSON.stringify([c.at, c.thread.map((q) => [q.text, q.files.length, !!q.gif, !!q.poll]), c.when || null, cmpReply.value]);
       if (typeof d.note === 'string' && d.note) {
         cmpStatus.textContent = macNote = d.note.slice(0, 300);
         macNoteSig = sig;

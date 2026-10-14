@@ -7153,9 +7153,14 @@
     function macLate(d) {
       if (typeof d.key !== 'string' || !/^(new|reply|quote|edit):/.test(d.key) || typeof d.text !== 'string') return;
       let old = drafts.get(d.key);
-      // A post that wasn't a draft yet becomes one, if it has words.
+      // Emptied, it is no draft, as keepDraft has it: an edit then opens on
+      // the post's own text again.
+      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !(old && ((old.more || []).length || old.poll || old.gif))) {
+        if (drafts.delete(d.key)) storeDrafts();
+        return;
+      }
+      // A post that wasn't a draft yet becomes one.
       if (!old) {
-        if (!d.text.trim()) return;
         old = { text: '', styles: null, reply: 'Everyone', gif: null, poll: null, more: [], files: [] };
         drafts.set(d.key, old);
       }

@@ -176,11 +176,8 @@ img{display:block}
 .col.resizing{user-select:none}
 .col.flash .ch{animation:sweeter-flash 1.3s ease-out}
 @keyframes sweeter-flash{0%{background:color-mix(in srgb,var(--accent) 34%,var(--bg))}100%{background:var(--bg)}}
-/* The column menu “…” shows on hover and keyboard focus. */
-.ch .mini.cmenu{opacity:0;transition:opacity .15s}
-.ch .mini.cmenu:focus-visible{opacity:1}
-@media (hover:none){.ch .mini.cmenu{opacity:1}}
-@media (hover:hover){.ch:hover .mini.cmenu{opacity:1}.rsz:hover::after{opacity:.55}}
+/* The column menu “…” always shows, quiet like the header's other buttons. */
+@media (hover:hover){.rsz:hover::after{opacity:.55}}
 .col.focus .ch{box-shadow:inset 0 -2px 0 var(--accent)}
 .ch{height:var(--chh);flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 6px 0 10px;border-bottom:1px solid var(--div);background:var(--bg);color:var(--t1);font-weight:600;font-size:12px}
 .ch .ct{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

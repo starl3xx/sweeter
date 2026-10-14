@@ -683,8 +683,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             if inner < Self.minWidth {
                 var f = w.frame
                 f.size.width += Self.minWidth - inner
-                // Still on the screen: a window by the right edge grows leftward.
-                if let area = (w.screen ?? NSScreen.main)?.visibleFrame {
+                // Still on its screen (the one most of the saved frame is on; a
+                // hidden window has no screen yet): by the right edge, it grows leftward.
+                let size = { (s: NSScreen) -> CGFloat in
+                    let r = s.frame.intersection(w.frame)
+                    return r.isNull ? 0 : r.width * r.height
+                }
+                let home = NSScreen.screens.filter { size($0) > 0 }.max { size($0) < size($1) } ?? NSScreen.main
+                if let area = home?.visibleFrame {
                     f.origin.x = max(area.minX, min(f.origin.x, area.maxX - f.width))
                 }
                 w.setFrame(f, display: false)

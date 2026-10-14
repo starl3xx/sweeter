@@ -250,6 +250,9 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             save: (f) => { post({ type: 'save', name: String(f.name || 'Sweeter.json'), text: String(f.text || '') }); },
             allowPopup: (kind) => post({ type: 'allowPopup', kind: String(kind || '') }),
             composeFront: () => post({ type: 'composeFront' }),
+            composeShow: (o) => post({ type: 'composeShow', json: JSON.stringify(o || {}) }),
+            composeState: (o) => post({ type: 'composeState', json: JSON.stringify(o || {}) }),
+            composeHide: () => post({ type: 'composeHide' }),
             covered: (on) => post({ type: 'covered', on: !!on }),
             show: () => post({ type: 'show' }),
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
@@ -520,6 +523,18 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         case "composeFront":
             composePanel?.makeKeyAndOrderFront(nil)
             replyHandler(nil, nil)
+        // The Mac compose window (ComposeWindow.swift): the page opens it on
+        // a draft, reports while it posts, and closes it when done.
+        case "composeShow":
+            showWindow()
+            ComposeWindowController.shared.show(json: body["json"] as? String ?? "")
+            replyHandler(nil, nil)
+        case "composeState":
+            if ComposeWindowController.made { ComposeWindowController.shared.update(json: body["json"] as? String ?? "") }
+            replyHandler(nil, nil)
+        case "composeHide":
+            if ComposeWindowController.made { ComposeWindowController.shared.closeFromPage() }
+            replyHandler(nil, nil)
         case "covered":
             xProShown = !(body["on"] as? Bool ?? true)
             placeWebView()
@@ -641,6 +656,16 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     /// JSON reply out (nil when X Pro's page is not open).
     func prefs(_ op: String, _ arg: Any?, done: @escaping (Any?) -> Void) {
         webView.callAsyncJavaScript("return Sweeter.native && Sweeter.native.prefs ? Sweeter.native.prefs(op, arg) : null",
+                                    arguments: ["op": op, "arg": arg ?? NSNull()], in: nil, in: world) { result in
+            done(try? result.get())
+        }
+    }
+
+    /// The Mac compose window's requests (app.js cw): an edit, Post, a close
+    /// that keeps the draft, and the rest; the reply is the page's state of
+    /// the window as JSON, or nil.
+    func composeOp(_ op: String, _ arg: Any?, done: @escaping (Any?) -> Void) {
+        webView.callAsyncJavaScript("return Sweeter.native && Sweeter.native.cw ? Sweeter.native.cw(op, arg) : null",
                                     arguments: ["op": op, "arg": arg ?? NSNull()], in: nil, in: world) { result in
             done(try? result.get())
         }
@@ -899,6 +924,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     /// Pop-out windows draw from the main page: they close when it reloads.
     func closePopouts() {
         for window in popoutWindows { window.close() }
+        if ComposeWindowController.made { ComposeWindowController.shared.closeFromPage() }
     }
 
     /// Closing hides the window, so X Pro keeps refreshing for the Dock badge.

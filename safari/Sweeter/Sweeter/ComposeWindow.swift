@@ -687,15 +687,16 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         column.spacing = 10
         column.setCustomSpacing(6, after: nameRow)
         column.translatesAutoresizingMaskIntoConstraints = false
-        // Its gaps stay their size (above the window keeping its size, 500,
-        // like the body's own height, 505), so a fit shrinks the window
-        // rather than spreading the parts down it; a window made taller by
-        // hand gives the room to the body, which hugs loosely.
-        column.setHuggingPriority(NSLayoutConstraint.Priority(505), for: .vertical)
+        // The column fills its height with its gaps at their size: the body
+        // (the loosest part) takes what is left. While fitting, the body asks
+        // for its own height (505, above the window keeping its size), so
+        // the window shrinks to fit; a window sized by hand gives the body
+        // the room and keeps that size.
+        column.distribution = .fill
         for v in [nameRow, noteLabel, quoteBox, scroll, statusRow] as [NSView] {
             v.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         }
-        scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        scroll.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .vertical)
         scroll.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
         content.addSubview(avatarView)

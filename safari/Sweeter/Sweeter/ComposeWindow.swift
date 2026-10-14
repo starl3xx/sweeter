@@ -131,19 +131,15 @@ final class ComposePost {
 
 /// Another post of the thread, above or below the open one: its number,
 /// the start of its text, what it carries, and a remove button.
-final class ComposeThreadRow: NSView, NSGestureRecognizerDelegate {
+final class ComposeThreadRow: ComposeCapsule, NSGestureRecognizerDelegate {
     var onOpen: (() -> Void)?
     var onRemove: (() -> Void)?
     private var removeButton: NSButton?
 
     init(number: Int, post: ComposePost) {
         super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = 6
-        layer?.backgroundColor = NSColor.quaternaryLabelColor.withAlphaComponent(0.12).cgColor
-        let n = NSTextField(labelWithString: String(number))
-        n.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
-        n.textColor = .secondaryLabelColor
+        radius = 10
+        let n = ComposeDisc(String(number), tone: .sky, side: 20)
         let words = post.text.string.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         let t = NSTextField(labelWithString: words.isEmpty ? "Empty post" : String(words.prefix(200)))
         t.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -163,7 +159,7 @@ final class ComposeThreadRow: NSView, NSGestureRecognizerDelegate {
         removeButton = x
         let row = NSStackView(views: [n, t, c, x])
         row.spacing = 8
-        row.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 4, right: 6)
+        row.edgeInsets = NSEdgeInsets(top: 5, left: 6, bottom: 5, right: 8)
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
         NSLayoutConstraint.activate([
@@ -339,7 +335,7 @@ enum ComposeStyle {
 
 final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSTextViewDelegate {
     static let shared = ComposeWindowController()
-    static let baseFont = NSFont.systemFont(ofSize: 14)
+    static let baseFont = NSFont.systemFont(ofSize: 15)
     /// The window exists (a page reload or report may need to reach it).
     private(set) static var made = false
 
@@ -375,7 +371,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private let prevRows = NSStackView()
     private let nextRows = NSStackView()
     private let pollView = ComposePollView()
-    private let whenLabel = NSTextField(labelWithString: "")
+    private let whenPill = ComposePill("", tone: .pink, symbol: "calendar")
     private let whenRow = NSStackView()
     private let mediaRow = NSStackView()
     private let mediaScroll = NSScrollView()
@@ -390,9 +386,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private let cardImage = NSImageView()
     private let cardHost = NSTextField(labelWithString: "")
     private let cardTitle = NSTextField(labelWithString: "")
-    private let replyPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+    /// Who can reply: a sky pill that opens a menu of X Pro's choices.
+    private let replyPill = ComposePill("", tone: .sky, symbol: "globe")
+    private var reply = "Everyone"
+    private var replyOptions: [String] = []
+    private let replyRow = NSStackView()
     private let spinner = NSProgressIndicator()
     private let statusLabel = NSTextField(labelWithString: "")
+    private let countRing = ComposeCountRing()
     private let countLabel = NSTextField(labelWithString: "")
     private let postButton = NSButton(title: "Post", target: nil, action: nil)
 
@@ -424,7 +425,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     // MARK: Layout
 
     private func build() {
-        let content = NSView()
+        let content = ComposeBackdrop()
 
         noteLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         noteLabel.textColor = .secondaryLabelColor
@@ -458,7 +459,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         textView.allowsUndo = true
         textView.isContinuousSpellCheckingEnabled = true
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 2, height: 4)
+        textView.textContainerInset = NSSize(width: 0, height: 4)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
@@ -471,7 +472,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         textView.onFiles = { [weak self] urls, png in self?.add(urls: urls, png: png) }
         textView.acceptPromises()
         mediaRow.orientation = .horizontal
-        mediaRow.spacing = 8
+        mediaRow.spacing = 10
+        // Room for the tiles' soft shadows.
+        mediaRow.edgeInsets = NSEdgeInsets(top: 4, left: 2, bottom: 14, right: 10)
         mediaRow.alignment = .centerY
         mediaRow.translatesAutoresizingMaskIntoConstraints = false
         // Wider than the window: the row scrolls sideways.
@@ -482,10 +485,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         mediaScroll.drawsBackground = false
         mediaScroll.borderType = .noBorder
         mediaScroll.verticalScrollElasticity = .none
-        mediaScroll.heightAnchor.constraint(equalToConstant: ComposeMediaTile.height + 4).isActive = true
+        mediaScroll.heightAnchor.constraint(equalToConstant: ComposeMediaTile.height + 18).isActive = true
         NSLayoutConstraint.activate([
             mediaRow.leadingAnchor.constraint(equalTo: mediaScroll.contentView.leadingAnchor),
-            mediaRow.topAnchor.constraint(equalTo: mediaScroll.contentView.topAnchor, constant: 2),
+            mediaRow.topAnchor.constraint(equalTo: mediaScroll.contentView.topAnchor),
         ])
         scroll.documentView = textView
         scroll.hasVerticalScroller = true
@@ -519,10 +522,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         cardBox.contentView = cardRow
         cardBox.toolTip = "A preview of the page. X makes the card itself when you post."
 
-        replyPopUp.target = self
-        replyPopUp.action = #selector(replyChanged)
-        replyPopUp.controlSize = .small
-        replyPopUp.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        replyPill.trailingSymbol = "chevron.down"
+        replyPill.target = self
+        replyPill.action = #selector(replyPressed)
+        replyPill.toolTip = "Who can reply"
+        replyRow.addArrangedSubview(replyPill)
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isDisplayedWhenStopped = false
@@ -535,8 +539,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         countLabel.textColor = .secondaryLabelColor
         countLabel.alignment = .right
         countLabel.setContentHuggingPriority(.required, for: .horizontal)
-        let bar = NSStackView(views: [replyPopUp, spinner, statusLabel, countLabel])
-        bar.spacing = 8
+        countRing.setContentHuggingPriority(.required, for: .horizontal)
+        let bar = NSStackView(views: [spinner, statusLabel, countRing, countLabel])
+        bar.spacing = 6
         bar.setHuggingPriority(.defaultLow, for: .horizontal)
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
@@ -546,34 +551,34 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             if p == nil { self.pollView.isHidden = true }
             self.sync()
         }
-        let clock = NSImageView(image: NSImage(systemSymbolName: "calendar.badge.clock", accessibilityDescription: "Scheduled") ?? NSImage())
-        clock.contentTintColor = .controlAccentColor
-        whenLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        whenLabel.lineBreakMode = .byTruncatingTail
-        whenLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let change = NSButton(title: "Change…", target: self, action: #selector(changeWhen(_:)))
-        let clearWhen = NSButton(title: "Clear", target: self, action: #selector(clearWhen))
-        for b in [change, clearWhen] {
-            b.controlSize = .small
-            b.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        }
-        for v in [clock, whenLabel, change, clearWhen] as [NSView] { whenRow.addArrangedSubview(v) }
-        whenRow.spacing = 6
+        whenPill.target = self
+        whenPill.action = #selector(changeWhen(_:))
+        whenPill.toolTip = "Change the time"
+        let clearWhen = ComposePill("", tone: .pink, symbol: "xmark", target: self, action: #selector(clearWhen))
+        clearWhen.pillHeight = 22
+        clearWhen.toolTip = "Send now instead"
+        clearWhen.setAccessibilityLabel("Clear the time")
+        for v in [whenPill, clearWhen] as [NSView] { whenRow.addArrangedSubview(v) }
+        whenRow.spacing = 4
 
         for rows in [prevRows, nextRows] {
             rows.orientation = .vertical
             rows.alignment = .leading
             rows.spacing = 4
         }
-        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, nextRows, cardBox, whenRow, bar])
+        let rule = NSBox()
+        rule.boxType = .separator
+        let stack = NSStackView(views: [replyRow, noteLabel, contextLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, nextRows, cardBox, whenRow, rule, bar])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 8
-        stack.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 10, right: 16)
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 20, bottom: 10, right: 20)
+        stack.setCustomSpacing(6, after: rule)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [noteLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, nextRows, cardBox, whenRow, bar] as [NSView] {
-            v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
+        for v in [noteLabel, quoteBox, prevRows, scroll, mediaScroll, pollView, nextRows, cardBox, bar] as [NSView] {
+            v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
         }
+        rule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
         scroll.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
@@ -587,7 +592,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         window?.contentView = content
 
         postButton.bezelStyle = .push
-        postButton.bezelColor = .controlAccentColor
+        postButton.controlSize = .large
+        postButton.bezelColor = SweeterColor.pinkFill
         postButton.keyEquivalent = "\r"
         postButton.keyEquivalentModifierMask = [.command]
         postButton.target = self
@@ -649,13 +655,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         load(at)
         when = snap.when.flatMap { ComposeWhen(["y": $0.y, "mo": $0.mo, "d": $0.d, "h": $0.h, "mi": $0.mi]) }
         showWhen()
-        replyPopUp.removeAllItems()
-        for o in snap.replyOptions {
-            replyPopUp.addItem(withTitle: o + " can reply")
-            replyPopUp.lastItem?.representedObject = o
-        }
-        if let i = snap.replyOptions.firstIndex(of: snap.reply) { replyPopUp.selectItem(at: i) }
-        replyPopUp.isHidden = snap.replyHidden
+        replyOptions = snap.replyOptions
+        reply = snap.replyOptions.contains(snap.reply) ? snap.reply : snap.replyOptions.first ?? "Everyone"
+        replyPill.title = reply + " can reply"
+        replyRow.isHidden = snap.replyHidden
         rebuildToolbar()
         apply(snap.state)
         isOpen = true
@@ -700,8 +703,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         if busy { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         postButton.isEnabled = !busy
         textView.isEditable = !busy
-        replyPopUp.isEnabled = !busy
+        replyPill.isEnabled = !busy
+        whenRow.arrangedSubviews.forEach { ($0 as? NSControl)?.isEnabled = !busy }
         countLabel.stringValue = s.count
+        countRing.show(s.count, level: s.level)
         countLabel.textColor = s.level == "over" ? .systemRed : s.level == "long" ? .systemOrange : .secondaryLabelColor
         underline(s.links)
         showCard(s.card)
@@ -857,7 +862,23 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         scheduleSync()
     }
 
-    @objc private func replyChanged() {
+    @objc private func replyPressed() {
+        guard !busy else { return }
+        let menu = NSMenu()
+        for o in replyOptions {
+            let m = NSMenuItem(title: o + " can reply", action: #selector(replyPicked(_:)), keyEquivalent: "")
+            m.target = self
+            m.representedObject = o
+            m.state = o == reply ? .on : .off
+            menu.addItem(m)
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: replyPill.isFlipped ? replyPill.bounds.height + 4 : -4), in: replyPill)
+    }
+
+    @objc private func replyPicked(_ sender: NSMenuItem) {
+        guard let o = sender.representedObject as? String else { return }
+        reply = o
+        replyPill.title = o + " can reply"
         sync()
     }
 
@@ -891,7 +912,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             "gif": gif?.dict ?? NSNull(),
             "poll": poll?.dict ?? NSNull(),
             "when": when?.dict ?? NSNull(),
-            "reply": replyPopUp.selectedItem?.representedObject as? String ?? "Everyone",
+            "reply": reply,
         ]
     }
 
@@ -1016,7 +1037,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         busy = true
         postButton.isEnabled = false
         textView.isEditable = false
-        replyPopUp.isEnabled = false
+        replyPill.isEnabled = false
         let all = thread.flatMap(\.media)
         guard !all.isEmpty else { return send(op, d) }
         uploading = true
@@ -1034,7 +1055,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             self.busy = false
             self.postButton.isEnabled = true
             self.textView.isEditable = true
-            self.replyPopUp.isEnabled = true
+            self.replyPill.isEnabled = true
             self.spinner.stopAnimation(nil)
             self.statusLabel.stringValue = problem
             self.statusLabel.textColor = .systemRed
@@ -1188,7 +1209,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     }
 
     private func showWhen() {
-        whenLabel.stringValue = when.map { "Will send on " + $0.label } ?? ""
+        whenPill.title = when.map { "Sends " + $0.label } ?? ""
         whenRow.isHidden = when == nil
     }
 
@@ -1337,7 +1358,15 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private static let postID = NSToolbarItem.Identifier("post")
 
     private func identifiers() -> [NSToolbarItem.Identifier] {
-        let mine = Tool.allCases.filter { tools.contains($0.rawValue) }.map { NSToolbarItem.Identifier($0.rawValue) }
+        // Three groups (add, style, the post's shape), each its own piece of glass.
+        let groups: [[Tool]] = [[.photo, .gif, .emoji], [.bold, .italic], [.poll, .schedule, .thread]]
+        var mine: [NSToolbarItem.Identifier] = []
+        for g in groups {
+            let ids = g.filter { tools.contains($0.rawValue) }.map { NSToolbarItem.Identifier($0.rawValue) }
+            if ids.isEmpty { continue }
+            if !mine.isEmpty { mine.append(.space) }
+            mine += ids
+        }
         return mine + [.flexibleSpace] + (tools.contains("xpro") ? [Self.moreID] : []) + [Self.postID]
     }
 
@@ -1351,7 +1380,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        Tool.allCases.map { NSToolbarItem.Identifier($0.rawValue) } + [.flexibleSpace, Self.moreID, Self.postID]
+        Tool.allCases.map { NSToolbarItem.Identifier($0.rawValue) } + [.space, .flexibleSpace, Self.moreID, Self.postID]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {

@@ -90,13 +90,16 @@ final class ComposeMedia {
 /// VIDEO badge, ALT for a photo's description, and a remove button. A GIF
 /// from X Pro's search shows its still, with no ALT (X Pro gives it its own).
 final class ComposeMediaTile: NSView {
-    static let height: CGFloat = 88
+    static let height: CGFloat = 112
     let media: ComposeMedia?
     var onRemove: (() -> Void)?
     var onAlt: ((NSView) -> Void)?
+    /// The rounded frame that clips the picture; the view itself casts a
+    /// soft shadow, so it doesn't clip.
+    private let frameLayer = CALayer()
     private let picture = CALayer()
     private let remove = NSButton()
-    private let altButton = NSButton()
+    private let altButton = ComposePill("ALT", tone: .dark)
     private let badge = NSTextField(labelWithString: "")
     private var widthConstraint: NSLayoutConstraint?
 
@@ -115,29 +118,30 @@ final class ComposeMediaTile: NSView {
         self.media = media
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 8
-        layer?.masksToBounds = true
-        layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
-        layer?.borderColor = NSColor.separatorColor.cgColor
-        layer?.borderWidth = 1
+        layer?.shadowOpacity = 1
+        layer?.shadowRadius = 8
+        layer?.shadowOffset = NSSize(width: 0, height: -3)
+        frameLayer.cornerRadius = 14
+        frameLayer.masksToBounds = true
+        frameLayer.borderWidth = 0.5
         picture.contentsGravity = .resizeAspectFill
         picture.masksToBounds = true
-        layer?.addSublayer(picture)
+        frameLayer.addSublayer(picture)
+        layer?.addSublayer(frameLayer)
         translatesAutoresizingMaskIntoConstraints = false
         heightAnchor.constraint(equalToConstant: Self.height).isActive = true
         widthConstraint = widthAnchor.constraint(equalToConstant: Self.height)
         widthConstraint?.isActive = true
 
-        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .regular).applying(.init(paletteColors: [.white, NSColor.black.withAlphaComponent(0.6)]))
+        let config = NSImage.SymbolConfiguration(pointSize: 17, weight: .regular).applying(.init(paletteColors: [NSColor(white: 0.22, alpha: 1), NSColor.white.withAlphaComponent(0.94)]))
         remove.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove")?.withSymbolConfiguration(config)
         remove.isBordered = false
         remove.toolTip = "Remove"
         remove.target = self
         remove.action = #selector(removePressed)
 
-        altButton.isBordered = false
-        altButton.wantsLayer = true
-        altButton.layer?.cornerRadius = 4
+        altButton.pillHeight = 20
+        altButton.pillFont = .systemFont(ofSize: 10, weight: .bold)
         altButton.target = self
         altButton.action = #selector(altPressed)
         altButton.isHidden = !alt
@@ -145,7 +149,10 @@ final class ComposeMediaTile: NSView {
         badge.font = .boldSystemFont(ofSize: 9)
         badge.textColor = .white
         badge.drawsBackground = true
-        badge.backgroundColor = NSColor.black.withAlphaComponent(0.6)
+        badge.backgroundColor = NSColor.black.withAlphaComponent(0.72)
+        badge.wantsLayer = true
+        badge.layer?.cornerRadius = 4
+        badge.layer?.masksToBounds = true
         badge.stringValue = text.map { " \($0) " } ?? ""
         badge.isHidden = text == nil
 
@@ -154,13 +161,12 @@ final class ComposeMediaTile: NSView {
             addSubview(v)
         }
         NSLayoutConstraint.activate([
-            remove.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            remove.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
-            altButton.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-            altButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 5),
-            altButton.heightAnchor.constraint(equalToConstant: 18),
-            badge.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
-            badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 5),
+            remove.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            remove.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            altButton.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -7),
+            altButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
+            badge.topAnchor.constraint(equalTo: topAnchor, constant: 7),
+            badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
         ])
         refresh()
     }
@@ -172,15 +178,14 @@ final class ComposeMediaTile: NSView {
         picture.contents = img.layerContents(forContentsScale: window?.backingScaleFactor ?? 2)
         // As wide as the picture's shape allows, within reason.
         let ratio = img.size.height > 0 ? img.size.width / img.size.height : 1
-        widthConstraint?.constant = min(200, max(60, (Self.height * ratio).rounded()))
+        widthConstraint?.constant = min(240, max(76, (Self.height * ratio).rounded()))
     }
 
     /// The description button: “ALT”, with a check once there is one.
     func refresh() {
         let alt = media?.alt ?? ""
         let set = !alt.isEmpty
-        altButton.attributedTitle = NSAttributedString(string: set ? "✓ ALT" : "ALT", attributes: [.font: NSFont.boldSystemFont(ofSize: 10), .foregroundColor: NSColor.white])
-        altButton.layer?.backgroundColor = (set ? NSColor.controlAccentColor : NSColor.black.withAlphaComponent(0.6)).cgColor
+        altButton.trailingSymbol = set ? "checkmark" : nil
         altButton.toolTip = set ? alt : "Add a description"
         altButton.setAccessibilityLabel(set ? "Edit the description" : "Add a description")
     }
@@ -189,8 +194,19 @@ final class ComposeMediaTile: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        picture.frame = bounds
+        frameLayer.frame = bounds
+        picture.frame = frameLayer.bounds
+        layer?.shadowPath = CGPath(roundedRect: bounds, cornerWidth: 14, cornerHeight: 14, transform: nil)
         CATransaction.commit()
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.shadowColor = NSColor(srgbRed: 0.14, green: 0.36, blue: 0.56, alpha: dark ? 0 : 0.16).cgColor
+        frameLayer.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+        frameLayer.borderColor = NSColor.separatorColor.cgColor
     }
 
     @objc private func removePressed() { onRemove?() }

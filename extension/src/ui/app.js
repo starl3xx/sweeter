@@ -568,9 +568,14 @@
       // buttons still work); xpro.js lifts it ('sweeter-acting') only while
       // it types into X Pro, since focus and innerText need it visible. In
       // the Mac app the sidebar is a real translucent macOS sidebar drawn
-      // behind the page, so the page's background goes too.
+      // behind the page, so the page's background goes too. The page never
+      // scrolls under Sweeter: when the last of x.com's dialogs closes (a
+      // sheet or picker Sweeter drove), x.com sets the root to
+      // overflow-y:scroll until X Pro's next route change, which drew a
+      // scrollbar down Sweeter's right edge.
       const pageStyle = document.createElement('style');
       pageStyle.textContent =
+        'html.sweeter-cover{overflow:hidden !important}' +
         'html.sweeter-cover:not(.sweeter-acting) body>*:not(#sweeter-host){visibility:hidden !important}' +
         (native ? 'html.sweeter-cover,html.sweeter-cover body{background:transparent !important}html.sweeter-cover body>*:not(#sweeter-host){opacity:0 !important}' : '');
       (document.head || document.documentElement).appendChild(pageStyle);

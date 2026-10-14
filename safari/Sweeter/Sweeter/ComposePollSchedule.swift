@@ -38,11 +38,25 @@ struct ComposePoll: Equatable {
     /// Inside X Pro's rules (text.js pollLength): 7 days takes no hours or
     /// minutes, and under an hour is 5 minutes at least.
     mutating func fit() {
-        choices = Array(choices.prefix(4)).map { String($0.prefix(Self.choiceMax)) }
+        choices = Array(choices.prefix(4)).map(Self.clip)
         while choices.count < 2 { choices.append("") }
         days = min(7, max(0, days))
         hours = days == 7 ? 0 : min(23, max(0, hours))
         minutes = days == 7 ? 0 : min(59, max(minutesMin, minutes))
+    }
+
+    /// At most 25 UTF-16 units, as the page counts (and X Pro's field),
+    /// never cutting a character in two.
+    static func clip(_ s: String) -> String {
+        var out = ""
+        var n = 0
+        for ch in s {
+            let u = ch.utf16.count
+            if n + u > choiceMax { break }
+            out.append(ch)
+            n += u
+        }
+        return out
     }
 
     var hoursMax: Int { days == 7 ? 0 : 23 }
@@ -150,7 +164,7 @@ final class ComposePollView: NSBox, NSTextFieldDelegate {
 
     func controlTextDidChange(_ obj: Notification) {
         guard let f = obj.object as? NSTextField, f.tag < poll.choices.count else { return }
-        if f.stringValue.count > ComposePoll.choiceMax { f.stringValue = String(f.stringValue.prefix(ComposePoll.choiceMax)) }
+        if f.stringValue.utf16.count > ComposePoll.choiceMax { f.stringValue = ComposePoll.clip(f.stringValue) }
         poll.choices[f.tag] = f.stringValue
         onChange?(poll)
     }

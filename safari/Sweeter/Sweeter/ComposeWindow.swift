@@ -454,7 +454,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 10, right: 16)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [noteLabel, quoteBox, scroll, mediaScroll, pollView, cardBox, bar] as [NSView] {
+        for v in [noteLabel, quoteBox, scroll, mediaScroll, pollView, cardBox, whenRow, bar] as [NSView] {
             v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
         }
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)

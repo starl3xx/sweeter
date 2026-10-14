@@ -7154,7 +7154,8 @@
         reply: cmpReply.value,
         replyOptions: REPLY_OPTIONS,
         replyHidden: c.kind === 'reply' || c.kind === 'edit',
-        tools: c.kind === 'edit' ? ['emoji', 'bold', 'italic'] : ['photo', 'gif', 'emoji', 'bold', 'italic'].concat(c.kind === 'quote' ? [] : ['poll'], ['schedule', 'thread', 'xpro']),
+        // A quote's own post takes no poll, but the posts after it can (the window says so).
+        tools: c.kind === 'edit' ? ['emoji', 'bold', 'italic'] : ['photo', 'gif', 'emoji', 'bold', 'italic', 'poll', 'schedule', 'thread', 'xpro'],
         state: macState(),
       };
     }
@@ -7173,7 +7174,6 @@
         ask: cmpAsk.hidden ? '' : 'alttext',
         card: macCard,
         title: cmpTitle.textContent,
-        at: compose ? compose.at : 0,
       };
     }
     // The window's draft into the sheet: its text, bold and italic (UTF-16
@@ -7369,7 +7369,8 @@
           }
           cmpStatus.textContent = '';
           submitCompose();
-          return reply();
+          // A check that stopped on another post names it, for the window to open.
+          return JSON.stringify(Object.assign(macState(), { at: compose ? compose.at : 0 }));
         case 'close':
           // The window is closing itself.
           macCmp = false;

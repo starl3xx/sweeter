@@ -98,8 +98,8 @@ struct ComposeState: Decodable {
     /// "alttext" while X Pro's image description reminder waits.
     let ask: String
     let card: Card?
-    /// The window's title (“New post · 2 of 3”) and the post a check
-    /// stopped on.
+    /// The window's title (“New post · 2 of 3”), and, in Post's answer
+    /// only, the post a check stopped on.
     let title: String?
     let at: Int?
 }
@@ -1148,7 +1148,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     private func addPoll() {
         if let _ = poll { return pollView.focusFirstChoice() }
-        if kind == "quote" { return say("A quote post can’t have a poll.") }
+        if kind == "quote" && at == 0 { return say("A quote post can’t have a poll.") }
         if !media.isEmpty || gif != nil { return say("A post can have a poll or media, not both.") }
         if when != nil { return say("X Pro can’t schedule a post with a poll. Clear the time first.") }
         poll = .fresh

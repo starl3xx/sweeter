@@ -693,6 +693,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         // the window shrinks to fit; a window sized by hand gives the body
         // the room and keeps that size.
         column.distribution = .fill
+        // Every other part holds its height above the window keeping its
+        // size (500): otherwise a fit leaves the window tall and stretches
+        // a loose part instead (the reply pill's row grew 150 points).
+        for v in [nameRow, replyRow, whenRow, statusRow] { v.setHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical) }
+        for v in [noteLabel, contextLabel, quoteBox] as [NSView] { v.setContentHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical) }
         for v in [nameRow, noteLabel, quoteBox, scroll, statusRow] as [NSView] {
             v.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         }
@@ -1120,6 +1125,12 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         c.priority = NSLayoutConstraint.Priority(505)
         return c
     }()
+
+    // A drag sizes the window by hand from its start: the body takes the room.
+    func windowWillStartLiveResize(_ notification: Notification) {
+        userSized = true
+        textHeight.isActive = false
+    }
 
     func windowDidEndLiveResize(_ notification: Notification) {
         userSized = true

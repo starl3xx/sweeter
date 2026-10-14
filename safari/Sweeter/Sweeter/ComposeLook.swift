@@ -405,9 +405,11 @@ final class ComposeDockButton: NSButton {
     }
 
     private var symbolName = ""
+    private var pointSize: CGFloat = 15
 
-    convenience init(symbol: String, label: String, tip: String) {
+    convenience init(symbol: String, label: String, tip: String, side: CGFloat = 36) {
         self.init(frame: .zero)
+        pointSize = max(8, (side * 0.42).rounded())
         isBordered = false
         setButtonType(.momentaryPushIn)
         title = ""
@@ -416,8 +418,8 @@ final class ComposeDockButton: NSButton {
         setAccessibilityLabel(label)
         translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 36),
-            heightAnchor.constraint(equalToConstant: 36),
+            widthAnchor.constraint(equalToConstant: side),
+            heightAnchor.constraint(equalToConstant: side),
         ])
     }
 
@@ -441,7 +443,7 @@ final class ComposeDockButton: NSButton {
         }
         // Idle tools at 72% of the text color, on ones in full; a third while disabled.
         let color = (on ? SweeterColor.pinkText : SweeterColor.text).withAlphaComponent((on ? 1 : 0.72) * (isEnabled ? 1 : 0.35))
-        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium).applying(.init(paletteColors: [color]))
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium).applying(.init(paletteColors: [color]))
         guard let img = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config) else { return }
         let r = NSRect(x: (bounds.width - img.size.width) / 2, y: (bounds.height - img.size.height) / 2, width: img.size.width, height: img.size.height)
         img.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)

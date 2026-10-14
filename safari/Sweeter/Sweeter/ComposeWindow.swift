@@ -1506,8 +1506,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
 
     private func schedule(from view: NSView) {
         if poll != nil { return say("X Pro can’t schedule a post with a poll. Remove the poll first.") }
-        // X Pro's own first choice: an hour from now.
-        let picker = ComposeSchedulePicker(start: when?.date ?? Date.now.addingTimeInterval(3600), had: when != nil)
+        // X Pro's own first choice, an hour from now, on the next 5 minutes.
+        let hour = (Date.now.timeIntervalSince1970 + 3600) / 300
+        let picker = ComposeSchedulePicker(start: when?.date ?? Date(timeIntervalSince1970: hour.rounded(.up) * 300), had: when != nil)
         let key = self.key
         picker.onSet = { [weak self] w in
             guard let self, self.isOpen, self.key == key, !self.busy else { return }

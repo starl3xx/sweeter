@@ -331,8 +331,9 @@ struct ComposeWhen: Equatable {
 /// The schedule popover: a calendar, a time, what it means, and Set.
 final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
     var onSet: ((ComposeWhen?) -> Void)?
-    private let calendar = NSDatePicker()
-    private let time = NSDatePicker()
+    /// Sweeter's own calendar and time field (ComposeCalendar.swift).
+    private let calendar: ComposeCalendarView
+    private let time: ComposeTimeField
     private let summary = NSTextField(labelWithString: "")
     private let setButton = ComposeAccentButton(title: "Set", target: nil, action: nil)
     private let start: Date
@@ -346,38 +347,29 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
     init(start: Date, had: Bool) {
         self.start = start
         self.had = had
+        let now = Date.now
+        calendar = ComposeCalendarView(selected: start, min: now, max: Calendar.current.date(byAdding: .month, value: 18, to: now) ?? now)
+        let c = Calendar.current.dateComponents([.hour, .minute], from: start)
+        time = ComposeTimeField(hour: c.hour ?? 9, minute: c.minute ?? 0)
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) { nil }
 
     override func loadView() {
-        let now = Date.now
-        let max = Calendar.current.date(byAdding: .month, value: 18, to: now) ?? now
-        calendar.datePickerStyle = .clockAndCalendar
-        calendar.datePickerElements = .yearMonthDay
-        calendar.isBezeled = false
-        calendar.drawsBackground = false
-        // It takes the keyboard when the popover opens; its selected day
-        // shows where the keyboard is, so no ring around the whole month.
-        calendar.focusRingType = .none
-        calendar.minDate = Calendar.current.startOfDay(for: now)
-        calendar.maxDate = max
-        calendar.dateValue = start
-        calendar.target = self
-        calendar.action = #selector(changed)
-        time.datePickerStyle = .textFieldAndStepper
-        time.datePickerElements = .hourMinute
-        time.dateValue = start
-        time.target = self
-        time.action = #selector(changed)
+        calendar.onChange = { [weak self] in self?.changed() }
+        time.onChange = { [weak self] in self?.changed() }
 
         let title = NSTextField(labelWithString: "Schedule")
         title.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
-        let timeLabel = NSTextField(labelWithString: "Time:")
+        title.textColor = SweeterColor.text
+        let timeLabel = NSTextField(labelWithString: "Time")
+        timeLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        timeLabel.textColor = SweeterColor.text
         let timeRow = NSStackView(views: [timeLabel, time])
+        timeRow.spacing = 10
         summary.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        summary.textColor = .secondaryLabelColor
+        summary.textColor = SweeterColor.secondary
         summary.lineBreakMode = .byWordWrapping
         summary.maximumNumberOfLines = 2
 
@@ -416,15 +408,17 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
         popover = p
         // The top edge, in the anchor's own coordinates (a button's are flipped).
         p.show(relativeTo: view.bounds, of: view, preferredEdge: view.isFlipped ? .minY : .maxY)
+        // The keyboard goes to the calendar: arrows move the day, Return sets.
+        self.view.window?.makeKey()
+        self.view.window?.makeFirstResponder(calendar)
     }
 
     /// The calendar's day and the time field's hour and minute.
     private var chosen: Date? {
         let cal = Calendar.current
-        var c = cal.dateComponents([.year, .month, .day], from: calendar.dateValue)
-        let t = cal.dateComponents([.hour, .minute], from: time.dateValue)
-        c.hour = t.hour
-        c.minute = t.minute
+        var c = cal.dateComponents([.year, .month, .day], from: calendar.selected)
+        c.hour = time.hour
+        c.minute = time.minute
         return cal.date(from: c)
     }
 
@@ -442,7 +436,7 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
             setButton.isEnabled = false
         } else {
             summary.stringValue = "Sends " + ComposeWhen(t).label + ", " + zone + "."
-            summary.textColor = .secondaryLabelColor
+            summary.textColor = SweeterColor.secondary
             setButton.isEnabled = true
         }
     }
@@ -464,8 +458,9 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
 
     @objc private func quickPressed(_ sender: NSButton) {
         let t = Date(timeIntervalSince1970: TimeInterval(sender.tag))
-        calendar.dateValue = t
-        time.dateValue = t
+        calendar.select(t)
+        let c = Calendar.current.dateComponents([.hour, .minute], from: t)
+        time.set(hour: c.hour ?? 9, minute: c.minute ?? 0)
         changed()
         set()
     }

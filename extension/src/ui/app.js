@@ -7298,8 +7298,39 @@
       if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
       return c.files.every((f) => f.__mac) && c.thread.every((p) => (p.files || []).every((f) => f.__mac));
     }
+    // The person's picture for the Mac window, as a small data: URL the page
+    // draws from the picture it already shows (the app never loads X's
+    // images itself). '' when it can't (the picture isn't shared with
+    // pages), and the window shows the handle's first letter.
+    let macAvatarUrl = '';
+    let macAvatarNow = null;
+    let macAvatarSent = null;
+    function macAvatar() {
+      const url = viewer && viewer.avatar ? viewer.avatar.replace(/_(normal|bigger|mini|x96)\./, '_200x200.') : '';
+      if (!url || url === macAvatarUrl) return;
+      macAvatarUrl = url;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        if (url !== macAvatarUrl) return;
+        try {
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = 96;
+          cv.getContext('2d').drawImage(img, 0, 0, 96, 96);
+          macAvatarNow = cv.toDataURL('image/png');
+        } catch (e) {
+          macAvatarNow = '';
+        }
+        if (macCmp && native && native.composeState) native.composeState(macState());
+      };
+      img.onerror = () => {
+        if (url === macAvatarUrl) macAvatarNow = '';
+      };
+      img.src = url;
+    }
     function macSnapshot(c) {
       macLook(); // the theme may have changed while the window was closed
+      macAvatar();
       const p = c.id ? findPost(c.id, c.kind === 'edit') : null;
       const quoted = p && (c.kind === 'reply' || c.kind === 'quote');
       return {
@@ -7307,6 +7338,7 @@
         kind: c.kind,
         title: cmpTitle.textContent,
         account: viewer && viewer.handle ? '@' + viewer.handle : '',
+        name: (viewer && viewer.handle && (personOf(viewer.handle) || {}).name) || '',
         placeholder: c.kind === 'reply' ? 'Post your reply' : c.kind === 'quote' ? 'Add a comment' : c.kind === 'edit' ? 'Edit your post' : 'What’s happening?',
         context: quoted ? { label: (c.kind === 'reply' ? 'Replying to @' : 'Quoting @') + p.author.handle, name: p.author.name || '', handle: '@' + p.author.handle, text: p.plain || '' } : null,
         note: c.kind === 'edit' ? cmpCtx.textContent.trim() : '',
@@ -7342,6 +7374,8 @@
         look: macLookNow || macLook(),
         // Saved drafts for the window's Drafts menu (not the open one).
         drafts: draftList(),
+        // The picture, once, when it changes (the window keeps it).
+        avatar: macAvatarNow !== null && macAvatarNow !== macAvatarSent ? (macAvatarSent = macAvatarNow) : undefined,
         status,
         busy: !!posting,
         post: cmpPost.textContent || 'Post',

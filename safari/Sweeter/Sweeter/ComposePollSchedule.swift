@@ -310,6 +310,15 @@ struct ComposeWhen: Equatable {
 
     var dict: [String: Any] { ["y": y, "mo": mo, "d": d, "h": h, "mi": mi] }
 
+    /// “Thu 9:05 PM” for Post's title; the date within the next week is
+    /// clear from the weekday, a later one says it (“Oct 30, 9:05 PM”).
+    var short: String {
+        guard let t = date else { return "" }
+        let soon = t.timeIntervalSinceNow < 6 * 86400
+        let day = soon ? t.formatted(.dateTime.weekday(.abbreviated)) : t.formatted(.dateTime.month(.abbreviated).day()) + ","
+        return day + " " + t.formatted(date: .omitted, time: .shortened)
+    }
+
     /// “Wed, Oct 14 at 9:00 AM”, with the year when it isn't this one.
     var label: String {
         guard let t = date else { return "" }
@@ -396,22 +405,14 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
         changed()
     }
 
-    func show(from item: NSToolbarItem) {
-        let p = NSPopover()
-        p.behavior = .transient
-        p.contentViewController = self
-        p.delegate = self
-        popover = p
-        p.show(relativeTo: item)
-    }
-
     func show(from view: NSView) {
         let p = NSPopover()
         p.behavior = .transient
         p.contentViewController = self
         p.delegate = self
         popover = p
-        p.show(relativeTo: view.bounds, of: view, preferredEdge: .maxY)
+        // The top edge, in the anchor's own coordinates (a button's are flipped).
+        p.show(relativeTo: view.bounds, of: view, preferredEdge: view.isFlipped ? .minY : .maxY)
     }
 
     /// The calendar's day and the time field's hour and minute.

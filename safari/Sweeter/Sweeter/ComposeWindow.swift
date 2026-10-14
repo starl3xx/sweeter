@@ -417,10 +417,26 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     }
 
     static func font(_ f: NSFont?, _ style: ComposeStyle, on: Bool) -> NSFont {
-        let f = f ?? baseFont
-        var traits = f.fontDescriptor.symbolicTraits
+        var traits = (f ?? baseFont).fontDescriptor.symbolicTraits.intersection([.bold, .italic])
         if on { traits.insert(style.trait) } else { traits.remove(style.trait) }
-        return NSFont(descriptor: baseFont.fontDescriptor.withSymbolicTraits(traits), size: baseFont.pointSize) ?? baseFont
+        return face(traits)
+    }
+
+    private static var faces: [UInt32: NSFont] = [:]
+
+    /// The system font at the post's size, bold, italic, both or neither:
+    /// only those two traits, and both kept when a face lacks one.
+    static func face(_ traits: NSFontDescriptor.SymbolicTraits) -> NSFont {
+        let t = traits.intersection([.bold, .italic])
+        if let f = faces[t.rawValue] { return f }
+        var f = NSFont(descriptor: baseFont.fontDescriptor.withSymbolicTraits(t), size: baseFont.pointSize) ?? baseFont
+        if !f.fontDescriptor.symbolicTraits.isSuperset(of: t) {
+            f = baseFont
+            if t.contains(.bold) { f = NSFontManager.shared.convert(f, toHaveTrait: .boldFontMask) }
+            if t.contains(.italic) { f = NSFontManager.shared.convert(f, toHaveTrait: .italicFontMask) }
+        }
+        faces[t.rawValue] = f
+        return f
     }
 
     /// ⌘B, ⌘I and the toolbar: the selection becomes bold (italic) unless
@@ -477,8 +493,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         guard odd else { return }
         storage.beginEditing()
         storage.enumerateAttribute(.font, in: all) { v, r, _ in
-            let t = ((v as? NSFont) ?? Self.baseFont).fontDescriptor.symbolicTraits.intersection([.bold, .italic])
-            let f = NSFont(descriptor: Self.baseFont.fontDescriptor.withSymbolicTraits(t), size: Self.baseFont.pointSize) ?? Self.baseFont
+            let f = Self.face(((v as? NSFont) ?? Self.baseFont).fontDescriptor.symbolicTraits)
             storage.setAttributes([.font: f, .foregroundColor: NSColor.textColor], range: r)
         }
         storage.endEditing()

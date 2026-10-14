@@ -7133,6 +7133,7 @@
     // another draft's (the window moved on).
     function macSync(d) {
       const c = compose;
+      if (d && c && d.key !== draftKey(c)) macLate(d);
       if (!c || !macCmp || !d || d.key !== draftKey(c)) return false;
       const text = String(d.text || '');
       const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
@@ -7145,6 +7146,24 @@
       }
       updateCount();
       return true;
+    }
+    // The last edit of a draft the window has just left (another post
+    // opened before its pause ended): it goes into that draft, which was
+    // saved from the sheet a moment before.
+    function macLate(d) {
+      if (typeof d.key !== 'string' || !/^(new|reply|quote|edit):/.test(d.key) || typeof d.text !== 'string') return;
+      let old = drafts.get(d.key);
+      // A post that wasn't a draft yet becomes one, if it has words.
+      if (!old) {
+        if (!d.text.trim()) return;
+        old = { text: '', styles: null, reply: 'Everyone', gif: null, poll: null, more: [], files: [] };
+        drafts.set(d.key, old);
+      }
+      const text = d.text;
+      const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
+      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, at: Date.now() });
+      if (REPLY_OPTIONS.includes(d.reply)) old.reply = d.reply;
+      storeDrafts();
     }
     // The window's requests (ViewController composeOp): its reply is the
     // state, as JSON, or null.

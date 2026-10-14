@@ -683,6 +683,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             if inner < Self.minWidth {
                 var f = w.frame
                 f.size.width += Self.minWidth - inner
+                // Still on the screen: a window by the right edge grows leftward.
+                if let area = (w.screen ?? NSScreen.main)?.visibleFrame {
+                    f.origin.x = max(area.minX, min(f.origin.x, area.maxX - f.width))
+                }
                 w.setFrame(f, display: false)
             }
         }

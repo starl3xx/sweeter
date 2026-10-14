@@ -7116,6 +7116,8 @@
     let macCard = null; // the link card the sheet shows
     let macMediaMsg = ''; // what the last add didn't take, while it shows
     let macMediaIds = ''; // the media that add left, until they change
+    let macNote = ''; // the window's own note, while it shows
+    let macNoteSig = ''; // the posts as they were when it came
     const cmpOpen = () => !cmpBack.hidden || macCmp;
     function macFits(c) {
       if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
@@ -7213,6 +7215,16 @@
       }
       renderThread();
       updateCount();
+      // A note of the window's own (“Write this post first.”) stays in the
+      // status line until the posts change.
+      const sig = JSON.stringify([c.at, c.thread.map((q) => [q.text, q.files.length, !!q.gif, !!q.poll])]);
+      if (typeof d.note === 'string' && d.note) {
+        cmpStatus.textContent = macNote = d.note.slice(0, 300);
+        macNoteSig = sig;
+      } else if (macNote && cmpStatus.textContent === macNote && sig !== macNoteSig) {
+        cmpStatus.textContent = '';
+        macNote = '';
+      }
       return true;
     }
     // One post from the window, as the sheet keeps it: text with bold and

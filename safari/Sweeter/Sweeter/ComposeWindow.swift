@@ -694,11 +694,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         // While bytes go to the page, the window stays as the upload set it.
         if uploading { return }
         busy = s.busy
-        if !(s.status.isEmpty && Date.now < noteUntil) {
-            statusLabel.stringValue = s.status
-            statusLabel.textColor = s.invalid ? .systemRed : .secondaryLabelColor
-            statusLabel.toolTip = s.status.isEmpty ? nil : s.status
-        }
+        statusLabel.stringValue = s.status
+        statusLabel.textColor = s.invalid ? .systemRed : .secondaryLabelColor
+        statusLabel.toolTip = s.status.isEmpty ? nil : s.status
         if busy { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         postButton.isEnabled = !busy
         textView.isEditable = !busy
@@ -879,7 +877,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private func draft() -> [String: Any] {
         stash()
         let s = Self.styles(textView.textStorage ?? NSAttributedString())
+        let note = pendingNote ?? ""
+        pendingNote = nil
         return [
+            "note": note,
             "thread": thread.map { Self.dict($0) },
             "at": at,
             "key": key,
@@ -1207,14 +1208,15 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     // MARK: GIFs
 
-    /// A note of the window's own in the status line: it stays a few
-    /// seconds, unless the page has something to say.
-    private var noteUntil = Date.distantPast
+    /// A note of the window's own: shown now, and sent with the next edit
+    /// to the page, which keeps it in its status line until the post changes.
+    private var pendingNote: String?
     private func say(_ s: String) {
         statusLabel.stringValue = s
         statusLabel.textColor = .systemRed
         statusLabel.toolTip = s
-        noteUntil = Date.now.addingTimeInterval(4)
+        pendingNote = s
+        scheduleSync()
     }
 
     private func chooseGif(from item: NSToolbarItem) {

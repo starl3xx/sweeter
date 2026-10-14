@@ -35,7 +35,8 @@ final class ComposeCalendarView: NSView {
         let c = Calendar.current
         minDate = c.startOfDay(for: min)
         maxDate = c.startOfDay(for: max)
-        let day = c.startOfDay(for: selected)
+        // A day already past (a saved time gone by) opens on today.
+        let day = Swift.min(c.startOfDay(for: max), Swift.max(c.startOfDay(for: min), c.startOfDay(for: selected)))
         self.selected = day
         month = c.date(from: c.dateComponents([.year, .month], from: day)) ?? day
         super.init(frame: .zero)
@@ -43,6 +44,8 @@ final class ComposeCalendarView: NSView {
         for (b, sel) in [(prev, #selector(prevMonth)), (next, #selector(nextMonth))] {
             b.target = self
             b.action = sel
+            // The keyboard stays on the days (arrows move them, Return sets).
+            b.refusesFirstResponder = true
             addSubview(b)
         }
         NSLayoutConstraint.activate([
@@ -338,11 +341,24 @@ final class ComposeTimeField: NSView {
         needsDisplay = true
     }
 
+    /// A trackpad's scroll, gathered into steps: one per 12 points, none
+    /// from the coasting after the fingers lift.
+    private var scrolled: CGFloat = 0
+
     override func scrollWheel(with event: NSEvent) {
-        let dy = event.scrollingDeltaY
-        guard abs(dy) >= (event.hasPreciseScrollingDeltas ? 4 : 1) else { return }
+        guard event.momentumPhase.isEmpty else { return }
+        if event.phase == .began { scrolled = 0 }
         if let p = part(at: convert(event.locationInWindow, from: nil)) { part = p }
-        step(part, dy > 0 ? 1 : -1)
+        guard event.hasPreciseScrollingDeltas else {
+            if event.scrollingDeltaY != 0 { step(part, event.scrollingDeltaY > 0 ? 1 : -1) }
+            return
+        }
+        scrolled += event.scrollingDeltaY
+        while abs(scrolled) >= 12 {
+            let n = scrolled > 0 ? 1 : -1
+            scrolled -= CGFloat(n) * 12
+            step(part, n)
+        }
     }
 
     private func step(_ p: Part, _ n: Int) {

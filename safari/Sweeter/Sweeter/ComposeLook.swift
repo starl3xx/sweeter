@@ -251,6 +251,63 @@ final class ComposePill: NSButton {
     }
 }
 
+/// “Add Another Post” under the post: a dashed row where the thread
+/// grows, in the theme's quiet text color, and its accent while pointed at.
+final class ComposeAddRow: NSButton {
+    private var hovering = false {
+        didSet { needsDisplay = true }
+    }
+
+    convenience init(_ title: String) {
+        self.init(frame: .zero)
+        isBordered = false
+        setButtonType(.momentaryPushIn)
+        self.title = title
+        translatesAutoresizingMaskIntoConstraints = false
+        heightAnchor.constraint(equalToConstant: 36).isActive = true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for t in trackingAreas { removeTrackingArea(t) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let lit = (hovering || isHighlighted) && isEnabled
+        let r = bounds.insetBy(dx: 0.75, dy: 0.75)
+        let path = NSBezierPath(roundedRect: r, xRadius: 12, yRadius: 12)
+        if lit {
+            SweeterColor.pinkTint.setFill()
+            path.fill()
+        }
+        let color = lit ? SweeterColor.pinkText : SweeterColor.secondary
+        path.lineWidth = 1.5
+        path.setLineDash([5, 4], count: 2, phase: 0)
+        (lit ? color : color.withAlphaComponent(0.45)).setStroke()
+        path.stroke()
+        let alpha: CGFloat = isEnabled ? 1 : 0.45
+        var x: CGFloat = 14
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold).applying(.init(paletteColors: [color.withAlphaComponent(alpha)]))
+        if let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)?.withSymbolConfiguration(config) {
+            img.draw(in: NSRect(x: x, y: (bounds.height - img.size.height) / 2, width: img.size.width, height: img.size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            x += img.size.width + 8
+        }
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: color.withAlphaComponent(alpha)]
+        let t = (title as NSString).size(withAttributes: attrs)
+        (title as NSString).draw(at: NSPoint(x: x, y: (bounds.height - t.height) / 2), withAttributes: attrs)
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 0.75, dy: 0.75), xRadius: 12, yRadius: 12).fill()
+    }
+}
+
 /// A push button on the theme's solid accent (Post, Set): its title in
 /// the color the theme puts on that accent (dark on Catppuccin's and
 /// Dracula's light ones), dimmed while disabled.

@@ -101,6 +101,8 @@ struct ComposeState: Decodable {
     /// only, the post a check stopped on.
     let title: String?
     let at: Int?
+    /// The theme as Sweeter shows it now (app.js macLook).
+    let look: ComposeTheme?
 }
 
 // MARK: - A post of the window
@@ -428,14 +430,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         let content = ComposeBackdrop()
 
         noteLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        noteLabel.textColor = .secondaryLabelColor
+        noteLabel.textColor = SweeterColor.secondary
 
         contextLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        contextLabel.textColor = .secondaryLabelColor
+        contextLabel.textColor = SweeterColor.secondary
         quoteName.font = .boldSystemFont(ofSize: NSFont.smallSystemFontSize)
         quoteName.lineBreakMode = .byTruncatingTail
         quoteText.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        quoteText.textColor = .secondaryLabelColor
+        quoteText.textColor = SweeterColor.secondary
         quoteText.maximumNumberOfLines = 4
         quoteText.lineBreakMode = .byTruncatingTail
         let quoteStack = NSStackView(views: [quoteName, quoteText])
@@ -453,7 +455,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
         textView.delegate = self
         textView.font = Self.baseFont
-        textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: NSColor.textColor]
+        textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: SweeterColor.text]
         textView.isRichText = true
         textView.importsGraphics = false
         textView.allowsUndo = true
@@ -501,7 +503,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         cardImage.layer?.cornerRadius = 4
         cardImage.layer?.masksToBounds = true
         cardHost.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        cardHost.textColor = .secondaryLabelColor
+        cardHost.textColor = SweeterColor.secondary
         cardTitle.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
         cardTitle.lineBreakMode = .byTruncatingTail
         let cardText = NSStackView(views: [cardHost, cardTitle])
@@ -531,12 +533,12 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         spinner.controlSize = .small
         spinner.isDisplayedWhenStopped = false
         statusLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.textColor = SweeterColor.secondary
         statusLabel.lineBreakMode = .byTruncatingTail
         statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         statusLabel.allowsExpansionToolTips = true
         countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
-        countLabel.textColor = .secondaryLabelColor
+        countLabel.textColor = SweeterColor.secondary
         countLabel.alignment = .right
         countLabel.setContentHuggingPriority(.required, for: .horizontal)
         countRing.setContentHuggingPriority(.required, for: .horizontal)
@@ -688,6 +690,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     }
 
     private func apply(_ s: ComposeState) {
+        if let look = s.look { applyTheme(look) }
         postButton.title = s.post.isEmpty ? "Post" : s.post
         if let t = s.title, !t.isEmpty { window?.title = t }
         if let a = s.at, a != at, a >= 0, a < thread.count, !uploading {
@@ -698,7 +701,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         if uploading { return }
         busy = s.busy
         statusLabel.stringValue = s.status
-        statusLabel.textColor = s.invalid ? .systemRed : .secondaryLabelColor
+        statusLabel.textColor = s.invalid ? .systemRed : SweeterColor.secondary
         statusLabel.toolTip = s.status.isEmpty ? nil : s.status
         if busy { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         postButton.isEnabled = !busy
@@ -707,7 +710,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         whenRow.arrangedSubviews.forEach { ($0 as? NSControl)?.isEnabled = !busy }
         countLabel.stringValue = s.count
         countRing.show(s.count, level: s.level)
-        countLabel.textColor = s.level == "over" ? .systemRed : s.level == "long" ? .systemOrange : .secondaryLabelColor
+        countLabel.textColor = s.level == "over" ? .systemRed : s.level == "long" ? .systemOrange : SweeterColor.secondary
         underline(s.links)
         showCard(s.card)
         if s.ask != asked {
@@ -716,18 +719,43 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         }
     }
 
+    // MARK: The theme
+
+    private var themeShown: ComposeTheme?
+
+    /// Sweeter's Light or Dark (not the Mac's), and the theme's colors: the
+    /// window draws again, and the text takes the new text color.
+    private func applyTheme(_ t: ComposeTheme) {
+        guard t != themeShown, let resolved = SweeterColor.Resolved(t) else { return }
+        themeShown = t
+        SweeterColor.theme = resolved
+        window?.appearance = NSAppearance(named: t.dark ? .darkAqua : .aqua)
+        window?.backgroundColor = resolved.bar
+        func redraw(_ v: NSView) {
+            v.needsDisplay = true
+            v.subviews.forEach(redraw)
+        }
+        if let v = window?.contentView { redraw(v) }
+        if let storage = textView.textStorage, storage.length > 0 {
+            storage.addAttribute(.foregroundColor, value: SweeterColor.text, range: NSRange(location: 0, length: storage.length))
+        }
+        textView.typingAttributes[.foregroundColor] = SweeterColor.text
+        textView.insertionPointColor = SweeterColor.pinkFill
+        postButton.bezelColor = SweeterColor.pinkFill
+    }
+
     // MARK: Text, bold and italic
 
     private func setText(_ text: NSAttributedString) {
         textView.textStorage?.setAttributedString(text)
-        textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: NSColor.textColor]
+        textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: SweeterColor.text]
         textView.undoManager?.removeAllActions()
         textView.needsDisplay = true
     }
 
     /// A post's text with its bold and italic, as the text view keeps it.
     static func styled(_ text: String, bold: [[Int]], italic: [[Int]]) -> NSAttributedString {
-        let s = NSMutableAttributedString(string: text, attributes: [.font: Self.baseFont, .foregroundColor: NSColor.textColor])
+        let s = NSMutableAttributedString(string: text, attributes: [.font: Self.baseFont, .foregroundColor: SweeterColor.text])
         let n = s.length
         for (ranges, style) in [(bold, ComposeStyle.bold), (italic, .italic)] {
             for r in ranges where r.count == 2 {
@@ -818,7 +846,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         storage.beginEditing()
         storage.enumerateAttribute(.font, in: all) { v, r, _ in
             let f = Self.face(((v as? NSFont) ?? Self.baseFont).fontDescriptor.symbolicTraits)
-            storage.setAttributes([.font: f, .foregroundColor: NSColor.textColor], range: r)
+            storage.setAttributes([.font: f, .foregroundColor: SweeterColor.text], range: r)
         }
         storage.endEditing()
     }
@@ -833,7 +861,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             guard b > a else { continue }
             let r = NSRange(location: a, length: b - a)
             lm.addTemporaryAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, forCharacterRange: r)
-            lm.addTemporaryAttribute(.foregroundColor, value: NSColor.linkColor, forCharacterRange: r)
+            lm.addTemporaryAttribute(.foregroundColor, value: SweeterColor.link, forCharacterRange: r)
         }
     }
 
@@ -1045,7 +1073,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         let run = uploadRun
         spinner.startAnimation(nil)
         statusLabel.stringValue = all.contains { $0.type.hasPrefix("video/") } ? "Preparing the video…" : "Preparing the media…"
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.textColor = SweeterColor.secondary
         let key = self.key
         upload(all, run: run) { [weak self] problem in
             guard let self, self.uploadRun == run else { return }

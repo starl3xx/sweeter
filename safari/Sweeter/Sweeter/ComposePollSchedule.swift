@@ -146,8 +146,15 @@ final class ComposePollView: NSView, NSTextFieldDelegate {
 
     required init?(coder: NSCoder) { nil }
 
+    /// Another poll (a new one, or another post's): Custom closes unless
+    /// its length needs it.
     func show(_ p: ComposePoll) {
+        custom = false
         poll = p
+        rebuild()
+    }
+
+    private func rebuild() {
         for v in choiceStack.arrangedSubviews {
             choiceStack.removeArrangedSubview(v)
             v.removeFromSuperview()
@@ -230,7 +237,7 @@ final class ComposePollView: NSView, NSTextFieldDelegate {
     @objc private func addChoice() {
         guard poll.choices.count < 4 else { return }
         poll.choices.append("")
-        show(poll)
+        rebuild()
         window?.makeFirstResponder(fields.last)
         onChange?(poll)
     }

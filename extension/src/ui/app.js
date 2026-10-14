@@ -826,6 +826,8 @@
     const holds = new Set();
 
     let lastCovered = true; // the app starts with X Pro covered
+    // The Mac compose window hears of a new theme (set by its code below).
+    let onLook = null;
     function applySettings() {
       app.dataset.skin = settings.skin;
       // A palette theme (styles.js PALETTES), or Classic: no attribute.
@@ -865,6 +867,7 @@
       if (native && native.covered && covered !== lastCovered) native.covered(covered);
       lastCovered = covered;
       if (native) reportState();
+      if (onLook) onLook();
     }
 
     // Equal widths: no column keeps a width of its own, and every column
@@ -7113,6 +7116,31 @@
     // X Pro's questions run as they do for the web window, and the window
     // hears what the sheet would show (macState).
     let macCmp = false; // the Mac window shows the open post
+    // The Mac window's colors: the theme as Sweeter shows it now (Light or
+    // Dark, the accent, contrast and pure black), resolved to rgb by a
+    // hidden probe inside the app, where the theme's tokens live.
+    let lookProbe = null;
+    let macLookNow = null;
+    function macLook() {
+      if (!lookProbe) {
+        lookProbe = document.createElement('i');
+        lookProbe.hidden = true;
+        app.appendChild(lookProbe);
+      }
+      const read = (v) => {
+        lookProbe.style.color = 'var(--' + v + ')';
+        return getComputedStyle(lookProbe).color;
+      };
+      const dark = settings.skin === 'dark' || (settings.skin === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      macLookNow = { dark, bg: read('bg'), bar: read('sub'), t1: read('t1'), t3: read('t3'), line: read('div'), accent: read('accent'), solid: read('accent-solid'), onAccent: read('on-accent') };
+      return macLookNow;
+    }
+    onLook = () => {
+      const was = JSON.stringify(macLookNow);
+      if (!macCmp || !native || !native.composeState || JSON.stringify(macLook()) === was) return;
+      native.composeState(macState());
+    };
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => onLook());
     let macCard = null; // the link card the sheet shows
     let macMediaMsg = ''; // what the last add didn't take, while it shows
     let macMediaIds = ''; // the media that add left, until they change
@@ -7124,6 +7152,7 @@
       return c.files.every((f) => f.__mac) && c.thread.every((p) => (p.files || []).every((f) => f.__mac));
     }
     function macSnapshot(c) {
+      macLook(); // the theme may have changed while the window was closed
       const p = c.id ? findPost(c.id, c.kind === 'edit') : null;
       const quoted = p && (c.kind === 'reply' || c.kind === 'quote');
       return {
@@ -7163,6 +7192,7 @@
     function macState() {
       const status = cmpStatus.textContent || '';
       return {
+        look: macLookNow || macLook(),
         status,
         busy: !!posting,
         post: cmpPost.textContent || 'Post',

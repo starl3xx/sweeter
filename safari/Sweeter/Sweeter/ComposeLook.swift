@@ -3,49 +3,122 @@
 //  Sweeter
 //
 //  Sweeter's own look inside the Mac compose window: the window and its
-//  toolbar stay the Mac's, and what sits in the box takes the icon's
-//  colors (the sky and the bird's pink, as in the About window) and
+//  toolbar stay the Mac's, and what sits in the box takes the theme's
+//  colors (in Sweeter's theme, the icon's sky and the bird's pink) and
 //  rounder shapes: pills, chips, lettered circles and a counter ring.
 //
 
 import Cocoa
 
-/// The icon's colors, for light and dark.
+/// The theme as the page shows it (app.js macLook): Light or Dark, and
+/// its colors as CSS computes them (rgb(), rgba() or color(srgb …)).
+struct ComposeTheme: Decodable, Equatable {
+    let dark: Bool
+    let bg: String
+    let bar: String
+    let t1: String
+    let t3: String
+    let line: String
+    let accent: String
+    let solid: String
+    let onAccent: String
+}
+
+/// The window's colors: the theme's own once the page sends it (its
+/// background, text and lines, its accent for the soft pills and its solid
+/// accent for Post and the chosen chips), and Sweeter's sky and pink until
+/// then. Each is read when it is drawn, so a new theme needs only a redraw.
 enum SweeterColor {
-    private static func dynamic(_ light: NSColor, _ dark: NSColor) -> NSColor {
-        NSColor(name: nil) { a in a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light }
+    struct Resolved {
+        let dark: Bool
+        let bg, bar, t1, t3, line, accent, solid, onAccent: NSColor
+
+        init?(_ t: ComposeTheme) {
+            guard let bg = SweeterColor.css(t.bg), let bar = SweeterColor.css(t.bar), let t1 = SweeterColor.css(t.t1), let t3 = SweeterColor.css(t.t3),
+                  let line = SweeterColor.css(t.line), let accent = SweeterColor.css(t.accent), let solid = SweeterColor.css(t.solid), let onAccent = SweeterColor.css(t.onAccent) else { return nil }
+            dark = t.dark
+            self.bg = bg
+            self.bar = bar
+            self.t1 = t1
+            self.t3 = t3
+            self.line = line
+            self.accent = accent
+            self.solid = solid
+            self.onAccent = onAccent
+        }
+    }
+
+    /// The page's theme; nil until it sends one.
+    static var theme: Resolved?
+
+    /// A CSS color as WebKit computes it.
+    static func css(_ value: String) -> NSColor? {
+        let s = value.trimmingCharacters(in: .whitespaces).lowercased()
+        guard let open = s.firstIndex(of: "("), s.hasSuffix(")") else { return nil }
+        let fn = String(s[..<open])
+        let inner = s[s.index(after: open) ..< s.index(before: s.endIndex)]
+        let parts = inner.replacingOccurrences(of: ",", with: " ").replacingOccurrences(of: "/", with: " ").split(separator: " ").map(String.init)
+        if fn == "rgb" || fn == "rgba" {
+            let n = parts.compactMap(Double.init)
+            guard n.count >= 3 else { return nil }
+            return NSColor(srgbRed: n[0] / 255, green: n[1] / 255, blue: n[2] / 255, alpha: n.count > 3 ? n[3] : 1)
+        }
+        if fn == "color", parts.first == "srgb" {
+            let n = parts.dropFirst().compactMap(Double.init)
+            guard n.count >= 3 else { return nil }
+            return NSColor(srgbRed: n[0], green: n[1], blue: n[2], alpha: n.count > 3 ? n[3] : 1)
+        }
+        return nil
     }
 
     private static func hex(_ v: UInt32, _ alpha: CGFloat = 1) -> NSColor {
         NSColor(srgbRed: CGFloat(v >> 16 & 0xFF) / 255, green: CGFloat(v >> 8 & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: alpha)
     }
 
-    /// The bird's pink as a fill under white text (Post, a chosen chip).
-    static let pinkFill = dynamic(hex(0xC2_3A72), hex(0xD1_4A82))
-    /// Pink text and symbols, and their soft background.
-    static let pinkText = dynamic(hex(0xB8_336A), hex(0xFF_8FB5))
-    static let pinkTint = dynamic(hex(0xEE_5A8E, 0.12), hex(0xEE_5A8E, 0.22))
-    /// The ring's pink.
-    static let pink = hex(0xEE_5A8E)
-    /// The icon's sky: soft background and the text on it.
-    static let skyTint = dynamic(hex(0x7E_C0FA, 0.22), hex(0x7E_C0FA, 0.20))
-    static let skyText = dynamic(hex(0x24_5C8F), hex(0x9F_D0FB))
+    /// The theme's color, or Sweeter's own for light and dark.
+    private static func pick(_ themed: @escaping (Resolved) -> NSColor, _ light: NSColor, _ dark: NSColor) -> NSColor {
+        NSColor(name: nil) { a in
+            if let t = theme { return themed(t) }
+            return a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        }
+    }
+
+    /// A color moved toward the text color, so it reads on a soft tint.
+    private static func toward(_ c: NSColor, _ f: CGFloat, _ t: Resolved) -> NSColor {
+        (c.usingColorSpace(.sRGB) ?? c).blended(withFraction: f, of: t.t1.usingColorSpace(.sRGB) ?? t.t1) ?? c
+    }
+
+    /// The box, the text in it, quieter text, and hairlines.
+    static var paper: NSColor { pick({ $0.bg }, hex(0xFF_FFFF), hex(0x1E_1E1E)) }
+    static var text: NSColor { pick({ $0.t1 }, hex(0x00_0000), hex(0xFF_FFFF)) }
+    static var secondary: NSColor { pick({ $0.t3 }, hex(0x6E_6E73), hex(0x98_989D)) }
+    static var line: NSColor { pick({ $0.line }, NSColor.black.withAlphaComponent(0.14), NSColor.white.withAlphaComponent(0.16)) }
+    static var link: NSColor { pick({ $0.accent }, hex(0x0A_66D8), hex(0x4D_A3FF)) }
+    /// The solid accent (the bird's pink in Sweeter's theme): Post and a
+    /// chosen chip, the text on it, the ring.
+    static var pinkFill: NSColor { pick({ $0.solid }, hex(0xC2_3A72), hex(0xD1_4A82)) }
+    static var onPink: NSColor { pick({ $0.onAccent }, .white, .white) }
+    static var pink: NSColor { pick({ $0.solid }, hex(0xEE_5A8E), hex(0xEE_5A8E)) }
+    /// A soft pill in the solid accent: its text and background.
+    static var pinkText: NSColor { pick({ toward($0.solid, 0.3, $0) }, hex(0xB8_336A), hex(0xFF_8FB5)) }
+    static var pinkTint: NSColor { pick({ $0.solid.withAlphaComponent($0.dark ? 0.22 : 0.12) }, hex(0xEE_5A8E, 0.12), hex(0xEE_5A8E, 0.22)) }
+    /// A soft pill in the accent (the icon's sky in Sweeter's theme).
+    static var skyTint: NSColor { pick({ $0.accent.withAlphaComponent($0.dark ? 0.20 : 0.16) }, hex(0x7E_C0FA, 0.22), hex(0x7E_C0FA, 0.20)) }
+    static var skyText: NSColor { pick({ toward($0.accent, 0.3, $0) }, hex(0x24_5C8F), hex(0x9F_D0FB)) }
     /// A lettered circle's colors.
-    static let discSky = dynamic(hex(0xD6_EBFE), hex(0x7E_C0FA, 0.28))
-    static let discSkyText = dynamic(hex(0x1F_4F7A), hex(0xCF_E7FD))
-    static let discPink = dynamic(hex(0xFD_E0EA), hex(0xEE_5A8E, 0.28))
-    static let discPinkText = dynamic(hex(0x8A_1F4B), hex(0xFF_D0E0))
-    /// A chip or a field's hairline.
-    static let line = dynamic(NSColor.black.withAlphaComponent(0.14), NSColor.white.withAlphaComponent(0.16))
+    static var discSky: NSColor { pick({ $0.accent.withAlphaComponent($0.dark ? 0.28 : 0.20) }, hex(0xD6_EBFE), hex(0x7E_C0FA, 0.28)) }
+    static var discSkyText: NSColor { pick({ toward($0.accent, 0.45, $0) }, hex(0x1F_4F7A), hex(0xCF_E7FD)) }
+    static var discPink: NSColor { pick({ $0.solid.withAlphaComponent($0.dark ? 0.28 : 0.16) }, hex(0xFD_E0EA), hex(0xEE_5A8E, 0.28)) }
+    static var discPinkText: NSColor { pick({ toward($0.solid, 0.45, $0) }, hex(0x8A_1F4B), hex(0xFF_D0E0)) }
 }
 
-/// The box's own background: the text background (white, or the dark
-/// equivalent), as a sheet of paper in the window.
+/// The box's own background: the theme's, as a sheet of paper in the
+/// window.
 final class ComposeBackdrop: NSView {
     override var wantsUpdateLayer: Bool { true }
 
     override func updateLayer() {
-        layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+        layer?.backgroundColor = SweeterColor.paper.cgColor
     }
 }
 
@@ -116,8 +189,8 @@ final class ComposePill: NSButton {
         switch tone {
         case .sky: return (SweeterColor.skyTint, SweeterColor.skyText, nil)
         case .pink: return (SweeterColor.pinkTint, SweeterColor.pinkText, nil)
-        case .chip: return (.controlBackgroundColor, .labelColor, SweeterColor.line)
-        case .chipOn: return (SweeterColor.pinkFill, .white, nil)
+        case .chip: return (SweeterColor.paper, SweeterColor.text, SweeterColor.line)
+        case .chipOn: return (SweeterColor.pinkFill, SweeterColor.onPink, nil)
         case .danger: return (NSColor.systemRed.withAlphaComponent(0.10), .systemRed, nil)
         case .dark: return (NSColor.black.withAlphaComponent(0.72), .white, nil)
         }
@@ -241,7 +314,7 @@ class ComposeCapsule: NSView {
     override func updateLayer() {
         guard let layer else { return }
         layer.cornerRadius = radius
-        layer.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        layer.backgroundColor = SweeterColor.paper.cgColor
         layer.borderColor = (focused ? SweeterColor.pinkText : SweeterColor.line).cgColor
         layer.borderWidth = focused ? 1.5 : 1
         layer.shadowColor = NSColor.black.withAlphaComponent(effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? 0 : 0.05).cgColor

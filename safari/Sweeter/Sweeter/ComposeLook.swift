@@ -319,6 +319,136 @@ final class ComposeAddRow: NSButton {
     }
 }
 
+/// The person's picture (the page sends a small copy; Sweeter never loads
+/// X's images itself), or the first letter of the handle, in a white ring
+/// with a soft shadow of the solid accent.
+final class ComposeAvatar: NSView {
+    private let picture = CALayer()
+    private let letter = NSTextField(labelWithString: "")
+    private var image: NSImage?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.shadowOpacity = 1
+        layer?.shadowRadius = 9
+        layer?.shadowOffset = NSSize(width: 0, height: -3)
+        picture.contentsGravity = .resizeAspectFill
+        picture.masksToBounds = true
+        layer?.addSublayer(picture)
+        letter.font = .systemFont(ofSize: 18, weight: .semibold)
+        letter.alignment = .center
+        letter.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(letter)
+        translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 44),
+            heightAnchor.constraint(equalToConstant: 44),
+            letter.centerXAnchor.constraint(equalTo: centerXAnchor),
+            letter.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        setAccessibilityElement(false)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    /// A data: URL of the picture, or nothing (the letter shows).
+    func show(dataURL: String?, handle: String) {
+        letter.stringValue = String(handle.drop { $0 == "@" }.prefix(1)).uppercased()
+        if let s = dataURL, let comma = s.firstIndex(of: ","), s.hasPrefix("data:image/"), let data = Data(base64Encoded: String(s[s.index(after: comma)...])), let img = NSImage(data: data) {
+            image = img
+        } else if dataURL != nil {
+            image = nil
+        }
+        picture.contents = image?.layerContents(forContentsScale: window?.backingScaleFactor ?? 2)
+        letter.isHidden = image != nil
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.frame = bounds.insetBy(dx: 2.5, dy: 2.5)
+        picture.cornerRadius = picture.frame.width / 2
+        layer?.cornerRadius = bounds.width / 2
+        layer?.shadowPath = CGPath(ellipseIn: bounds, transform: nil)
+        CATransaction.commit()
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.backgroundColor = SweeterColor.paper.cgColor
+        layer?.shadowColor = SweeterColor.pink.withAlphaComponent(dark ? 0.35 : 0.28).cgColor
+        picture.backgroundColor = SweeterColor.discSky.cgColor
+        letter.textColor = SweeterColor.discSkyText
+    }
+}
+
+/// A round tool in the floating bar: its symbol in the text color, a soft
+/// circle while pointed at, and the solid accent's tint while on (a poll,
+/// a send time).
+final class ComposeDockButton: NSButton {
+    var on = false {
+        didSet { needsDisplay = true }
+    }
+
+    private var hovering = false {
+        didSet { needsDisplay = true }
+    }
+
+    private var symbolName = ""
+
+    convenience init(symbol: String, label: String, tip: String) {
+        self.init(frame: .zero)
+        isBordered = false
+        setButtonType(.momentaryPushIn)
+        title = ""
+        symbolName = symbol
+        toolTip = tip
+        setAccessibilityLabel(label)
+        translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 36),
+            heightAnchor.constraint(equalToConstant: 36),
+        ])
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for t in trackingAreas { removeTrackingArea(t) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1))
+        if on {
+            SweeterColor.pinkTint.setFill()
+            circle.fill()
+        } else if (hovering || isHighlighted) && isEnabled {
+            SweeterColor.text.withAlphaComponent(0.07).setFill()
+            circle.fill()
+        }
+        // Idle tools at 72% of the text color, on ones in full; a third while disabled.
+        let color = (on ? SweeterColor.pinkText : SweeterColor.text).withAlphaComponent((on ? 1 : 0.72) * (isEnabled ? 1 : 0.35))
+        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium).applying(.init(paletteColors: [color]))
+        guard let img = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config) else { return }
+        let r = NSRect(x: (bounds.width - img.size.width) / 2, y: (bounds.height - img.size.height) / 2, width: img.size.width, height: img.size.height)
+        img.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func drawFocusRingMask() {
+        NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1)).fill()
+    }
+}
+
 /// A push button on the theme's solid accent (Post, Set): its title in
 /// the color the theme puts on that accent (dark on Catppuccin's and
 /// Dracula's light ones), dimmed while disabled.
@@ -340,6 +470,7 @@ final class ComposeAccentButton: NSButton {
         bezelColor = SweeterColor.pinkFill
         let p = NSMutableParagraphStyle()
         p.alignment = .center
+        p.lineBreakMode = .byTruncatingTail
         attributedTitle = NSAttributedString(string: title, attributes: [
             .font: font ?? .systemFont(ofSize: NSFont.systemFontSize),
             .foregroundColor: SweeterColor.onPink.withAlphaComponent(isEnabled ? 1 : 0.55),
@@ -401,12 +532,15 @@ class ComposeCapsule: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// How far it floats: its shadow's strength and size.
+    var lift: (alpha: CGFloat, blur: CGFloat, drop: CGFloat) = (0.05, 3, 1) {
+        didSet { needsDisplay = true }
+    }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.shadowOpacity = 1
-        layer?.shadowRadius = 3
-        layer?.shadowOffset = NSSize(width: 0, height: -1)
     }
 
     required init?(coder: NSCoder) { nil }
@@ -419,7 +553,10 @@ class ComposeCapsule: NSView {
         layer.backgroundColor = SweeterColor.paper.cgColor
         layer.borderColor = (focused ? SweeterColor.pinkText : SweeterColor.line).cgColor
         layer.borderWidth = focused ? 1.5 : 1
-        layer.shadowColor = NSColor.black.withAlphaComponent(effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? 0 : 0.05).cgColor
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer.shadowColor = NSColor(srgbRed: 0.12, green: 0.08, blue: 0.24, alpha: dark ? lift.alpha * 2.5 : lift.alpha).cgColor
+        layer.shadowRadius = lift.blur
+        layer.shadowOffset = NSSize(width: 0, height: -lift.drop)
     }
 }
 

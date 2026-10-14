@@ -422,7 +422,7 @@
       { k: 'sep' },
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
       { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'It floats above Sweeter, keeps the size and place you give it, and needs no room in the columns.', app: true },
-      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, and a toolbar. For now, polls, scheduling, and threads move the post to the other window.', app: true },
+      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, polls, scheduling, and a toolbar. For now, threads move the post to the other window.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
@@ -7117,7 +7117,7 @@
     const cmpOpen = () => !cmpBack.hidden || macCmp;
     function macFits(c) {
       if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
-      return c.thread.length === 1 && c.files.every((f) => f.__mac) && !c.poll && !c.when;
+      return c.thread.length === 1 && c.files.every((f) => f.__mac);
     }
     function macSnapshot(c) {
       const p = c.id ? findPost(c.id, c.kind === 'edit') : null;
@@ -7135,6 +7135,8 @@
         italic: c.styles.italic,
         files: c.files.filter((f) => f.__mac).map((f) => ({ id: f.__mac, alt: f.__alt || '' })),
         gif: c.gif || null,
+        poll: c.poll || null,
+        when: c.when || null,
         reply: cmpReply.value,
         replyOptions: REPLY_OPTIONS,
         replyHidden: c.kind === 'reply' || c.kind === 'edit',
@@ -7174,6 +7176,15 @@
         cmpReply.value = d.reply;
         syncWho();
       }
+      // A poll (an edit has none) and a send time, inside X Pro's rules.
+      if ('poll' in d) c.poll = d.poll && c.kind !== 'edit' ? draftPoll(d.poll) : null;
+      if ('when' in d) {
+        const w = d.when && Sweeter.text.whenDate(d.when) ? Sweeter.text.whenOf(Sweeter.text.whenDate(d.when)) : null;
+        if (JSON.stringify(w) !== JSON.stringify(c.when || null)) {
+          c.when = c.kind === 'edit' ? null : w;
+          renderWhen();
+        }
+      }
       // A GIF from X Pro's search (the recorder passes only GIPHY's).
       if ('gif' in d) c.gif = macGifOf(d.gif);
       // The window's media: its own ids, with their descriptions. The bytes
@@ -7203,7 +7214,8 @@
       // Emptied, it is no draft, as keepDraft has it: an edit then opens on
       // the post's own text again.
       const gif = 'gif' in d ? macGifOf(d.gif) : old ? old.gif : null;
-      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !gif && !(old && ((old.more || []).length || old.poll))) {
+      const poll = 'poll' in d ? (d.poll && !/^edit:/.test(d.key) ? draftPoll(d.poll) : null) : old ? old.poll : null;
+      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !gif && !poll && !(old && (old.more || []).length)) {
         if (drafts.delete(d.key)) storeDrafts();
         return;
       }
@@ -7214,7 +7226,8 @@
       }
       const text = d.text;
       const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
-      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, gif, at: Date.now() });
+      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, gif, poll, at: Date.now() });
+      if ('when' in d && !/^edit:/.test(d.key)) old.when = d.when && Sweeter.text.whenDate(d.when) ? Sweeter.text.whenOf(Sweeter.text.whenDate(d.when)) : null;
       if (REPLY_OPTIONS.includes(d.reply)) old.reply = d.reply;
       // The window's media, as stand-ins (the window keeps their bytes).
       if (Array.isArray(d.files)) old.files = d.files.filter((m) => m && typeof m.id === 'string').slice(0, 4).map((m) => ({ name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0, __mac: m.id, __alt: String(m.alt || '').slice(0, 1000) }));

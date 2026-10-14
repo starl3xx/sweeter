@@ -45,6 +45,19 @@ struct ComposeSnapshot: Decodable {
     let files: [FileRef]
     /// A GIF from X Pro's search.
     let gif: ComposeGif?
+    struct PollRef: Decodable {
+        let choices: [String]
+        let days: Int
+        let hours: Int
+        let minutes: Int
+    }
+
+    struct WhenRef: Decodable {
+        let y: Int, mo: Int, d: Int, h: Int, mi: Int
+    }
+
+    let poll: PollRef?
+    let when: WhenRef?
     let reply: String
     let replyOptions: [String]
     let replyHidden: Bool
@@ -247,6 +260,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private var media: [ComposeMedia] = []
     private var mediaByKey: [String: [ComposeMedia]] = [:]
     private var gif: ComposeGif?
+    private var poll: ComposePoll?
+    private var when: ComposeWhen?
+    private let pollView = ComposePollView()
+    private let whenLabel = NSTextField(labelWithString: "")
+    private let whenRow = NSStackView()
     private let mediaRow = NSStackView()
     private let mediaScroll = NSScrollView()
     private let textView = ComposeTextView(usingTextLayoutManager: false)
@@ -410,13 +428,33 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         bar.setHuggingPriority(.defaultLow, for: .horizontal)
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, scroll, mediaScroll, cardBox, bar])
+        pollView.onChange = { [weak self] p in
+            guard let self else { return }
+            self.poll = p
+            if p == nil { self.pollView.isHidden = true }
+            self.sync()
+        }
+        let clock = NSImageView(image: NSImage(systemSymbolName: "calendar.badge.clock", accessibilityDescription: "Scheduled") ?? NSImage())
+        clock.contentTintColor = .controlAccentColor
+        whenLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        whenLabel.lineBreakMode = .byTruncatingTail
+        whenLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let change = NSButton(title: "Change…", target: self, action: #selector(changeWhen(_:)))
+        let clearWhen = NSButton(title: "Clear", target: self, action: #selector(clearWhen))
+        for b in [change, clearWhen] {
+            b.controlSize = .small
+            b.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        }
+        for v in [clock, whenLabel, change, clearWhen] as [NSView] { whenRow.addArrangedSubview(v) }
+        whenRow.spacing = 6
+
+        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, scroll, mediaScroll, pollView, cardBox, whenRow, bar])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 10, right: 16)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [noteLabel, quoteBox, scroll, mediaScroll, cardBox, bar] as [NSView] {
+        for v in [noteLabel, quoteBox, scroll, mediaScroll, pollView, cardBox, bar] as [NSView] {
             v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
         }
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
@@ -480,6 +518,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         mediaByKey[snap.key] = media
         gif = snap.gif
         rebuildMediaRow()
+        poll = snap.poll.map { ComposePoll(choices: $0.choices, days: $0.days, hours: $0.hours, minutes: $0.minutes) }
+        if let poll { pollView.show(poll) }
+        pollView.isHidden = poll == nil
+        when = snap.when.flatMap { ComposeWhen(["y": $0.y, "mo": $0.mo, "d": $0.d, "h": $0.h, "mi": $0.mi]) }
+        showWhen()
         replyPopUp.removeAllItems()
         for o in snap.replyOptions {
             replyPopUp.addItem(withTitle: o + " can reply")
@@ -705,6 +748,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             "italic": s.italic,
             "files": media.map { ["id": $0.id, "name": $0.name, "type": $0.type, "size": $0.size, "alt": $0.alt] as [String: Any] },
             "gif": gif?.dict ?? NSNull(),
+            "poll": poll?.dict ?? NSNull(),
+            "when": when?.dict ?? NSNull(),
             "reply": replyPopUp.selectedItem?.representedObject as? String ?? "Everyone",
         ]
     }
@@ -879,14 +924,63 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         mediaScroll.isHidden = media.isEmpty && gif == nil
     }
 
+    // MARK: A poll and a send time
+
+    private func addPoll() {
+        if let _ = poll { return pollView.focusFirstChoice() }
+        if kind == "quote" { return say("A quote post can’t have a poll.") }
+        if !media.isEmpty || gif != nil { return say("A post can have a poll or media, not both.") }
+        if when != nil { return say("X Pro can’t schedule a post with a poll. Clear the time first.") }
+        poll = .fresh
+        pollView.show(.fresh)
+        pollView.isHidden = false
+        pollView.focusFirstChoice()
+        sync()
+    }
+
+    private func schedule(from item: NSToolbarItem?, or view: NSView?) {
+        if poll != nil { return say("X Pro can’t schedule a post with a poll. Remove the poll first.") }
+        // X Pro's own first choice: an hour from now.
+        let picker = ComposeSchedulePicker(start: when?.date ?? Date.now.addingTimeInterval(3600), had: when != nil)
+        let key = self.key
+        picker.onSet = { [weak self] w in
+            guard let self, self.isOpen, self.key == key, !self.busy else { return }
+            self.when = w
+            self.showWhen()
+            self.sync()
+        }
+        if let item { picker.show(from: item) } else if let view { picker.show(from: view) }
+    }
+
+    private func showWhen() {
+        whenLabel.stringValue = when.map { "Will send on " + $0.label } ?? ""
+        whenRow.isHidden = when == nil
+    }
+
+    @objc private func changeWhen(_ sender: NSButton) {
+        guard !busy else { return }
+        schedule(from: nil, or: sender)
+    }
+
+    @objc private func clearWhen() {
+        guard !busy else { return }
+        when = nil
+        showWhen()
+        sync()
+    }
+
     // MARK: GIFs
 
+    /// A note in the status line, until the page's next state.
+    private func say(_ s: String) {
+        statusLabel.stringValue = s
+        statusLabel.textColor = .systemRed
+        statusLabel.toolTip = s
+    }
+
     private func chooseGif(from item: NSToolbarItem) {
-        guard media.isEmpty else {
-            statusLabel.stringValue = "A post can have photos or a video, or one GIF."
-            statusLabel.textColor = .systemRed
-            return
-        }
+        guard media.isEmpty else { return say("A post can have photos or a video, or one GIF.") }
+        guard poll == nil else { return say("A post can have a poll or media, not both.") }
         let picker = ComposeGifPicker()
         let key = self.key
         picker.search = { q, done in
@@ -1074,6 +1168,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             choosePhotos()
         case .gif:
             chooseGif(from: sender)
+        case .poll:
+            addPoll()
+        case .schedule:
+            schedule(from: sender, or: nil)
         default:
             // Not drawn here yet: the web compose window takes the draft
             // (with its media) and opens the tool.

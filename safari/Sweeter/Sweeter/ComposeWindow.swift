@@ -1601,6 +1601,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             let open = NSMenuItem(title: d.title, action: #selector(openDraftPicked(_:)), keyEquivalent: "")
             open.target = self
             open.representedObject = d.key
+            // A pair with its ⌥ alternate: the same (empty) key, masks differing only by ⌥.
+            open.keyEquivalentModifierMask = []
             if #available(macOS 14.4, *) { open.subtitle = d.info } else { open.toolTip = d.info }
             menu.addItem(open)
             let del = NSMenuItem(title: "Delete “" + d.title + "”", action: #selector(deleteDraftPicked(_:)), keyEquivalent: "")

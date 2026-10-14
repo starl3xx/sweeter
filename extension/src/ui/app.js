@@ -10644,6 +10644,10 @@
           } else if (e.metaKey && t.id === 'cmp-text' && (e.key === 'b' || e.key === 'i')) {
             applyStyle(e.key === 'b' ? 'bold' : 'italic');
             handled = true;
+          } else if (e.metaKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's' && compose && t.closest('.cmp')) {
+            // ⌘S in any of the compose window's fields.
+            saveDraftNow();
+            handled = true;
           } else if (t.id === 'emo-q' && emojiKey(e)) {
             handled = true;
           } else if (t.id === 'gif-q' && gifKey(e)) {

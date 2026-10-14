@@ -6041,6 +6041,8 @@
         const old = drafts.get(key);
         const one = (p) => ({ text: p.text, files: p.files, gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
         const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null });
+        // Media only the Mac window can show, kept for it.
+        if (c.held) d.files = (d.files || []).concat(c.held);
         const sig = (x) => JSON.stringify([x].concat(x.more || []).map((p) => [p.text, p.gif || null, p.styles || null, p.poll || null]).concat([x.reply, x.when || null]));
         const same = old && sig(old) === sig(d);
         const files = (x) => [x.files].concat((x.more || []).map((p) => p.files));
@@ -6778,10 +6780,16 @@
         macCmp = false;
         native.composeHide(false);
       }
-      if (c && c.files.some((f) => !(f instanceof File))) {
+      // Media the Mac window holds (its bytes are there) stay in the draft
+      // but not in this window, which says so.
+      const held = c ? c.files.filter((f) => !(f instanceof File)) : [];
+      if (held.length) {
         c.files = webFiles(c.files);
+        c.held = held;
         c.thread[c.at] = livePost();
         renderMedia();
+        const one = held.length === 1;
+        cmpStatus.textContent = 'This draft’s ' + (one ? 'photo is' : 'photos are') + ' in the Mac compose window. Turn it on in Settings ▸ Media ▸ Compose to post ' + (one ? 'it' : 'them') + '.';
       }
       if (native && native.allowPopup && settings.composeWindow !== false) {
         const w = await composeWindow();
@@ -7103,6 +7111,7 @@
     // (photos, a GIF, a poll, a time, a thread) goes to the web window.
     let macCmp = false; // the Mac window shows the open post
     let macCard = null; // the link card the sheet shows
+    let macMediaMsg = ''; // what the last add didn't take, while it shows
     const cmpOpen = () => !cmpBack.hidden || macCmp;
     function macFits(c) {
       if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
@@ -7166,6 +7175,7 @@
       // come only at Post (macFile); until then each is a stand-in.
       if (Array.isArray(d.files)) {
         const was = new Map(c.files.filter((f) => f.__mac).map((f) => [f.__mac, f]));
+        if (macMediaMsg && cmpStatus.textContent === macMediaMsg && d.files.map((m) => m && m.id).join() !== c.files.map((f) => f.__mac).join()) cmpStatus.textContent = '';
         c.files = d.files
           .filter((m) => m && typeof m.id === 'string')
           .slice(0, 4)
@@ -7248,8 +7258,9 @@
         case 'add': {
           const incoming = (Array.isArray(arg.incoming) ? arg.incoming : []).map((f) => ({ type: String((f && f.type) || '') }));
           const r = mediaCheck(compose.files, incoming);
-          // Said in the status line, which the window shows.
-          if (r.msg) cmpStatus.textContent = r.msg;
+          // Said in the status line, which the window shows, until the media change.
+          if (r.msg) cmpStatus.textContent = macMediaMsg = r.msg;
+          else if (macMediaMsg && cmpStatus.textContent === macMediaMsg) cmpStatus.textContent = '';
           return JSON.stringify({ take: r.take, msg: r.msg });
         }
         case 'post':

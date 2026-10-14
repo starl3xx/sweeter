@@ -125,6 +125,9 @@ final class ComposeTextView: NSTextView {
         onFiles != nil && carriesFiles(sender.draggingPasteboard) ? .copy : super.draggingUpdated(sender)
     }
 
+    /// Promises being read: a receiver let go of never finishes.
+    private var receiving: [NSFilePromiseReceiver] = []
+
     private static let promiseQueue: OperationQueue = {
         let q = OperationQueue()
         q.qualityOfService = .userInitiated
@@ -148,6 +151,7 @@ final class ComposeTextView: NSTextView {
         let group = DispatchGroup()
         let lock = NSLock()
         var got: [URL] = []
+        receiving += promises
         for p in promises {
             group.enter()
             p.receivePromisedFiles(atDestination: dir, options: [:], operationQueue: Self.promiseQueue) { url, error in
@@ -159,8 +163,9 @@ final class ComposeTextView: NSTextView {
                 group.leave()
             }
         }
-        group.notify(queue: .main) {
+        group.notify(queue: .main) { [weak self] in
             MainActor.assumeIsolated {
+                self?.receiving.removeAll { r in promises.contains { $0 === r } }
                 if !got.isEmpty { onFiles(got, nil) }
             }
         }
@@ -228,6 +233,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private var uploading = false
     /// The page is deciding on new media.
     private var adding = false
+    /// Each upload's run: a close or another draft ends the one under way.
+    private var uploadRun = 0
     /// The page closed the window: it needs no word back.
     private var closingFromPage = false
     private var asked = ""
@@ -440,6 +447,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         }
         // An edit still waiting to reach the page goes first.
         flushSync()
+        endUpload()
         key = snap.key
         kind = snap.kind
         tools = snap.tools
@@ -729,12 +737,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         replyPopUp.isEnabled = false
         guard !media.isEmpty else { return send(op, d) }
         uploading = true
+        uploadRun += 1
+        let run = uploadRun
         spinner.startAnimation(nil)
         statusLabel.stringValue = media.contains { $0.type.hasPrefix("video/") } ? "Preparing the video…" : "Preparing the media…"
         statusLabel.textColor = .secondaryLabelColor
         let key = self.key
-        upload(media) { [weak self] problem in
-            guard let self else { return }
+        upload(media, run: run) { [weak self] problem in
+            guard let self, self.uploadRun == run else { return }
             self.uploading = false
             guard self.isOpen, self.key == key else { return }
             guard let problem else { return self.send(op, d) }
@@ -750,9 +760,17 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     private static let partSize = 1_500_000
 
+    private func endUpload() {
+        guard uploading else { return }
+        uploadRun += 1
+        uploading = false
+        busy = false
+        spinner.stopAnimation(nil)
+    }
+
     /// Each file's bytes to the page in base64 parts, in order (app.js
     /// macFile); nil when all arrived, or what went wrong.
-    private func upload(_ items: [ComposeMedia], done: @escaping (String?) -> Void) {
+    private func upload(_ items: [ComposeMedia], run: Int, done: @escaping (String?) -> Void) {
         guard let vc = ViewController.shared else { return done("X Pro’s page isn’t open. Nothing was posted.") }
         var queue: [(ComposeMedia, Data)] = []
         for m in items {
@@ -766,7 +784,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             let lo = part * Self.partSize
             let chunk = data.subdata(in: lo ..< min(data.count, lo + Self.partSize))
             let arg: [String: Any] = ["id": m.id, "name": m.name, "type": m.type, "part": part, "parts": parts, "b64": chunk.base64EncodedString()]
-            vc.composeOp("file", arg) { reply in
+            vc.composeOp("file", arg) { [weak self] reply in
+                // Closed, or another draft opened: this upload is over.
+                guard let self, self.uploadRun == run else { return }
                 guard let r = reply as? String, r == "more" || r == "done" else { return done("X Pro’s page didn’t take the media. Nothing was posted.") }
                 if part + 1 < parts { next(i, part + 1) } else { next(i + 1, 0) }
             }
@@ -861,6 +881,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     }
 
     func windowWillClose(_ notification: Notification) {
+        endUpload()
         isOpen = false
         closingFromPage = false
         busy = false

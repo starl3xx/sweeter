@@ -227,6 +227,10 @@ final class ComposeTimeField: NSView {
         up.action = #selector(stepUp)
         down.target = self
         down.action = #selector(stepDown)
+        // A click on the arrows leaves the keyboard in the field, so they
+        // step the part chosen there (hour, minute, or AM/PM).
+        up.refusesFirstResponder = true
+        down.refusesFirstResponder = true
         let arrows = NSStackView(views: [up, down])
         arrows.orientation = .vertical
         arrows.spacing = 0

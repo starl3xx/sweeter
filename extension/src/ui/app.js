@@ -422,7 +422,7 @@
       { k: 'sep' },
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
       { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'It floats above Sweeter, keeps the size and place you give it, and needs no room in the columns.', app: true },
-      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, and a toolbar. For now, photos, GIFs, polls, scheduling, and threads move the post to the other window.', app: true },
+      { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, and a toolbar. For now, GIFs, polls, scheduling, and threads move the post to the other window.', app: true },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
       { k: 'check', key: 'quoteMedia', label: 'Quoted posts', text: 'Show a thumbnail of their media' },
@@ -6400,27 +6400,34 @@
 
     function addFiles(list) {
       if (!compose) return;
-      if (compose.kind === 'edit') return toast('An edit keeps the post’s media as it is.', 'info');
-      if (compose.poll) return toast('A post can have a poll or media, not both.', 'warn');
-      if (compose.gif) return toast('A post can have photos or a video, or one GIF.', 'warn');
       const incoming = Array.from(list || []).filter((f) => f && f.type);
-      const bad = incoming.filter((f) => !ACCEPT.includes(f.type));
-      const good = incoming.filter((f) => ACCEPT.includes(f.type));
-      if (bad.length) toast('X takes JPEG, PNG, WebP, GIF, MP4 or MOV.', 'warn');
-      const all = compose.files.concat(good);
-      const motion = all.filter((f) => /^video\//.test(f.type) || f.type === 'image/gif');
-      if (motion.length > 1 || (motion.length && all.length > 1)) {
-        toast('A post can have one video or GIF, or up to four photos.', 'warn');
-        return;
-      }
-      if (all.length > 4) {
-        toast('A post can have up to four photos.', 'warn');
-        return;
-      }
+      const r = mediaCheck(compose.files, incoming);
+      if (r.msg) toast(r.msg, r.info ? 'info' : 'warn');
+      if (!r.take.length) return;
+      const good = r.take.map((i) => incoming[i]);
       for (const f of good) f.__url = URL.createObjectURL(f);
-      compose.files = all;
+      compose.files = compose.files.concat(good);
       renderMedia();
       updateCount();
+    }
+    // Which of the incoming files ({ type }) the open post can take, as X
+    // allows: up to four photos, or one video or GIF, and no media with a
+    // poll, a GIF from search, or in an edit. take: their indexes; msg:
+    // what to say about the rest. The Mac window asks it too.
+    function mediaCheck(have, incoming) {
+      const c = compose;
+      if (c.kind === 'edit') return { take: [], msg: 'An edit keeps the post’s media as it is.', info: true };
+      if (c.poll) return { take: [], msg: 'A post can have a poll or media, not both.' };
+      if (c.gif) return { take: [], msg: 'A post can have photos or a video, or one GIF.' };
+      const good = [];
+      incoming.forEach((f, i) => {
+        if (f && ACCEPT.includes(f.type)) good.push(i);
+      });
+      const all = have.concat(good.map((i) => incoming[i]));
+      const motion = all.filter((f) => /^video\//.test(f.type) || f.type === 'image/gif');
+      if (motion.length > 1 || (motion.length && all.length > 1)) return { take: [], msg: 'A post can have one video or GIF, or up to four photos.' };
+      if (all.length > 4) return { take: [], msg: 'A post can have up to four photos.' };
+      return { take: good, msg: good.length < incoming.length ? 'X takes JPEG, PNG, WebP, GIF, MP4 or MOV.' : '' };
     }
 
     function renderMedia() {
@@ -6770,6 +6777,11 @@
         macCmp = false;
         native.composeHide();
       }
+      if (c && c.files.some((f) => !(f instanceof File))) {
+        c.files = webFiles(c.files);
+        c.thread[c.at] = livePost();
+        renderMedia();
+      }
       if (native && native.allowPopup && settings.composeWindow !== false) {
         const w = await composeWindow();
         // Closed or replaced while the window opened.
@@ -6825,6 +6837,8 @@
         macCmp = false;
         native.composeHide();
       }
+      macFiles.clear();
+      macParts.clear();
       if (!cmpWin) return;
       const w = cmpWin;
       cmpWin = null;
@@ -7089,7 +7103,7 @@
     const cmpOpen = () => !cmpBack.hidden || macCmp;
     function macFits(c) {
       if (!c || c.web || !native || !native.composeShow || settings.composeWindow === false || settings.composeNative !== true) return false;
-      return c.thread.length === 1 && !c.files.length && !c.gif && !c.poll && !c.when;
+      return c.thread.length === 1 && c.files.every((f) => f.__mac) && !c.gif && !c.poll && !c.when;
     }
     function macSnapshot(c) {
       const p = c.id ? findPost(c.id, c.kind === 'edit') : null;
@@ -7105,6 +7119,7 @@
         text: cmpText.value,
         bold: c.styles.bold,
         italic: c.styles.italic,
+        files: c.files.filter((f) => f.__mac).map((f) => ({ id: f.__mac, alt: f.__alt || '' })),
         reply: cmpReply.value,
         replyOptions: REPLY_OPTIONS,
         replyHidden: c.kind === 'reply' || c.kind === 'edit',
@@ -7144,6 +7159,20 @@
         cmpReply.value = d.reply;
         syncWho();
       }
+      // The window's media: its own ids, with their descriptions. The bytes
+      // come only at Post (macFile); until then each is a stand-in.
+      if (Array.isArray(d.files)) {
+        const was = new Map(c.files.filter((f) => f.__mac).map((f) => [f.__mac, f]));
+        c.files = d.files
+          .filter((m) => m && typeof m.id === 'string')
+          .slice(0, 4)
+          .map((m) => {
+            const f = macFiles.get(m.id) || was.get(m.id) || { name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0 };
+            f.__mac = m.id;
+            f.__alt = String(m.alt || '').slice(0, 1000);
+            return f;
+          });
+      }
       updateCount();
       return true;
     }
@@ -7168,7 +7197,36 @@
       const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
       Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, at: Date.now() });
       if (REPLY_OPTIONS.includes(d.reply)) old.reply = d.reply;
+      // The window's media, as stand-ins (the window keeps their bytes).
+      if (Array.isArray(d.files)) old.files = d.files.filter((m) => m && typeof m.id === 'string').slice(0, 4).map((m) => ({ name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0, __mac: m.id, __alt: String(m.alt || '').slice(0, 1000) }));
       storeDrafts();
+    }
+    // A file's bytes from the window, in base64 parts, in order; the last
+    // makes it a File the post can take.
+    const macFiles = new Map(); // window id -> File
+    const macParts = new Map(); // window id -> the parts so far
+    function macFile(a) {
+      if (!a || typeof a.id !== 'string' || !(a.parts > 0) || !(a.part >= 0)) return null;
+      const bin = atob(String(a.b64 || ''));
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const parts = a.part === 0 ? [] : macParts.get(a.id);
+      if (!parts) return null;
+      parts.push(u8);
+      if (a.part + 1 < a.parts) {
+        macParts.set(a.id, parts);
+        return 'more';
+      }
+      macParts.delete(a.id);
+      macFiles.set(a.id, new File(parts, String(a.name || 'media'), { type: String(a.type || '') }));
+      return 'done';
+    }
+    // Only real files for the web window: the window's stand-ins have no bytes.
+    function webFiles(list) {
+      return (list || []).filter((f) => f instanceof File).map((f) => {
+        if (!f.__url) f.__url = URL.createObjectURL(f);
+        return f;
+      });
     }
     // The window's requests (ViewController composeOp): its reply is the
     // state, as JSON, or null.
@@ -7179,11 +7237,23 @@
         answerAltText(arg && (arg.choice === 'add' || arg.choice === 'post') ? arg.choice : 'back');
         return reply();
       }
+      if (op === 'file') return macFile(arg);
       if (!macSync(arg)) return null;
       switch (op) {
         case 'edit':
           return reply();
+        case 'add': {
+          const incoming = (Array.isArray(arg.incoming) ? arg.incoming : []).map((f) => ({ type: String((f && f.type) || '') }));
+          const r = mediaCheck(compose.files, incoming);
+          return JSON.stringify({ take: r.take, msg: r.msg });
+        }
         case 'post':
+          // The window sends every file's bytes first.
+          if (!compose.files.every((f) => f instanceof File)) {
+            cmpStatus.textContent = 'Sweeter didn’t get the media from its window. Nothing was posted.';
+            return reply();
+          }
+          cmpStatus.textContent = '';
           submitCompose();
           return reply();
         case 'close':
@@ -7208,9 +7278,13 @@
       macCmp = false;
       native.composeHide();
       c.web = true;
+      // The window sent its media's bytes first.
+      c.files = webFiles(c.files);
+      c.thread[c.at] = livePost();
+      renderMedia();
       await showCompose();
-      const cmd = { photo: 'cmp-photo', gif: 'cmp-gif', poll: 'cmp-poll', schedule: 'cmp-schedule', thread: 'cmp-thread-add' }[tool];
-      if (cmd && cmd !== 'cmp-photo' && compose === c) run(cmd, cmpBox);
+      const cmd = { gif: 'cmp-gif', poll: 'cmp-poll', schedule: 'cmp-schedule', thread: 'cmp-thread-add' }[tool];
+      if (cmd && compose === c) run(cmd, cmpBox);
     }
     // The sheet's changes reach the window as one state per turn.
     let macPush = false;

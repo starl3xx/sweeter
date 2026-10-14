@@ -19,6 +19,11 @@ import Cocoa
 
 /// A compose window as the page opens it (app.js nativeSnapshot).
 struct ComposeSnapshot: Decodable {
+    struct FileRef: Decodable {
+        let id: String
+        let alt: String
+    }
+
     struct Context: Decodable {
         let label: String
         let name: String
@@ -36,6 +41,8 @@ struct ComposeSnapshot: Decodable {
     let text: String
     let bold: [[Int]]
     let italic: [[Int]]
+    /// The window's own media in this draft, by id, with descriptions.
+    let files: [FileRef]
     let reply: String
     let replyOptions: [String]
     let replyHidden: Bool
@@ -75,10 +82,46 @@ final class ComposeTextView: NSTextView {
     }
     var onEscape: (() -> Void)?
     var onStyle: ((ComposeStyle) -> Void)?
+    /// Photos or a video pasted or dropped: files, or a pasted image as PNG.
+    var onFiles: (([URL], Data?) -> Void)?
 
-    // Rich text from elsewhere comes in as this post's own plain text.
+    // Files and a copied image become media; rich text from elsewhere
+    // comes in as this post's own plain text.
     override func paste(_ sender: Any?) {
+        let pb = NSPasteboard.general
+        if let onFiles {
+            let urls = Self.fileURLs(pb)
+            if !urls.isEmpty { return onFiles(urls, nil) }
+            if pb.availableType(from: [.string]) == nil, let png = Self.png(pb) { return onFiles([], png) }
+        }
         pasteAsPlainText(sender)
+    }
+
+    static func fileURLs(_ pb: NSPasteboard) -> [URL] {
+        (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+    }
+
+    static func png(_ pb: NSPasteboard) -> Data? {
+        if let d = pb.data(forType: .png) { return d }
+        guard let tiff = pb.data(forType: .tiff), let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onFiles != nil && !Self.fileURLs(sender.draggingPasteboard).isEmpty ? .copy : super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        onFiles != nil && !Self.fileURLs(sender.draggingPasteboard).isEmpty ? .copy : super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = Self.fileURLs(sender.draggingPasteboard)
+        if let onFiles, !urls.isEmpty {
+            onFiles(urls, nil)
+            return true
+        }
+        return super.performDragOperation(sender)
     }
 
     override func cancelOperation(_ sender: Any?) {
@@ -142,6 +185,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     private var asked = ""
     private var syncTimer: Timer?
 
+    /// The open post's media, and every draft's this session (its bytes
+    /// stay here until Post).
+    private var media: [ComposeMedia] = []
+    private var mediaByKey: [String: [ComposeMedia]] = [:]
+    private let mediaRow = NSStackView()
     private let textView = ComposeTextView(usingTextLayoutManager: false)
     private let scroll = NSScrollView()
     private let noteLabel = NSTextField(wrappingLabelWithString: "")
@@ -231,6 +279,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         textView.textContainer?.widthTracksTextView = true
         textView.onEscape = { [weak self] in self?.window?.performClose(nil) }
         textView.onStyle = { [weak self] style in self?.toggle(style) }
+        textView.onFiles = { [weak self] urls, png in self?.add(urls: urls, png: png) }
+        mediaRow.orientation = .horizontal
+        mediaRow.spacing = 8
+        mediaRow.alignment = .centerY
         scroll.documentView = textView
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -284,7 +336,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         bar.setHuggingPriority(.defaultLow, for: .horizontal)
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, scroll, cardBox, bar])
+        let stack = NSStackView(views: [noteLabel, contextLabel, quoteBox, scroll, mediaRow, cardBox, bar])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
@@ -344,6 +396,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             quoteBox.isHidden = true
         }
         setText(snap.text, bold: snap.bold, italic: snap.italic)
+        let known = mediaByKey[snap.key] ?? []
+        media = snap.files.compactMap { f in
+            guard let m = known.first(where: { $0.id == f.id }) else { return nil }
+            m.alt = f.alt
+            return m
+        }
+        mediaByKey[snap.key] = media
+        rebuildMediaRow()
         replyPopUp.removeAllItems()
         for o in snap.replyOptions {
             replyPopUp.addItem(withTitle: o + " can reply")
@@ -370,6 +430,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     /// The page is done with the window (posted, or moved elsewhere).
     func closeFromPage() {
         guard isOpen else { return }
+        // Posted, or handed on with its bytes: this draft's media are done here.
+        mediaByKey[key] = nil
         syncTimer?.invalidate()
         syncTimer = nil
         closingFromPage = true
@@ -562,6 +624,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             "text": textView.string,
             "bold": s.bold,
             "italic": s.italic,
+            "files": media.map { ["id": $0.id, "name": $0.name, "type": $0.type, "size": $0.size, "alt": $0.alt] as [String: Any] },
             "reply": replyPopUp.selectedItem?.representedObject as? String ?? "Everyone",
         ]
     }
@@ -584,11 +647,127 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
 
     @objc private func post() {
         guard isOpen, !busy else { return }
+        withMedia("post", draft())
+    }
+
+    /// A request that needs the media's bytes on the page first (Post, and
+    /// a move to the web window or X Pro): they go, then the request.
+    private func withMedia(_ op: String, _ d: [String: Any]) {
         syncTimer?.invalidate()
         syncTimer = nil
         busy = true
         postButton.isEnabled = false
-        send("post", draft())
+        textView.isEditable = false
+        guard !media.isEmpty else { return send(op, d) }
+        spinner.startAnimation(nil)
+        statusLabel.stringValue = media.contains { $0.type.hasPrefix("video/") } ? "Preparing the video…" : "Preparing the media…"
+        statusLabel.textColor = .secondaryLabelColor
+        let key = self.key
+        upload(media) { [weak self] problem in
+            guard let self, self.isOpen, self.key == key else { return }
+            guard let problem else { return self.send(op, d) }
+            self.busy = false
+            self.postButton.isEnabled = true
+            self.textView.isEditable = true
+            self.spinner.stopAnimation(nil)
+            self.statusLabel.stringValue = problem
+            self.statusLabel.textColor = .systemRed
+        }
+    }
+
+    private static let partSize = 1_500_000
+
+    /// Each file's bytes to the page in base64 parts, in order (app.js
+    /// macFile); nil when all arrived, or what went wrong.
+    private func upload(_ items: [ComposeMedia], done: @escaping (String?) -> Void) {
+        guard let vc = ViewController.shared else { return done("X Pro’s page isn’t open. Nothing was posted.") }
+        var queue: [(ComposeMedia, Data)] = []
+        for m in items {
+            guard let data = try? m.bytes() else { return done("Sweeter couldn’t read “\(m.name)”. Nothing was posted.") }
+            queue.append((m, data))
+        }
+        func next(_ i: Int, _ part: Int) {
+            guard i < queue.count else { return done(nil) }
+            let (m, data) = queue[i]
+            let parts = max(1, (data.count + Self.partSize - 1) / Self.partSize)
+            let lo = part * Self.partSize
+            let chunk = data.subdata(in: lo ..< min(data.count, lo + Self.partSize))
+            let arg: [String: Any] = ["id": m.id, "name": m.name, "type": m.type, "part": part, "parts": parts, "b64": chunk.base64EncodedString()]
+            vc.composeOp("file", arg) { reply in
+                guard let r = reply as? String, r == "more" || r == "done" else { return done("X Pro’s page didn’t take the media. Nothing was posted.") }
+                if part + 1 < parts { next(i, part + 1) } else { next(i + 1, 0) }
+            }
+        }
+        next(0, 0)
+    }
+
+    // MARK: Photos and video
+
+    private func choosePhotos() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = ComposeMedia.types
+        panel.message = "Up to four photos, or one video or GIF."
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK else { return }
+            self?.add(urls: panel.urls, png: nil)
+        }
+    }
+
+    /// New media, as far as X allows (the page decides: app.js mediaCheck).
+    private func add(urls: [URL], png: Data?) {
+        guard isOpen, !busy else { return }
+        var items = urls.compactMap { ComposeMedia(url: $0) }
+        if let png { items.append(ComposeMedia(png: png)) }
+        guard !items.isEmpty else { return }
+        syncTimer?.invalidate()
+        syncTimer = nil
+        var d = draft()
+        d["incoming"] = items.map { ["name": $0.name, "type": $0.type, "size": $0.size] as [String: Any] }
+        let key = self.key
+        ViewController.shared?.composeOp("add", d) { [weak self] reply in
+            guard let self, self.isOpen, self.key == key, let text = reply as? String, let data = text.data(using: .utf8),
+                  let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+            let take = (o["take"] as? [Int]) ?? []
+            for i in take where i >= 0 && i < items.count { self.media.append(items[i]) }
+            self.mediaByKey[key] = self.media
+            self.rebuildMediaRow()
+            if !take.isEmpty { self.sync() }
+            if let msg = o["msg"] as? String, !msg.isEmpty {
+                self.statusLabel.stringValue = msg
+                self.statusLabel.textColor = .systemRed
+            }
+        }
+    }
+
+    private func removeMedia(_ id: String) {
+        guard !busy else { return }
+        media.removeAll { $0.id == id }
+        mediaByKey[key] = media
+        rebuildMediaRow()
+        sync()
+    }
+
+    private func rebuildMediaRow() {
+        for v in mediaRow.arrangedSubviews {
+            mediaRow.removeArrangedSubview(v)
+            v.removeFromSuperview()
+        }
+        for m in media {
+            let tile = ComposeMediaTile(media: m)
+            tile.onRemove = { [weak self] in self?.removeMedia(m.id) }
+            tile.onAlt = { [weak self, weak tile] anchor in
+                guard let self, !self.busy else { return }
+                ComposeAltController(media: m) { [weak self] in
+                    tile?.refresh()
+                    self?.sync()
+                }.show(from: anchor)
+            }
+            mediaRow.addArrangedSubview(tile)
+        }
+        mediaRow.isHidden = media.isEmpty
     }
 
     // MARK: Closing
@@ -747,22 +926,21 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
         case .emoji:
             window?.makeFirstResponder(textView)
             NSApp.orderFrontCharacterPalette(textView)
+        case .photo:
+            choosePhotos()
         default:
-            // Not drawn here yet: the web compose window takes the draft and opens it.
-            syncTimer?.invalidate()
-            syncTimer = nil
+            // Not drawn here yet: the web compose window takes the draft
+            // (with its media) and opens the tool.
             var d = draft()
             d["tool"] = tool.rawValue
-            send("web", d)
+            withMedia("web", d)
         }
     }
 
     @objc private func xpro(_ sender: NSMenuItem) {
         guard !busy, let tool = sender.representedObject as? String else { return }
-        syncTimer?.invalidate()
-        syncTimer = nil
         var d = draft()
         d["tool"] = tool
-        send("xpro", d)
+        withMedia("xpro", d)
     }
 }

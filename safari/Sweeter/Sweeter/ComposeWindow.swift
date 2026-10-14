@@ -1639,9 +1639,15 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         alert.addButton(withTitle: "Delete Draft").hasDestructiveAction = true
         alert.beginSheetModal(for: w) { [weak self] response in
             guard let self, self.isOpen, response != .alertSecondButtonReturn else { return }
-            ViewController.shared?.composeOp(response == .alertFirstButtonReturn ? "close" : "discard", self.draft()) { _ in }
             self.closeDecided = true
-            w.close()
+            guard response == .alertFirstButtonReturn else {
+                ViewController.shared?.composeOp("discard", self.draft()) { _ in }
+                return w.close()
+            }
+            self.withBytes {
+                ViewController.shared?.composeOp("close", self.draft()) { _ in }
+                w.close()
+            }
         }
     }
 
@@ -1650,7 +1656,31 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         guard isOpen, !busy else { return }
         syncTimer?.invalidate()
         syncTimer = nil
-        send("save", draft())
+        withBytes { [weak self] in
+            guard let self, self.isOpen else { return }
+            self.send("save", self.draft())
+        }
+    }
+
+    /// Save: the media's bytes go to the page first, as for Post, so the
+    /// draft can go to X with them (app.js saveToX). A failure still saves
+    /// the draft here; the page then says why X didn't get it.
+    private func withBytes(_ then: @escaping () -> Void) {
+        let all = thread.flatMap(\.media)
+        guard !all.isEmpty, !uploading else { return then() }
+        uploading = true
+        uploadRun += 1
+        let run = uploadRun
+        spinner.startAnimation(nil)
+        statusLabel.stringValue = "Saving the media…"
+        statusLabel.textColor = SweeterColor.secondary
+        statusRow.isHidden = false
+        upload(all, run: run) { [weak self] _ in
+            guard let self, self.uploadRun == run else { return }
+            self.uploading = false
+            self.spinner.stopAnimation(nil)
+            then()
+        }
     }
 
     /// Escape anywhere in the window closes it and keeps the draft.

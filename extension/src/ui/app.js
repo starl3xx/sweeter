@@ -6031,7 +6031,7 @@
     const drafts = new Map(
       Object.entries(opts.drafts || {})
         .filter(([, d]) => d && typeof d.text === 'string' && Date.now() - (d.at || 0) < DRAFT_DAYS * 864e5)
-        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), more: draftMore(d.more), when: d.when || null, files: [], at: d.at, saved: true, xid: d.xid || null, xtext: typeof d.xtext === 'string' ? d.xtext : null, xsig: typeof d.xsig === 'string' ? d.xsig : null }]),
+        .map(([k, d]) => [k, { text: d.text, styles: d.styles || null, reply: d.reply || 'Everyone', gif: d.gif || null, poll: draftPoll(d.poll), more: draftMore(d.more), when: d.when || null, files: [], at: d.at, saved: true, xid: d.xid || null, xtext: typeof d.xtext === 'string' ? d.xtext : null, xsig: typeof d.xsig === 'string' ? d.xsig : null, xmedia: d.xmedia | 0 }]),
     );
     // Drafts on X: X Pro tasks one at a time (posting waits for them too),
     // and the ones being deleted, out of the list already.
@@ -6066,7 +6066,7 @@
       const out = {};
       const kept = Array.from(drafts.entries()).filter(([, d]) => [d].concat(d.more || []).some((p) => (p.text || '').trim() || p.gif || p.poll));
       const slim = (p) => ({ text: p.text, styles: p.styles || null, gif: p.gif || null, poll: p.poll || null });
-      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = Object.assign(slim(d), { reply: d.reply || 'Everyone', more: (d.more || []).map(slim), when: d.when || null, at: d.at || Date.now() }, d.xid ? { xid: d.xid, xtext: d.xtext || '', xsig: d.xsig || '' } : null);
+      for (const [k, d] of kept.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, DRAFT_MAX)) out[k] = Object.assign(slim(d), { reply: d.reply || 'Everyone', more: (d.more || []).map(slim), when: d.when || null, at: d.at || Date.now() }, d.xid ? { xid: d.xid, xtext: d.xtext || '', xsig: d.xsig || '', xmedia: d.xmedia | 0 } : null);
       save({ drafts: out });
       renderDrafts();
     }
@@ -6081,7 +6081,7 @@
         const old = drafts.get(key);
         // Media only the Mac window can show (held) go back with their post.
         const one = (p) => ({ text: p.text, files: (p.files || []).concat(p.held || []), gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
-        const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null }, c.xid ? { xid: c.xid, xtext: c.xtext, xsig: old && old.xid === c.xid ? old.xsig : null } : null);
+        const d = Object.assign(one(t[0]), { reply: cmpReply.value, more: t.slice(1).map(one), when: c.when || null }, c.xid ? { xid: c.xid, xtext: c.xtext, xsig: old && old.xid === c.xid ? old.xsig : null, xmedia: old && old.xid === c.xid ? old.xmedia | 0 : 0 } : null);
         const sig = (x) => JSON.stringify([x].concat(x.more || []).map((p) => [p.text, p.gif || null, p.styles || null, p.poll || null]).concat([x.reply, x.when || null]));
         const same = old && sig(old) === sig(d);
         const files = (x) => [x.files].concat((x.more || []).map((p) => p.files));
@@ -6218,20 +6218,20 @@
       const sig = xSig(d);
       // X has this one already.
       if (d.xid && d.xsig === sig && xListed(d.xid)) return;
-      // Media live only until Sweeter quits: a copy on X that has some keeps them.
-      const xs = d.xid && (store.xDrafts() || []).find((x) => x.id === d.xid);
-      if (xs && xs.media.length && !d.gif && !(d.files || []).length) return;
-      const snap = { text: d.text || '', styles: d.styles || null, files: (d.files || []).slice(), gif: d.gif || null };
+      // Media live here only until Sweeter quits: a copy on X saved with
+      // some keeps them, rather than give way to one without.
+      const files = d.files || [];
+      if (d.xid && d.xmedia && !d.gif && !files.length) return;
       const say = (msg) => toast('Your draft is saved on this Mac. ' + msg, 'warn');
+      // The Mac window sends its media's bytes before Save; without them
+      // (it couldn't read a file) there is nothing to give X.
+      if (files.some((f) => !(f instanceof Blob))) return say('Sweeter didn’t get the media from its window, so it isn’t on X.');
+      const snap = { text: d.text || '', styles: d.styles || null, files: files.slice(), gif: d.gif || null };
       xStep(async () => {
-        if (!mappingFor('x:drafts')) {
-          const r = await runColumnOp(() => xpro.addColumn('drafts'));
-          if (!r.ok) {
-            if (r.pickerId) xpro.removePicker(r.pickerId);
-            return say(X_SAVE_FAIL.nocolumn);
-          }
-          if (!(await until(() => mappingFor('x:drafts'), 5000))) return say(X_SAVE_FAIL.nocolumn);
-        }
+        if (!mappingFor('x:drafts') && !(await addDraftsColumn())) return say(X_SAVE_FAIL.nocolumn);
+        // The copy it replaces must be found in X's list, which X Pro asks
+        // for as the column opens.
+        if (d.xid && !(await until(() => store.xDrafts(), 6000))) return say('X Pro hasn’t listed your drafts on X yet. Try again in a moment.');
         const r = await xpro.saveXDraft(snap);
         if (!r.ok) return say(X_SAVE_FAIL[r.reason] || 'X Pro didn’t save it to X.');
         const now = drafts.get(key);
@@ -6239,7 +6239,7 @@
         // The copy it replaces leaves the list now, before X deletes it.
         if (old && old !== r.id) xGoing.add(old);
         if (now) {
-          Object.assign(now, { xid: r.id, xtext: snap.text, xsig: sig });
+          Object.assign(now, { xid: r.id, xtext: snap.text, xsig: sig, xmedia: snap.files.length + (snap.gif ? 1 : 0) });
           storeDrafts();
           if (compose && draftKey(compose) === key) {
             Object.assign(compose, { xid: r.id, xtext: snap.text });
@@ -6253,6 +6253,33 @@
         if (!now || !drafts.has(key)) await deleteXDraftsNow([r.id]);
         if (old && old !== r.id) await deleteXDraftsNow([old]);
       });
+    }
+
+    // A Drafts column for the deck, out of sight: X Pro's picker as Add
+    // Column uses it, without what a column the person adds gets (its
+    // place in a group, Sweeter moving to it).
+    async function addDraftsColumn() {
+      for (let i = 0; i < 40 && colOp; i++) await new Promise((r) => setTimeout(r, 250));
+      if (colOp) return false;
+      colOp = true;
+      holds.add('add');
+      let r;
+      try {
+        r = await xpro.addColumn('drafts');
+      } catch (e) {
+        r = { ok: false };
+      } finally {
+        holds.delete('add');
+        colOp = false;
+      }
+      if (!r.ok) {
+        if (r.pickerId) xpro.removePicker(r.pickerId);
+        return false;
+      }
+      return until(() => {
+        remap(true);
+        return !!mappingFor('x:drafts');
+      }, 6000);
     }
 
     // A post is on its way (sent, partly sent, or going on in X Pro's

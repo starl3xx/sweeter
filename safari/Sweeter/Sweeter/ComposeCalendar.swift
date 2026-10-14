@@ -345,7 +345,11 @@ final class ComposeTimeField: NSView {
         typed = ""
         switch p {
         case .hour: hour = (hour + n + 24) % 24
-        case .minute: minute = (minute + n + 60) % 60
+        case .minute:
+            // Minutes carry into the hour (2:59 and one more is 3:00).
+            let t = (hour * 60 + minute + n + 1440) % 1440
+            hour = t / 60
+            minute = t % 60
         // Up (or a scroll up) is PM, down is AM: a direction, never a flip,
         // so a trackpad's many scroll events land where the gesture points.
         case .ampm:
@@ -361,8 +365,12 @@ final class ComposeTimeField: NSView {
     private func arrowStep(_ n: Int) {
         let p = focused ? part : .minute
         if p == .minute {
-            let next = n > 0 ? (minute / 5 + 1) * 5 : ((minute + 4) / 5 - 1) * 5
-            minute = (next + 60) % 60
+            // To the next 5 minutes, carrying into the hour (2:58 is then 3:00).
+            let now = hour * 60 + minute
+            let next = n > 0 ? (now / 5 + 1) * 5 : ((now + 4) / 5 - 1) * 5
+            let t = (next + 1440) % 1440
+            hour = t / 60
+            minute = t % 60
             typed = ""
             changed()
         } else {

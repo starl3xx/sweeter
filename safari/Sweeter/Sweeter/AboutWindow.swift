@@ -42,11 +42,22 @@ final class AboutWindowController: NSWindowController {
 
     func show() {
         NSApp.activate(ignoringOtherApps: true)
-        if window?.isVisible != true { window?.center() }
+        if window?.isVisible != true { centerOnScreen() }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         // Every time the window shows, from the first frame.
         hero.play()
+    }
+
+    /// The exact middle of the screen Sweeter's window is on (AppKit's
+    /// center() puts a window a third of the way down instead).
+    private func centerOnScreen() {
+        guard let window else { return }
+        window.layoutIfNeeded()
+        let main = NSApp.windows.first { $0 is SweeterWindow && $0.isVisible }
+        guard let area = (main ?? NSApp.mainWindow)?.screen?.visibleFrame ?? NSScreen.main?.visibleFrame else { return window.center() }
+        let size = window.frame.size
+        window.setFrameOrigin(NSPoint(x: (area.midX - size.width / 2).rounded(), y: (area.midY - size.height / 2).rounded()))
     }
 }
 

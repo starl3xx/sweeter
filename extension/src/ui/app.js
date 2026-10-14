@@ -7307,8 +7307,11 @@
     let macAvatarSent = null;
     function macAvatar() {
       const url = viewer && viewer.avatar ? viewer.avatar.replace(/_(normal|bigger|mini|x96)\./, '_200x200.') : '';
-      if (!url || url === macAvatarUrl) return;
+      if (url === macAvatarUrl) return;
       macAvatarUrl = url;
+      // Another account (or none): its letter until its picture is drawn.
+      macAvatarNow = '';
+      if (!url) return;
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {

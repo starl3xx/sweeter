@@ -469,6 +469,7 @@ final class ComposeAccentButton: NSButton {
         bezelColor = SweeterColor.pinkFill
         let p = NSMutableParagraphStyle()
         p.alignment = .center
+        p.lineBreakMode = .byTruncatingTail
         attributedTitle = NSAttributedString(string: title, attributes: [
             .font: font ?? .systemFont(ofSize: NSFont.systemFontSize),
             .foregroundColor: SweeterColor.onPink.withAlphaComponent(isEnabled ? 1 : 0.55),

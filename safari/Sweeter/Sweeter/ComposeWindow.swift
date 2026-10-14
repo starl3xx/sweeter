@@ -572,7 +572,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         countLabel.textColor = SweeterColor.secondary
         countLabel.setContentHuggingPriority(.required, for: .horizontal)
-        countLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        countLabel.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
+        // A long “Schedule for …” shortens (…) before the bar outgrows the window.
+        postButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         countRing.setContentHuggingPriority(.required, for: .horizontal)
 
         pollView.onChange = { [weak self] p in
@@ -770,7 +772,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         handleLabel.stringValue = handle
         handleLabel.isHidden = handle.isEmpty
         avatarHandle = handle
-        if avatarShown == nil { avatarView.show(dataURL: nil, handle: handle) }
+        avatarView.show(dataURL: nil, handle: handle)
         refreshTools()
         apply(snap.state)
         isOpen = true
@@ -1220,6 +1222,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         let run = uploadRun
         spinner.startAnimation(nil)
         statusLabel.stringValue = all.contains { $0.type.hasPrefix("video/") } ? "Preparing the video…" : "Preparing the media…"
+        statusRow.isHidden = false
         statusLabel.textColor = SweeterColor.secondary
         let key = self.key
         upload(all, run: run) { [weak self] problem in
@@ -1235,6 +1238,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             for b in self.dockButtons.values { b.isEnabled = true }
             self.spinner.stopAnimation(nil)
             self.statusLabel.stringValue = problem
+            self.statusRow.isHidden = false
             self.statusLabel.textColor = .systemRed
         }
     }
@@ -1367,6 +1371,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         poll = .fresh
         pollView.show(.fresh)
         pollView.isHidden = false
+        refreshDock()
         pollView.focusFirstChoice()
         sync()
     }
@@ -1412,6 +1417,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private var pendingNote: String?
     private func say(_ s: String) {
         statusLabel.stringValue = s
+        statusRow.isHidden = false
         statusLabel.textColor = .systemRed
         statusLabel.toolTip = s
         pendingNote = s

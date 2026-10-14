@@ -582,6 +582,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             self.poll = p
             if p == nil { self.pollView.isHidden = true }
             self.refreshDock()
+            self.fitSoon()
             self.sync()
         }
         whenPill.target = self
@@ -796,8 +797,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
                 w.setFrame(f, display: false)
             }
         }
+        if !isOpen { userSized = false }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+        fitSoon()
         window?.makeFirstResponder(textView)
         textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
     }
@@ -823,6 +826,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private func apply(_ s: ComposeState) {
         if let look = s.look { applyTheme(look) }
         if let d = s.drafts { showDrafts(d) }
+        defer { fitSoon() }
         if let a = s.avatar, a != avatarShown {
             avatarShown = a
             avatarView.show(dataURL: a, handle: avatarHandle)
@@ -1022,6 +1026,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             cardImage.isHidden = true
         }
         cardBox.isHidden = false
+        fitSoon()
     }
 
     // MARK: Edits go to the page
@@ -1029,6 +1034,49 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     func textDidChange(_ notification: Notification) {
         normalizeLooks()
         scheduleSync()
+        fitSoon()
+    }
+
+    // MARK: The window's height
+
+    /// The window fits what it holds (the text, media, a poll, a thread's
+    /// rows), opening compact and growing as you write, up to most of the
+    /// screen, until you size it yourself (then until it closes).
+    private var userSized = false
+    private var fitQueued = false
+    private static let textMin: CGFloat = 96
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        userSized = true
+    }
+
+    private func fitSoon() {
+        guard !fitQueued else { return }
+        fitQueued = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.fitQueued = false
+            self.fitHeight()
+        }
+    }
+
+    private func fitHeight() {
+        guard isOpen, !userSized, let w = window, w.inLiveResize == false, let lm = textView.layoutManager, let tc = textView.textContainer else { return }
+        w.contentView?.layoutSubtreeIfNeeded()
+        lm.ensureLayout(for: tc)
+        let text = ceil(lm.usedRect(for: tc).height + textView.textContainerInset.height * 2)
+        let delta = max(Self.textMin, text) - scroll.frame.height
+        guard abs(delta) > 1 else { return }
+        let area = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
+        let lowest = w.frameRect(forContentRect: NSRect(origin: .zero, size: w.contentMinSize)).height
+        var f = w.frame
+        let h = min(area.height * 0.8, max(lowest, f.height + delta)).rounded()
+        guard abs(h - f.height) > 1 else { return }
+        // The top stays put; the window grows down, and up only at the screen's bottom.
+        f.origin.y += f.height - h
+        f.size.height = h
+        if f.minY < area.minY { f.origin.y = area.minY }
+        w.setFrame(f, display: true)
     }
 
     @objc private func replyPressed() {
@@ -1138,6 +1186,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         pollView.isHidden = poll == nil
         refreshDock()
         rebuildRows()
+        fitSoon()
         window?.makeFirstResponder(textView)
         textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
     }
@@ -1363,6 +1412,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             mediaRow.addArrangedSubview(tile)
         }
         mediaScroll.isHidden = media.isEmpty && gif == nil
+        fitSoon()
     }
 
     // MARK: A poll and a send time
@@ -1376,6 +1426,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         pollView.show(.fresh)
         pollView.isHidden = false
         refreshDock()
+        fitSoon()
         pollView.focusFirstChoice()
         sync()
     }
@@ -1398,6 +1449,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         whenPill.title = when.map { "Sends " + $0.label } ?? ""
         whenRow.isHidden = when == nil
         refreshDock()
+        fitSoon()
         postButton.title = postTitle(lastPost)
     }
 
@@ -1512,6 +1564,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         closingFromPage = false
         closeDecided = false
         busy = false
+        userSized = false
         if let sheet = window?.attachedSheet { window?.endSheet(sheet) }
     }
 

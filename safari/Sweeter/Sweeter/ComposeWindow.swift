@@ -43,6 +43,8 @@ struct ComposeSnapshot: Decodable {
     let italic: [[Int]]
     /// The window's own media in this draft, by id, with descriptions.
     let files: [FileRef]
+    /// A GIF from X Pro's search.
+    let gif: ComposeGif?
     let reply: String
     let replyOptions: [String]
     let replyHidden: Bool
@@ -244,6 +246,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
     /// stay here until Post).
     private var media: [ComposeMedia] = []
     private var mediaByKey: [String: [ComposeMedia]] = [:]
+    private var gif: ComposeGif?
     private let mediaRow = NSStackView()
     private let mediaScroll = NSScrollView()
     private let textView = ComposeTextView(usingTextLayoutManager: false)
@@ -475,6 +478,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             return m
         }
         mediaByKey[snap.key] = media
+        gif = snap.gif
         rebuildMediaRow()
         replyPopUp.removeAllItems()
         for o in snap.replyOptions {
@@ -700,6 +704,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             "bold": s.bold,
             "italic": s.italic,
             "files": media.map { ["id": $0.id, "name": $0.name, "type": $0.type, "size": $0.size, "alt": $0.alt] as [String: Any] },
+            "gif": gif?.dict ?? NSNull(),
             "reply": replyPopUp.selectedItem?.representedObject as? String ?? "Everyone",
         ]
     }
@@ -861,7 +866,51 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             }
             mediaRow.addArrangedSubview(tile)
         }
-        mediaScroll.isHidden = media.isEmpty
+        if let gif {
+            let tile = ComposeMediaTile(gif: gif)
+            tile.onRemove = { [weak self] in
+                guard let self, !self.busy else { return }
+                self.gif = nil
+                self.rebuildMediaRow()
+                self.sync()
+            }
+            mediaRow.addArrangedSubview(tile)
+        }
+        mediaScroll.isHidden = media.isEmpty && gif == nil
+    }
+
+    // MARK: GIFs
+
+    private func chooseGif(from item: NSToolbarItem) {
+        guard media.isEmpty else {
+            statusLabel.stringValue = "A post can have photos or a video, or one GIF."
+            statusLabel.textColor = .systemRed
+            return
+        }
+        let picker = ComposeGifPicker()
+        let key = self.key
+        picker.search = { q, done in
+            ViewController.shared?.composeOp("gifs", ["q": q]) { reply in
+                guard let text = reply as? String, let data = text.data(using: .utf8),
+                      let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any], o["stale"] == nil else { return }
+                let list = (o["items"] as? [[String: Any]]) ?? []
+                let gifs = list.compactMap { g -> ComposeGif? in
+                    guard let id = g["id"] as? String, let url = g["url"] as? String, let still = g["still"] as? String else { return nil }
+                    return ComposeGif(id: id, alt: g["alt"] as? String ?? "", url: url, still: still, w: g["w"] as? Int ?? 0, h: g["h"] as? Int ?? 0, query: q)
+                }
+                done(gifs, o["empty"] as? String ?? "No GIFs found.")
+            }
+        }
+        picker.onPick = { [weak self] g in
+            guard let self, self.isOpen, self.key == key, !self.busy, self.media.isEmpty else { return }
+            self.gif = g
+            self.rebuildMediaRow()
+            self.sync()
+        }
+        picker.onClose = {
+            ViewController.shared?.composeOp("gifsClose", nil) { _ in }
+        }
+        picker.show(from: item)
     }
 
     // MARK: Closing
@@ -1023,6 +1072,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSToo
             NSApp.orderFrontCharacterPalette(textView)
         case .photo:
             choosePhotos()
+        case .gif:
+            chooseGif(from: sender)
         default:
             // Not drawn here yet: the web compose window takes the draft
             // (with its media) and opens the tool.

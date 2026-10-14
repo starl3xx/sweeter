@@ -187,3 +187,32 @@ test('poll rules: X Pro’s length limits, its choices, and when it refuses', ()
   ok(/media/.test(T.pollProblem('Which?', P, { media: true })));
   ok(/quote/.test(T.pollProblem('Which?', P, { quote: true })));
 });
+
+test('schedule rules: a real local time, after now, within 18 months, as X Pro allows', () => {
+  const T = globalThis.Sweeter.text;
+  const now = new Date(2026, 9, 13, 18, 0).getTime();
+  const W = (y, mo, d, h, mi) => ({ y, mo, d, h, mi });
+  eq(T.whenDate(W(2026, 10, 14, 9, 5)).getTime(), new Date(2026, 9, 14, 9, 5).getTime());
+  eq(T.whenDate(W(2026, 2, 30, 9, 0)), null); // no February 30
+  eq(T.whenDate(W(2026, 10, 14, 24, 0)), null);
+  eq(T.whenDate({ y: 2026, mo: 10, d: 14, h: 9 }), null);
+  eq(T.whenDate(null), null);
+  eq(T.whenOf(new Date(2026, 9, 14, 9, 5)), W(2026, 10, 14, 9, 5));
+  eq(T.scheduleProblem(W(2026, 10, 14, 9, 0), now), null);
+  ok(/past/.test(T.scheduleProblem(W(2026, 10, 13, 17, 59), now)));
+  ok(/past/.test(T.scheduleProblem(W(2026, 10, 13, 18, 0), now)));
+  ok(/2 minutes/.test(T.scheduleProblem(W(2026, 10, 13, 18, 1), now)));
+  eq(T.scheduleProblem(W(2026, 10, 13, 18, 2), now), null);
+  eq(T.scheduleProblem(W(2028, 4, 13, 18, 0), now), null); // 18 months to the minute
+  ok(/18 months/.test(T.scheduleProblem(W(2028, 4, 13, 18, 1), now)));
+  ok(/date and time/.test(T.scheduleProblem(W(2026, 2, 30, 9, 0), now)));
+  ok(/poll/.test(T.scheduleProblem(W(2026, 10, 14, 9, 0), now, { poll: true })));
+  ok(/everyone/.test(T.scheduleProblem(W(2026, 10, 14, 9, 0), now, { reply: 'Accounts you follow' })));
+  eq(T.scheduleProblem(W(2026, 10, 14, 9, 0), now, { reply: 'Everyone' }), null);
+  ok(/bold or italic/.test(T.scheduleProblem(W(2026, 10, 14, 9, 0), now, { styledReply: true })));
+  ok(/280/.test(T.scheduleProblem(W(2026, 10, 14, 9, 0), now, { longReply: true })));
+  ok(/ at /.test(T.whenLabel(W(2026, 10, 14, 9, 5), now)));
+  ok(!/2026/.test(T.whenLabel(W(2026, 10, 14, 9, 5), now)));
+  ok(/2027/.test(T.whenLabel(W(2027, 1, 4, 9, 5), now)));
+  eq(T.whenLabel(null, now), '');
+});

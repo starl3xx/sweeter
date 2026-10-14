@@ -758,6 +758,15 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-prev{padding-top:8px}
 .cmp-next{padding-bottom:8px}
 .cmp-prev:empty,.cmp-next:empty{display:none}
+/* When X Pro sends it: one line under the posts, for the whole thread. */
+.cmp-when{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 14px 8px 64px;font-size:12.5px;color:var(--accent-solid)}
+.cmp-when[hidden]{display:none}
+.cmp-when>svg{width:15px;height:15px;flex:0 0 auto}
+.cmp-when .wh-l{font-weight:600}
+.cmp-when input{font:inherit;font-size:12.5px;color:var(--t1);background:transparent;border:1px solid var(--div);border-radius:6px;padding:3px 6px;color-scheme:inherit}
+.cmp-when input:focus{outline:none;border-color:var(--accent-solid)}
+.cmp-when .wh-s{flex:1 1 auto;min-width:0;color:var(--t2)}
+.cmp-when .wh-x{background:none;border:0;padding:2px 0;color:#E64545;font-size:12.5px;font-weight:600;cursor:pointer}
 .cmp-tp{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 8px;border:1px solid var(--div);border-radius:10px;cursor:pointer;font-size:12.5px;line-height:1.3}
 .cmp-tp:hover,.cmp-tp:focus-visible{background:var(--tint);outline:none}
 .cmp-tp-n{flex:0 0 auto;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:var(--sub);color:var(--t3);font-size:11px;font-weight:600;display:grid;place-items:center}

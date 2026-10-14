@@ -113,6 +113,9 @@
     // conversation at once (see trim).
     'CreateTweet',
     'CreateNoteTweet',
+    // A scheduled post (module 957178): X's answer names the scheduled
+    // post, which isn't a post yet.
+    'CreateScheduledTweet',
     // A profile X Pro opens as a stack (verified 2026-09-28): the person,
     // then their posts.
     'UserByScreenName',
@@ -140,7 +143,7 @@
   // The deck sync carries more than Sweeter needs (onboarding state, each
   // column creator’s full record): pass on only the deck model, with the
   // creator’s handle alone.
-  const POSTING = new Set(['CreateTweet', 'CreateNoteTweet']);
+  const POSTING = new Set(['CreateTweet', 'CreateNoteTweet', 'CreateScheduledTweet']);
   const GIFS = new Set(['GifSearch', 'GifEnumerateCategory']);
   function trim(op, json, status) {
     if (GIFS.has(op)) {
@@ -159,6 +162,12 @@
       } catch (e) {
         return null;
       }
+    }
+    if (op === 'CreateScheduledTweet') {
+      const t = json && json.data && json.data.tweet;
+      const id = t && t.rest_id;
+      const err = json && Array.isArray(json.errors) ? json.errors[0] : null;
+      return { status: status || 0, id: id ? String(id) : null, post: null, scheduled: true, error: err ? { code: err.code || null, message: String(err.message || '').slice(0, 300) } : !id && status !== 200 ? { code: null, message: 'HTTP ' + status } : null };
     }
     if (POSTING.has(op)) {
       const d = (json && json.data) || {};

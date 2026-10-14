@@ -1076,20 +1076,31 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             textHeight.isActive = false
             return
         }
-        let area = (w.screen ?? NSScreen.main)?.visibleFrame ?? w.frame
-        w.contentMaxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: (area.height * 0.8).rounded())
+        // The screen most of the window is on (a hidden one has no screen yet).
+        let size = { (s: NSScreen) -> CGFloat in
+            let r = s.frame.intersection(w.frame)
+            return r.isNull ? 0 : r.width * r.height
+        }
+        let screen = w.screen ?? NSScreen.screens.filter { size($0) > 0 }.max { size($0) < size($1) } ?? NSScreen.main
+        let area = screen?.visibleFrame ?? w.frame
         lm.ensureLayout(for: tc)
-        let text = ceil(lm.usedRect(for: tc).height + textView.textContainerInset.height * 2)
-        let want = max(Self.textMin, text)
+        // The text with its last, empty line (after a Return) counted too.
+        var used = lm.usedRect(for: tc)
+        if lm.extraLineFragmentTextContainer === tc, !lm.extraLineFragmentRect.isEmpty { used = used.union(lm.extraLineFragmentRect) }
+        let text = ceil(used.height + textView.textContainerInset.height * 2)
+        // Up to 80% of the screen: the rest of the box keeps its height.
+        w.contentView?.layoutSubtreeIfNeeded()
+        let others = w.frame.height - scroll.frame.height
+        let want = max(Self.textMin, min(text, area.height * 0.8 - others))
         if abs(textHeight.constant - want) > 0.5 { textHeight.constant = want }
         textHeight.isActive = true
+        // The top stays where it was; the window grows down, and up only at the screen's bottom.
+        let top = w.frame.maxY
         w.layoutIfNeeded()
-        // Grown past the screen's bottom: up as far as it needs.
         var f = w.frame
-        if f.minY < area.minY {
-            f.origin.y = min(area.minY, area.maxY - f.height)
-            w.setFrameOrigin(f.origin)
-        }
+        f.origin.y = top - f.height
+        if f.minY < area.minY { f.origin.y = min(area.minY, area.maxY - f.height) }
+        if f.origin != w.frame.origin { w.setFrameOrigin(f.origin) }
     }
 
     @objc private func replyPressed() {

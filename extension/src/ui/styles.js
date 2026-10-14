@@ -948,14 +948,16 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 @keyframes sweeter-spin{to{transform:rotate(360deg)}}
 .asearch{display:flex;gap:8px;padding:6px 4px}
 .asearch input{flex:1 1 auto;min-width:0;font:inherit;font-size:13px;color:var(--t1);background:var(--field);border:1px solid var(--div);border-radius:6px;padding:6px 8px}
-.cheats{columns:2;column-gap:12px;margin:2px 0 0;padding:10px 0 0;border-top:1px solid var(--div)}
-.cheats .cg{break-inside:avoid;margin:0 0 8px}
-.cheats h4{margin:0 0 2px;padding:0 6px;font-size:11px;font-weight:600;color:var(--t3)}
-.cheats button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;border:0;background:none;border-radius:6px;padding:4px 6px;text-align:left;font:inherit;cursor:pointer}
-.cheats code{font:12px ui-monospace,"SF Mono",Menlo,monospace;color:var(--t1)}
-.cheats span{font-size:11.5px;color:var(--t3)}
-.cheats button:focus-visible{outline:2px solid var(--accent-hl);outline-offset:-2px}
-@media (hover:hover){.cheats button:hover{background:var(--sub)}}
+.sform{margin:2px 0 0;padding:4px 0 0;border-top:1px solid var(--div);display:flex;flex-direction:column;gap:2px}
+.sf-g{border:0;margin:0;padding:6px 6px 2px;min-width:0;display:flex;flex-direction:column;gap:5px}
+.sf-g legend{padding:0 0 4px;font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--t3)}
+.sf-row{display:grid;grid-template-columns:118px minmax(0,1fr);align-items:center;gap:10px;font-size:12.5px;color:var(--t2)}
+.sf-row input,.sf-row select{min-width:0;width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;color:var(--t1);background:var(--field);border:1px solid var(--div);border-radius:6px;padding:4px 7px;color-scheme:inherit}
+.sf-row input[type=number]{width:96px;font-variant-numeric:tabular-nums}
+.sf-row input:focus-visible,.sf-row select:focus-visible{outline:2px solid var(--accent-hl);outline-offset:-1px}
+.sf-checks{display:flex;flex-wrap:wrap;gap:4px 16px;padding-left:128px}
+.sf-check{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2)}
+.sf-check input{margin:0;accent-color:var(--accent-solid)}
 .col.lifted{opacity:.45}
 .app.reordering,.app.reordering *{cursor:grabbing!important}
 .app.reordering .cols{scroll-snap-type:none}

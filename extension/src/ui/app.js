@@ -5688,7 +5688,7 @@
             ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + '</div>'
             : '<p class="anote">You have no lists yet. Make one on x.com, then add it here.</p>';
       } else if (s.step === 'search') {
-        body = '<form class="asearch"><input id="add-q" type="search" value="' + h(s.q || '') + '" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">' + (s.edit ? 'Save' : 'Add Column') + '</button></form><p class="anote">A search column shows the newest posts first.</p>' + searchCheats();
+        body = '<form class="asearch"><input id="add-q" type="search" value="' + h(s.q || '') + '" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">' + (s.edit ? 'Save' : 'Add Column') + '</button></form><p class="anote">A search column shows the newest posts first. Write the query, or fill in what you want below.</p>' + searchForm(s.q || '');
       } else {
         body = '<p class="anote busy">' + h(s.label || 'Adding the column in X Pro…') + '</p>';
       }
@@ -5703,42 +5703,63 @@
     }
     // X’s search syntax, a click away. Each adds its operator after the
     // cursor, with the part to change ({…}) selected.
-    function searchCheats() {
-      const d = new Date(Date.now() - 7 * 864e5);
-      const day = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      const groups = [
-        ['Words', [['"{exact phrase}"', 'This exact phrase'], ['OR {word}', 'Either word', 'cats OR dogs'], ['-{word}', 'Without this word'], ['#{hashtag}', 'This hashtag']]],
-        ['People', [['from:{user}', 'Posted by this account'], ['to:{user}', 'Replies to this account'], ['@{user}', 'Mentions this account'], ['filter:follows', 'Only accounts you follow']]],
-        ['Links and media', [['url:{site.com}', 'Links to this site'], ['filter:links', 'Has a link'], ['filter:images', 'Has a photo'], ['filter:videos', 'Has a video']]],
-        ['More', [['-filter:replies', 'No replies'], ['min_faves:{10}', 'At least 10 likes'], ['lang:{en}', 'In this language'], ['since:{' + day + '}', 'On or after this day']]],
-      ];
-      return '<div class="cheats">' + groups.map(([name, ops]) => '<div class="cg"><h4>' + h(name) + '</h4>' + ops.map(([ins, what, shown]) => '<button type="button" data-cmd="add-ins" data-ins="' + h(ins) + '"><code>' + h(shown || ins.replace(/[{}]/g, '')) + '</code><span>' + h(what) + '</span></button>').join('') + '</div>').join('') + '</div>';
+    // ---------- the search form ----------
+    // X's search filters as fields (Sweeter.text.searchParse/searchBuild):
+    // changing one writes the query above, and typing the query fills them
+    // in. What no field holds stays in the query as typed (addState.rest).
+    const SEARCH_LANGS = [['', 'Any language'], ['en', 'English'], ['es', 'Spanish'], ['pt', 'Portuguese'], ['fr', 'French'], ['de', 'German'], ['it', 'Italian'], ['nl', 'Dutch'], ['ja', 'Japanese'], ['ko', 'Korean'], ['zh', 'Chinese'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['tr', 'Turkish'], ['ru', 'Russian'], ['in', 'Indonesian']];
+    const SEARCH_TRI_OPTS = [['', 'Include'], ['only', 'Only'], ['none', 'Leave out']];
+    function searchForm(q) {
+      const f = Sweeter.text.searchParse(q);
+      addState.rest = f.rest;
+      const text = (k, label, ph, type) => '<label class="sf-row"><span>' + h(label) + '</span><input data-sf="' + k + '" type="' + (type || 'text') + '" value="' + h(f[k]) + '" placeholder="' + h(ph || '') + '" autocomplete="off" spellcheck="false"' + (type === 'number' ? ' min="0" inputmode="numeric"' : '') + '></label>';
+      const pick = (k, label, opts) => {
+        const list = opts.some((o) => o[0] === f[k]) ? opts : opts.concat([[f[k], f[k]]]);
+        return '<label class="sf-row"><span>' + h(label) + '</span><select data-sf="' + k + '">' + list.map(([v, t]) => '<option value="' + h(v) + '"' + (v === f[k] ? ' selected' : '') + '>' + h(t) + '</option>').join('') + '</select></label>';
+      };
+      const check = (k, label) => '<label class="sf-check"><input data-sf="' + k + '" type="checkbox"' + (f[k] ? ' checked' : '') + '><span>' + h(label) + '</span></label>';
+      const group = (name, rows) => '<fieldset class="sf-g"><legend>' + h(name) + '</legend>' + rows.join('') + '</fieldset>';
+      return (
+        '<div class="sform">' +
+        group('Words', [text('all', 'All of these', 'mac app'), text('exact', 'This exact phrase', 'release notes'), text('any', 'Any of these', 'swift swiftui'), text('none', 'None of these', 'ios'), text('tags', 'Hashtags', '#wwdc'), pick('lang', 'Language', SEARCH_LANGS)]) +
+        group('Accounts', [text('from', 'From', 'starl3xx'), text('to', 'Replying to', 'starl3xx'), text('mention', 'Mentioning', 'starl3xx'), '<div class="sf-checks">' + check('verified', 'Only verified accounts') + check('follows', 'Only accounts you follow') + '</div>']) +
+        group('Posts', [pick('replies', 'Replies', SEARCH_TRI_OPTS), pick('reposts', 'Reposts', SEARCH_TRI_OPTS), pick('quotes', 'Quotes', SEARCH_TRI_OPTS), pick('links', 'Links', SEARCH_TRI_OPTS), text('site', 'Links to', 'sixcolors.com'), pick('media', 'Media', [['', 'Any'], ['media', 'Photos or videos'], ['images', 'Photos'], ['videos', 'Videos']])]) +
+        group('At least', [text('minReplies', 'Replies', '0', 'number'), text('minLikes', 'Likes', '0', 'number'), text('minReposts', 'Reposts', '0', 'number')]) +
+        group('Dates', [text('since', 'On or after', '', 'date'), text('until', 'Before', '', 'date')]) +
+        '</div>'
+      );
     }
-    function insertOp(el) {
+    // A field changed: the query, from every field and what they don't hold.
+    function searchFromForm() {
       const q = addBody.querySelector('#add-q');
-      if (!q) return;
-      const tpl = el.dataset.ins;
-      const text = tpl.replace(/[{}]/g, '');
-      // After the word or "quoted phrase" at the cursor, never inside it
-      // (or over a selection, which stays).
-      const v = q.value;
-      let at = q.selectionEnd == null ? v.length : q.selectionEnd;
-      if ((v.slice(0, at).match(/"/g) || []).length % 2) {
-        const close = v.indexOf('"', at);
-        at = close < 0 ? v.length : close + 1;
-      }
-      while (at < v.length && !/\s/.test(v[at])) at++;
-      const before = q.value.slice(0, at);
-      const after = q.value.slice(at);
-      const pre = before && !/\s$/.test(before) ? ' ' : '';
-      const post = after && !/^\s/.test(after) ? ' ' : '';
-      q.value = before + pre + text + post + after;
-      const start = before.length + pre.length;
-      const a = tpl.indexOf('{');
-      q.focus();
-      if (a < 0) q.setSelectionRange(start + text.length, start + text.length);
-      else q.setSelectionRange(start + a, start + tpl.indexOf('}') - 1);
+      if (!q || !addState) return;
+      const f = Object.assign({}, Sweeter.text.SEARCH_FIELDS, { rest: addState.rest || '' });
+      for (const el of addBody.querySelectorAll('[data-sf]')) f[el.dataset.sf] = el.type === 'checkbox' ? el.checked : el.value;
+      q.value = Sweeter.text.searchBuild(f);
+      addState.q = q.value;
     }
+    // The query typed: the fields, but not the one being typed in.
+    function searchToForm() {
+      const q = addBody.querySelector('#add-q');
+      if (!q || !addState) return;
+      const f = Sweeter.text.searchParse(q.value);
+      addState.rest = f.rest;
+      addState.q = q.value;
+      for (const el of addBody.querySelectorAll('[data-sf]')) {
+        const v = f[el.dataset.sf];
+        if (el.type === 'checkbox') el.checked = !!v;
+        else if (el.tagName === 'SELECT' && !Array.from(el.options).some((o) => o.value === v)) el.add(new Option(v, v, true, true));
+        else el.value = v;
+      }
+    }
+    addBody.addEventListener('input', (e) => {
+      if (!addState || addState.step !== 'search') return;
+      if (e.target.id === 'add-q') searchToForm();
+      else if (e.target.closest('[data-sf]')) searchFromForm();
+    });
+    addBody.addEventListener('change', (e) => {
+      if (addState && addState.step === 'search' && e.target.closest('[data-sf]')) searchFromForm();
+    });
     async function doAdd(fn, onFail) {
       addState = { step: 'busy' };
       renderAdd();
@@ -8753,9 +8774,6 @@
           break;
         case 'add-open':
           openAddSheet();
-          break;
-        case 'add-ins':
-          insertOp(el);
           break;
         case 'deckmenu':
           showDeckMenu(el);

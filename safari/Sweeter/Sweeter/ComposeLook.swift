@@ -434,7 +434,8 @@ final class ComposeDockButton: NSButton {
             SweeterColor.text.withAlphaComponent(0.07).setFill()
             circle.fill()
         }
-        let color = (on ? SweeterColor.pinkText : SweeterColor.text.withAlphaComponent(0.72)).withAlphaComponent(isEnabled ? 1 : 0.35)
+        // Idle tools at 72% of the text color, on ones in full; a third while disabled.
+        let color = (on ? SweeterColor.pinkText : SweeterColor.text).withAlphaComponent((on ? 1 : 0.72) * (isEnabled ? 1 : 0.35))
         let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium).applying(.init(paletteColors: [color]))
         guard let img = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config) else { return }
         let r = NSRect(x: (bounds.width - img.size.width) / 2, y: (bounds.height - img.size.height) / 2, width: img.size.width, height: img.size.height)

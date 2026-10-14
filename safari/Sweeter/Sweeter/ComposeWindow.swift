@@ -1215,6 +1215,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         replyPill.isEnabled = false
         addRow.isEnabled = false
         for b in dockButtons.values { b.isEnabled = false }
+        moreButton.isEnabled = false
+        draftsPill.isEnabled = false
         let all = thread.flatMap(\.media)
         guard !all.isEmpty else { return send(op, d) }
         uploading = true
@@ -1236,6 +1238,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             self.replyPill.isEnabled = true
             self.addRow.isEnabled = true
             for b in self.dockButtons.values { b.isEnabled = true }
+            self.moreButton.isEnabled = true
+            self.draftsPill.isEnabled = true
             self.spinner.stopAnimation(nil)
             self.statusLabel.stringValue = problem
             self.statusRow.isHidden = false

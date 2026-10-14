@@ -5793,17 +5793,18 @@
     // updatePost’s count flips must not run twice on one record.
     function eachPost(visit) {
       const seen = new Set();
-      const fn = (p) => {
+      // quoted: the copy inside another post, which carries less of it.
+      const fn = (p, quoted) => {
         if (!p || seen.has(p)) return;
         seen.add(p);
-        visit(p);
+        visit(p, !!quoted);
       };
       for (const s of store.all()) {
         for (const b of s.sorted) {
           if (b.kind === 'post') {
             fn(b.post);
-            if (b.post.quote) fn(b.post.quote);
-          } else if (b.kind === 'thread') b.posts.forEach(fn);
+            if (b.post.quote) fn(b.post.quote, true);
+          } else if (b.kind === 'thread') b.posts.forEach((p) => fn(p));
           else if (b.kind === 'notification' && b.n.target) fn(b.n.target);
         }
       }
@@ -5814,17 +5815,18 @@
         for (const b of d ? d.blocks : []) {
           if (b.kind === 'post') {
             fn(b.post);
-            if (b.post.quote) fn(b.post.quote);
-          } else if (b.kind === 'thread') b.posts.forEach(fn);
+            if (b.post.quote) fn(b.post.quote, true);
+          } else if (b.kind === 'thread') b.posts.forEach((p) => fn(p));
         }
       }
       if (rd) fn(rd.post);
     }
 
-    function findPost(id) {
+    // whole: not a quoted copy (which has no quote of its own).
+    function findPost(id, whole) {
       let found = null;
-      eachPost((p) => {
-        if (!found && p && p.id === id) found = p;
+      eachPost((p, quoted) => {
+        if (!found && p && p.id === id && !(whole && quoted)) found = p;
       });
       return found;
     }
@@ -6032,7 +6034,7 @@
       const key = draftKey(c);
       if (c === compose && stash !== false) stashPost();
       const t = c.thread;
-      const unchanged = c.kind === 'edit' && t[0].text.trim() === (c.orig || '').trim() && !(t[0].styles && (t[0].styles.bold.length || t[0].styles.italic.length));
+      const unchanged = c.kind === 'edit' && editUnchanged(c, t[0]);
       if (!unchanged && t.some(postFilled)) {
         const old = drafts.get(key);
         const one = (p) => ({ text: p.text, files: p.files, gif: p.gif, styles: p.styles, poll: p.poll ? draftPoll(p.poll) : null });
@@ -6649,13 +6651,18 @@
       const text = bits.filter(Boolean).join(' ');
       return text ? '<div class="rto edn">' + h(text) + '</div>' : '';
     }
+    // The post as it was: the same text, bold and italic.
+    function editUnchanged(c, p) {
+      const st = (x) => JSON.stringify([Sweeter.text.normRanges((x && x.bold) || []), Sweeter.text.normRanges((x && x.italic) || [])]);
+      return p.text === (c.orig || '') && st(p.styles) === st(c.origStyles);
+    }
     async function submitEdit(c) {
       const p = c.thread[0];
       const styled = (x) => (x.styles && (x.styles.bold.length || x.styles.italic.length) ? x.styles : null);
       const until = c.editCtl && c.editCtl.until;
       let problem = null;
       if (!p.text.trim() && !c.media && !c.quotes) problem = 'Write something first.';
-      else if (p.text.trim() === (c.orig || '').trim() && !styled(p)) problem = 'Change something first: each edit makes a new version of the post.';
+      else if (editUnchanged(c, p)) problem = 'Change something first: each edit makes a new version of the post.';
       else if (weighted(p.text) > 25000) problem = 'This post is over 25,000 characters.';
       else if (until && Date.now() > until) problem = 'The time to edit this post is over.';
       if (problem) {
@@ -6686,7 +6693,7 @@
     function openCompose(kind, id, key) {
       if (key && refuseDelegated(key)) return;
       closePop();
-      const p = id ? findPost(id) : null;
+      const p = id ? findPost(id, kind === 'edit') : null;
       if (id && (!p || p.unavailable)) return;
       // X limits who can reply and this account isn't one of them: X Pro's
       // own Reply would refuse, so say who can instead.
@@ -6701,14 +6708,14 @@
       compose = { kind, id: id || null, key: key || null, files: [] };
       // An edit starts from the post's own text; its media and quoted post
       // stay as they are (X Pro's Edit keeps them).
-      if (kind === 'edit') Object.assign(compose, { orig: p.editText || '', media: !!(p.media && p.media.length), quotes: !!p.quote, editCtl: p.editCtl || null, lastEdit: !!(p.editCtl && p.editCtl.left === 1) });
+      if (kind === 'edit') Object.assign(compose, { orig: (p.editable && p.editable.text) || '', origStyles: { bold: (p.editable && p.editable.bold) || [], italic: (p.editable && p.editable.italic) || [] }, media: !!(p.media && p.media.length), quotes: !!p.quote, editCtl: p.editCtl || null, lastEdit: !!(p.editCtl && p.editCtl.left === 1) });
       cmpTitle.textContent = kind === 'reply' ? 'Reply' : kind === 'quote' ? 'Quote post' : kind === 'edit' ? 'Edit post' : 'New post';
       cmpPost.textContent = kind === 'reply' ? 'Reply' : 'Post';
       cmpCtx.innerHTML = kind === 'edit' ? editNote(compose) : p ? contextHTML(kind, p) : '';
       cmpBox.classList.toggle('editing', kind === 'edit');
       if (viewer && viewer.avatar) cmpAv.style.backgroundImage = 'url("' + safeUrl(viewer.avatar.replace(/_(normal|bigger|mini|x96)\./, '_200x200.')) + '")';
       cmpText.placeholder = kind === 'reply' ? 'Post your reply' : kind === 'quote' ? 'Add a comment' : kind === 'edit' ? 'Edit your post' : 'What’s happening?';
-      const draft = drafts.get(draftKey(compose)) || { text: kind === 'edit' ? compose.orig : '', files: [], reply: 'Everyone' };
+      const draft = drafts.get(draftKey(compose)) || { text: kind === 'edit' ? compose.orig : '', styles: kind === 'edit' ? compose.origStyles : null, files: [], reply: 'Everyone' };
       // A draft from an earlier session says so once.
       const restored = !!draft.saved;
       delete draft.saved;

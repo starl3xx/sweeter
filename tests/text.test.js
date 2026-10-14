@@ -217,12 +217,24 @@ test('schedule rules: a real local time, after now, within 18 months, as X Pro a
   eq(T.whenLabel(null, now), '');
 });
 
-test('editable text: full links back in, a quoted post’s link left out, as X Pro’s Edit does', () => {
+test('editable text: full links back in, a quoted post’s link left out, bold and italic kept, as X Pro’s Edit does', () => {
   const T = globalThis.Sweeter.text;
   const text = 'See https://t.co/abc and 🔥 https://t.co/q https://t.co/m';
   const ents = { urls: [{ url: 'https://t.co/abc', expanded_url: 'https://starl3xx.fun/sweeter', indices: [4, 20] }, { url: 'https://t.co/q', expanded_url: 'https://x.com/a/status/1', indices: [27, 41] }] };
-  eq(T.editableText(text, [0, 41], ents, ['https://t.co/q']), 'See https://starl3xx.fun/sweeter and 🔥');
-  eq(T.editableText(text, [0, 41], ents, []), 'See https://starl3xx.fun/sweeter and 🔥 https://x.com/a/status/1');
-  eq(T.editableText('a &amp; b', null, {}), 'a & b');
-  eq(T.editableText('', null, null), '');
+  eq(T.editableText(text, [0, 41], ents, ['https://t.co/q']).text, 'See https://starl3xx.fun/sweeter and 🔥');
+  eq(T.editableText(text, [0, 41], ents, []).text, 'See https://starl3xx.fun/sweeter and 🔥 https://x.com/a/status/1');
+  eq(T.editableText('a &amp; b', null, {}).text, 'a & b');
+  eq(T.editableText('', null, null), { text: '', bold: [], italic: [] });
+  // "See" bold; "and 🔥" italic (code points 21-26), after the longer link.
+  const r = T.editableText(text, [0, 41], ents, ['https://t.co/q'], [{ s: 0, e: 3, bold: true, italic: false }, { s: 21, e: 26, bold: false, italic: true }]);
+  eq(r.bold, [[0, 3]]);
+  eq(r.text.slice(r.italic[0][0], r.italic[0][1]), 'and 🔥');
+  // A style over a link covers the whole new address.
+  const l = T.editableText(text, [0, 41], ents, [], [{ s: 6, e: 10, bold: true, italic: true }]);
+  eq(l.text.slice(l.bold[0][0], l.bold[0][1]), 'https://starl3xx.fun/sweeter');
+  eq(l.italic, l.bold);
+  // Entities before a style move it by their unescaped length; leading space is trimmed.
+  const m = T.editableText('  x &amp; y', null, {}, [], [{ s: 10, e: 11, bold: true }]);
+  eq(m.text, 'x & y');
+  eq(m.text.slice(m.bold[0][0], m.bold[0][1]), 'y');
 });

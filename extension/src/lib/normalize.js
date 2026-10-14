@@ -494,8 +494,8 @@
       createdMs: isFinite(createdMs) ? createdMs : Date.parse(legacy.created_at),
       html: richText(text, entities, range, { hideUrls, styles }),
       plain: plainText(text, range, entities),
-      // For an edit: only a post that isn't quoted inside another.
-      editText: depth ? '' : editableText(text, range, entities, hideUrls),
+      // For an edit: the text as written, with its bold and italic.
+      editable: editableText(text, range, entities, hideUrls, styles),
       lang: legacy.lang || '',
       source: sourceName(r.source),
       replyTo: legacy.in_reply_to_screen_name || null,

@@ -7214,7 +7214,8 @@
       // Emptied, it is no draft, as keepDraft has it: an edit then opens on
       // the post's own text again.
       const gif = 'gif' in d ? macGifOf(d.gif) : old ? old.gif : null;
-      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !gif && !(old && ((old.more || []).length || old.poll))) {
+      const poll = 'poll' in d ? (d.poll && !/^edit:/.test(d.key) ? draftPoll(d.poll) : null) : old ? old.poll : null;
+      if (!d.text.trim() && !(Array.isArray(d.files) && d.files.length) && !gif && !poll && !(old && (old.more || []).length)) {
         if (drafts.delete(d.key)) storeDrafts();
         return;
       }
@@ -7225,7 +7226,8 @@
       }
       const text = d.text;
       const fit = (l) => Sweeter.text.normRanges((Array.isArray(l) ? l : []).filter((r) => Array.isArray(r) && r.length === 2).map((r) => [Math.max(0, r[0] | 0), Math.min(text.length, r[1] | 0)]));
-      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, gif, at: Date.now() });
+      Object.assign(old, { text, styles: { bold: fit(d.bold), italic: fit(d.italic) }, gif, poll, at: Date.now() });
+      if ('when' in d && !/^edit:/.test(d.key)) old.when = d.when && Sweeter.text.whenDate(d.when) ? Sweeter.text.whenOf(Sweeter.text.whenDate(d.when)) : null;
       if (REPLY_OPTIONS.includes(d.reply)) old.reply = d.reply;
       // The window's media, as stand-ins (the window keeps their bytes).
       if (Array.isArray(d.files)) old.files = d.files.filter((m) => m && typeof m.id === 'string').slice(0, 4).map((m) => ({ name: String(m.name || ''), type: String(m.type || ''), size: m.size | 0, __mac: m.id, __alt: String(m.alt || '').slice(0, 1000) }));

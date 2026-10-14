@@ -216,3 +216,13 @@ test('schedule rules: a real local time, after now, within 18 months, as X Pro a
   ok(/2027/.test(T.whenLabel(W(2027, 1, 4, 9, 5), now)));
   eq(T.whenLabel(null, now), '');
 });
+
+test('editable text: full links back in, a quoted post’s link left out, as X Pro’s Edit does', () => {
+  const T = globalThis.Sweeter.text;
+  const text = 'See https://t.co/abc and 🔥 https://t.co/q https://t.co/m';
+  const ents = { urls: [{ url: 'https://t.co/abc', expanded_url: 'https://starl3xx.fun/sweeter', indices: [4, 20] }, { url: 'https://t.co/q', expanded_url: 'https://x.com/a/status/1', indices: [27, 41] }] };
+  eq(T.editableText(text, [0, 41], ents, ['https://t.co/q']), 'See https://starl3xx.fun/sweeter and 🔥');
+  eq(T.editableText(text, [0, 41], ents, []), 'See https://starl3xx.fun/sweeter and 🔥 https://x.com/a/status/1');
+  eq(T.editableText('a &amp; b', null, {}), 'a & b');
+  eq(T.editableText('', null, null), '');
+});

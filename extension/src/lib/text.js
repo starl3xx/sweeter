@@ -162,6 +162,24 @@
     return unescapeEntities(cps.slice(s, e).join(''));
   }
 
+  // A post's text as its author wrote it, for an edit: in its display
+  // range, each link as its full address (X shortens it again), and the
+  // links X shows another way (a quoted post, an article) left out, as X
+  // Pro's own Edit does (module 714377). Indices count code points.
+  function editableText(text, range, entities, hide) {
+    const cps = Array.from(String(text || ''));
+    const s = range ? range[0] : 0;
+    const e = range ? range[1] : cps.length;
+    const urls = ((entities && entities.urls) || []).filter((u) => u && Array.isArray(u.indices) && u.indices[0] >= s && u.indices[1] <= e).sort((a, b) => b.indices[0] - a.indices[0]);
+    let out = cps.slice(s, e);
+    for (const u of urls) {
+      const [a, b] = u.indices;
+      const to = (hide || []).includes(u.url) ? [] : Array.from(String(u.expanded_url || u.url || ''));
+      out = out.slice(0, a - s).concat(to, out.slice(b - s));
+    }
+    return unescapeEntities(out.join('')).trim();
+  }
+
   // Links typed in the compose window: the http(s) addresses X counts as 23
   // characters, less the punctuation that ends a sentence (a closing
   // bracket stays when the link opened one). Offsets count UTF-16 units,
@@ -345,6 +363,6 @@
     return day + ' at ' + t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   }
 
-  Sweeter.text = { richText, plainText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem };
+  Sweeter.text = { richText, plainText, editableText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.text;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

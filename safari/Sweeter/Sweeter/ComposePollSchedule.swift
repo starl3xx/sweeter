@@ -66,35 +66,33 @@ struct ComposePoll: Equatable {
     var dict: [String: Any] { ["choices": choices, "days": days, "hours": hours, "minutes": minutes] }
 }
 
-/// The poll under the text: its choices, Add a Choice, the length, and
-/// Remove Poll.
-final class ComposePollView: NSBox, NSTextFieldDelegate {
+/// The poll under the text: lettered choices, Add a Choice, the length as
+/// chips (Custom shows days, hours and minutes), and Remove Poll.
+final class ComposePollView: NSView, NSTextFieldDelegate {
     var onChange: ((ComposePoll?) -> Void)?
     private(set) var poll = ComposePoll.fresh
     private let choiceStack = NSStackView()
-    private let addButton = NSButton(title: "Add a Choice", target: nil, action: nil)
+    private let addButton = ComposePill("Add a Choice", tone: .chip, symbol: "plus")
     private let days = NSPopUpButton(frame: .zero, pullsDown: false)
     private let hours = NSPopUpButton(frame: .zero, pullsDown: false)
     private let minutes = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let customRow = NSStackView()
+    private let customChip = ComposePill("Custom…", tone: .chip)
+    private var chips: [ComposePill] = []
     private var fields: [NSTextField] = []
+    /// Custom stays open once chosen, even on a common length.
+    private var custom = false
+
+    /// The common lengths: title, days, hours, minutes.
+    private static let presets: [(String, Int, Int, Int)] = [("1 hour", 0, 1, 0), ("1 day", 1, 0, 0), ("3 days", 3, 0, 0), ("7 days", 7, 0, 0)]
 
     init() {
         super.init(frame: .zero)
-        boxType = .custom
-        cornerRadius = 8
-        borderColor = .separatorColor
-        borderWidth = 1
-        fillColor = .clear
-        titlePosition = .noTitle
-        contentViewMargins = NSSize(width: 10, height: 8)
-
         choiceStack.orientation = .vertical
         choiceStack.alignment = .leading
-        choiceStack.spacing = 6
+        choiceStack.spacing = 7
         addButton.target = self
         addButton.action = #selector(addChoice)
-        addButton.controlSize = .small
-        addButton.bezelStyle = .push
 
         for (p, sel) in [(days, #selector(daysChanged)), (hours, #selector(lengthChanged)), (minutes, #selector(lengthChanged))] {
             p.controlSize = .small
@@ -108,45 +106,94 @@ final class ComposePollView: NSBox, NSTextFieldDelegate {
             t.textColor = .secondaryLabelColor
             return t
         }
-        let lengthTitle = label("Poll length:")
-        let length = NSStackView(views: [lengthTitle, days, label("days"), hours, label("hours"), minutes, label("minutes")])
-        length.spacing = 4
-        let remove = NSButton(title: "Remove Poll", target: self, action: #selector(removePoll))
-        remove.controlSize = .small
-        remove.bezelStyle = .push
-        let foot = NSStackView(views: [addButton, NSView(), remove])
+        for v in [days, label("days"), hours, label("hours"), minutes, label("minutes")] as [NSView] { customRow.addArrangedSubview(v) }
+        customRow.spacing = 4
 
-        let stack = NSStackView(views: [choiceStack, length, foot])
+        chips = Self.presets.enumerated().map { i, p in
+            let c = ComposePill(p.0, tone: .chip, target: self, action: #selector(presetPressed(_:)))
+            c.tag = i
+            return c
+        }
+        customChip.target = self
+        customChip.action = #selector(customPressed)
+        let remove = ComposePill("Remove Poll", tone: .danger, symbol: "xmark", target: self, action: #selector(removePoll))
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let edit = NSStackView(views: [addButton, spacer, remove])
+        let length = NSStackView(views: chips + [customChip])
+        length.spacing = 6
+
+        let stack = NSStackView(views: [choiceStack, edit, length, customRow])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 8
-        foot.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        choiceStack.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        contentView = stack
+        stack.spacing = 10
+        stack.setCustomSpacing(8, after: choiceStack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        let narrow = choiceStack.widthAnchor.constraint(equalToConstant: 340)
+        narrow.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            edit.widthAnchor.constraint(equalTo: choiceStack.widthAnchor),
+            choiceStack.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor),
+            narrow,
+        ])
         show(.fresh)
     }
 
     required init?(coder: NSCoder) { nil }
 
+    /// Another poll (a new one, or another post's): Custom closes unless
+    /// its length needs it.
     func show(_ p: ComposePoll) {
+        custom = false
         poll = p
-        for f in fields { f.removeFromSuperview() }
-        fields = poll.choices.enumerated().map { i, c in
+        rebuild()
+    }
+
+    private func rebuild() {
+        for v in choiceStack.arrangedSubviews {
+            choiceStack.removeArrangedSubview(v)
+            v.removeFromSuperview()
+        }
+        fields = []
+        for (i, c) in poll.choices.enumerated() {
+            let letter = String(Character(UnicodeScalar(UInt8(65 + i))))
+            let row = ComposeCapsule()
+            row.translatesAutoresizingMaskIntoConstraints = false
+            let disc = ComposeDisc(letter, tone: i % 2 == 0 ? .sky : .pink, side: 26)
             let f = NSTextField(string: c)
+            f.isBordered = false
+            f.drawsBackground = false
+            f.focusRingType = .none
+            f.font = .systemFont(ofSize: 14)
             f.placeholderString = "Choice \(i + 1)" + (i > 1 ? " (optional)" : "")
+            f.setAccessibilityLabel("Choice \(letter)")
             f.delegate = self
             f.tag = i
             f.translatesAutoresizingMaskIntoConstraints = false
-            return f
-        }
-        for f in fields {
-            choiceStack.addArrangedSubview(f)
-            f.widthAnchor.constraint(equalTo: choiceStack.widthAnchor).isActive = true
+            row.addSubview(disc)
+            row.addSubview(f)
+            NSLayoutConstraint.activate([
+                row.heightAnchor.constraint(equalToConstant: 36),
+                disc.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 5),
+                disc.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+                f.leadingAnchor.constraint(equalTo: disc.trailingAnchor, constant: 10),
+                f.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -14),
+                f.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            ])
+            choiceStack.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: choiceStack.widthAnchor).isActive = true
+            fields.append(f)
         }
         addButton.isHidden = poll.choices.count >= 4
         fillLength()
     }
 
+    /// The pop-ups for Custom, and which chip is on.
     private func fillLength() {
         let fill = { (p: NSPopUpButton, lo: Int, hi: Int, v: Int) in
             p.removeAllItems()
@@ -156,10 +203,28 @@ final class ComposePollView: NSBox, NSTextFieldDelegate {
         fill(days, 0, 7, poll.days)
         fill(hours, 0, poll.hoursMax, poll.hours)
         fill(minutes, poll.minutesMin, poll.minutesMax, poll.minutes)
+        let match = Self.presets.firstIndex { $0.1 == poll.days && $0.2 == poll.hours && $0.3 == poll.minutes }
+        let open = custom || match == nil
+        for (i, c) in chips.enumerated() {
+            let on = !open && match == i
+            c.tone = on ? .chipOn : .chip
+            c.setAccessibilityValue(on ? "selected" : nil)
+        }
+        customChip.tone = open ? .chipOn : .chip
+        customChip.setAccessibilityValue(open ? "selected" : nil)
+        customRow.isHidden = !open
     }
 
     func focusFirstChoice() {
         window?.makeFirstResponder(fields.first)
+    }
+
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        ((obj.object as? NSView)?.superview as? ComposeCapsule)?.focused = true
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        ((obj.object as? NSView)?.superview as? ComposeCapsule)?.focused = false
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -172,9 +237,26 @@ final class ComposePollView: NSBox, NSTextFieldDelegate {
     @objc private func addChoice() {
         guard poll.choices.count < 4 else { return }
         poll.choices.append("")
-        show(poll)
+        rebuild()
         window?.makeFirstResponder(fields.last)
         onChange?(poll)
+    }
+
+    @objc private func presetPressed(_ sender: ComposePill) {
+        guard sender.tag < Self.presets.count else { return }
+        let p = Self.presets[sender.tag]
+        poll.days = p.1
+        poll.hours = p.2
+        poll.minutes = p.3
+        custom = false
+        poll.fit()
+        fillLength()
+        onChange?(poll)
+    }
+
+    @objc private func customPressed() {
+        custom = true
+        fillLength()
     }
 
     @objc private func daysChanged() {
@@ -243,7 +325,7 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
     private let calendar = NSDatePicker()
     private let time = NSDatePicker()
     private let summary = NSTextField(labelWithString: "")
-    private let setButton = NSButton(title: "Set", target: nil, action: nil)
+    private let setButton = ComposeAccentButton(title: "Set", target: nil, action: nil)
     private let start: Date
     private let had: Bool
     private weak var popover: NSPopover?
@@ -290,10 +372,20 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
         setButton.target = self
         setButton.action = #selector(set)
         setButton.keyEquivalent = "\r"
+        setButton.repaint()
         let clear = NSButton(title: had ? "Clear" : "Cancel", target: self, action: #selector(clearIt))
         let buttons = NSStackView(views: [clear, NSView(), setButton])
 
-        let stack = NSStackView(views: [title, calendar, timeRow, summary, buttons])
+        // The next 9 PM and 9 AM, in one click.
+        let quick = NSStackView(views: [21, 9].map { hour in
+            let t = Self.next(hour)
+            let chip = ComposePill(Self.quickTitle(t), tone: .chip, target: self, action: #selector(quickPressed(_:)))
+            chip.tag = Int(t.timeIntervalSince1970)
+            return chip
+        })
+        quick.spacing = 6
+
+        let stack = NSStackView(views: [title, quick, calendar, timeRow, summary, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
@@ -349,6 +441,29 @@ final class ComposeSchedulePicker: NSViewController, NSPopoverDelegate {
             summary.textColor = .secondaryLabelColor
             setButton.isEnabled = true
         }
+    }
+
+    /// Today at the hour, or tomorrow when that is too soon.
+    static func next(_ hour: Int, from now: Date = .now) -> Date {
+        let cal = Calendar.current
+        let today = cal.date(bySettingHour: hour, minute: 0, second: 0, of: now) ?? now
+        if today.timeIntervalSince(now) >= lead { return today }
+        return cal.date(byAdding: .day, value: 1, to: today) ?? today
+    }
+
+    /// “Tonight 9 PM”, “Today 9 AM”, “Tomorrow 9 AM”.
+    static func quickTitle(_ t: Date) -> String {
+        let cal = Calendar.current
+        let day = cal.isDateInToday(t) ? (cal.component(.hour, from: t) >= 17 ? "Tonight" : "Today") : "Tomorrow"
+        return day + " " + t.formatted(.dateTime.hour())
+    }
+
+    @objc private func quickPressed(_ sender: NSButton) {
+        let t = Date(timeIntervalSince1970: TimeInterval(sender.tag))
+        calendar.dateValue = t
+        time.dateValue = t
+        changed()
+        set()
     }
 
     @objc private func set() {

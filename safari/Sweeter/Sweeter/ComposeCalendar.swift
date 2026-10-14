@@ -66,6 +66,8 @@ final class ComposeCalendarView: NSView {
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+    // In a popover (a panel): keys need the popover to be the key window.
+    override var needsPanelToBecomeKey: Bool { true }
 
     /// Another day, kept inside min…max, with its month shown.
     func select(_ date: Date) {
@@ -89,9 +91,12 @@ final class ComposeCalendarView: NSView {
     @objc private func prevMonth() { shiftMonth(-1) }
     @objc private func nextMonth() { shiftMonth(1) }
 
-    /// The month before or after, with the same day of it where there is one.
+    /// The month before or after, on the same day, or its last day when
+    /// it is shorter (January 31 goes to February 28, never March).
     private func shiftMonth(_ n: Int) {
-        guard let d = cal.date(byAdding: .month, value: n, to: selected) else { return }
+        guard let first = cal.date(byAdding: .month, value: n, to: month),
+              let days = cal.range(of: .day, in: .month, for: first)?.count,
+              let d = cal.date(byAdding: .day, value: Swift.min(cal.component(.day, from: selected), days) - 1, to: first) else { return }
         select(d)
     }
 
@@ -179,8 +184,10 @@ final class ComposeCalendarView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        let step: [UInt16: (Calendar.Component, Int)] = [123: (.day, -1), 124: (.day, 1), 126: (.day, -7), 125: (.day, 7), 116: (.month, -1), 121: (.month, 1)]
-        guard let (unit, n) = step[event.keyCode], let d = cal.date(byAdding: unit, value: n, to: selected) else { return super.keyDown(with: event) }
+        // Page Up and Page Down: a month, clamped as the arrows are.
+        if event.keyCode == 116 || event.keyCode == 121 { return shiftMonth(event.keyCode == 116 ? -1 : 1) }
+        let step: [UInt16: Int] = [123: -1, 124: 1, 126: -7, 125: 7]
+        guard let n = step[event.keyCode], let d = cal.date(byAdding: .day, value: n, to: selected) else { return super.keyDown(with: event) }
         select(d)
     }
 
@@ -255,6 +262,7 @@ final class ComposeTimeField: NSView {
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+    override var needsPanelToBecomeKey: Bool { true }
 
     override func becomeFirstResponder() -> Bool {
         focused = true

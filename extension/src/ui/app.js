@@ -3344,21 +3344,29 @@
     // reader, the post’s author, and people the reader follows never fold.
     // What it folded waits behind one row at the end, as X’s own “Show
     // additional replies” does.
+    // The reader, the post’s author, and people the reader follows.
+    function shieldExempt(p, focal) {
+      const a = p && p.author;
+      if (!a) return false;
+      const me = viewer && viewer.handle ? viewer.handle.toLowerCase() : '';
+      return !!a.following || a.handle.toLowerCase() === me || !!(focal && focal.author && a.handle.toLowerCase() === focal.author.handle.toLowerCase());
+    }
     function shieldWhy(p, focal, now) {
       const days = Number(settings.replyShield);
-      if (!days || !p || p.unavailable || !p.author) return null;
+      if (!days || !p || p.unavailable || !p.author || shieldExempt(p, focal)) return null;
       const a = p.author;
-      const me = viewer && viewer.handle ? viewer.handle.toLowerCase() : '';
-      if (a.following || a.handle.toLowerCase() === me || (focal && focal.author && a.handle.toLowerCase() === focal.author.handle.toLowerCase())) return null;
       if (match(p)) return 'muted';
       if (a.defaultAvatar) return 'nopic';
       if (a.createdMs && now - a.createdMs < days * 864e5) return 'new';
       return null;
     }
     function shieldRow(folded, shown) {
-      const n = (k) => folded.filter((x) => x.why === k).length;
+      // Replies, not blocks: a folded thread counts each of its posts.
+      const size = (x) => (x.b.kind === 'thread' ? x.b.posts.length : 1);
+      const n = (k) => folded.filter((x) => x.why === k).reduce((t, x) => t + size(x), 0);
       const parts = [[n('new'), 'from a new account', 'from new accounts'], [n('nopic'), 'with no profile picture'], [n('muted'), 'muted']].filter(([k]) => k).map(([k, one, many]) => k + ' ' + (k > 1 && many ? many : one));
-      const what = folded.length === 1 ? '1 hidden reply' : folded.length + ' hidden replies';
+      const all = folded.reduce((t, x) => t + size(x), 0);
+      const what = all === 1 ? '1 hidden reply' : all + ' hidden replies';
       return '<div class="shield-row"><button type="button" class="lnk" data-cmd="shield-toggle">' + (shown ? 'Fold ' + what + ' again' : 'Show ' + what) + '</button><span class="shield-why">' + h(parts.join(' · ')) + '</span></div>';
     }
 
@@ -3381,7 +3389,9 @@
         } else if (b.kind === 'post' && !focalSeen) {
           html += R.post(b.post, ctx, 'ancestor'); // what the post replies to
         } else {
-          const why = shieldWhy(b.kind === 'post' ? b.post : b.kind === 'thread' ? b.posts[0] : null, d.post, ctx.now);
+          // A thread folds by its first reply, unless someone who never
+          // folds (the reader, say, just now) replied further down it.
+          const why = b.kind === 'thread' && b.posts.some((q) => shieldExempt(q, d.post)) ? null : shieldWhy(b.kind === 'post' ? b.post : b.kind === 'thread' ? b.posts[0] : null, d.post, ctx.now);
           if (why) folded.push({ b, why });
           else html += R.block(b, ctx, b.kind === 'thread' ? b.posts : null);
         }

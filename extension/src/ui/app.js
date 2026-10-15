@@ -51,6 +51,7 @@
     // Per column, by view id (see vidOf). Sweeter only; X Pro never sees them.
     colFilters: {}, // view id (before 0.15: source key) -> ids of the filters that are on
     colDigest: {}, // view id -> true: a notification column's likes and reposts, one row per post per hour
+    keyMap: {}, // a default single key -> the key pressed for it instead (Settings ▸ Keyboard)
     colWidths: {}, // view id -> width in px
     colTitles: {}, // view id -> the person’s own title
     colIcons: {}, // view id -> icon name (COL_ICON_GROUPS)
@@ -457,7 +458,7 @@
   const READER_SIZES = [14, 16, 18, 20, 22, 25, 28];
   // The Keyboard page’s list (the Settings sheet and the Mac app’s window).
   const KEY_LIST = [
-    ['j k', 'Next, previous post'], ['l', 'Like or unlike'],
+    ['j', 'Next post'], ['k', 'Previous post'], ['l', 'Like or unlike'],
     ['t', 'Repost or quote'], ['⌥ t', 'Quote'],
     ['r', 'Reply'], ['n', 'New post'],
     ['b', 'Bookmark or remove bookmark'],
@@ -9429,6 +9430,17 @@
           persist();
           redrawSearchStep();
           break;
+        case 'key-change':
+          keyRecording = el.dataset.def;
+          redrawPrefs('keys');
+          break;
+        case 'key-reset':
+          keyRecording = null;
+          settings.keyMap = {};
+          persist();
+          redrawPrefs('keys');
+          toast('Every key is back to its own', 'keyboard');
+          break;
         case 'shield-toggle':
           if (!c || !c.detail) break;
           c.detail.showFolded = !c.detail.showFolded;
@@ -11241,8 +11253,15 @@
           '<div class="fnew"><button type="button" data-cmd="lay-save">Save Current Layout…</button> <button type="button" data-cmd="lay-export">Export…</button> <button type="button" data-cmd="lay-import">Import…</button></div>';
       },
       keys: () => {
-        const k = KEY_LIST;
-        return '<div class="keys">' + k.map(([keys, d]) => '<span class="k">' + keys.split(/\s{2}/).map((g) => g.split(' ').map((x) => '<kbd>' + h(x) + '</kbd>').join(' ')).join(' ') + '</span><span class="d">' + h(d) + '</span>').join('') + '</div>';
+        const k = keyListShown();
+        const moved = Object.keys(keyMap()).length > 0;
+        return '<div class="hint">Change moves a single key to one you choose. The chord keys (c, g, d), the digits, and f stay put.</div>' +
+          '<div class="keys">' + k.map(([keys, d, def]) => {
+            const caps = keyRecording && keyRecording === def ? '<em class="krec">Press a key… (Esc cancels)</em>' : keys.split(/\s{2}/).map((g) => g.split(' ').map((x) => '<kbd>' + h(x) + '</kbd>').join(' ')).join(' ');
+            const change = def ? ' <button class="lnk kchg" type="button" data-cmd="key-change" data-def="' + h(def) + '">Change</button>' : '';
+            return '<span class="k">' + caps + '</span><span class="d">' + h(d) + change + '</span>';
+          }).join('') + '</div>' +
+          (moved ? '<div class="fnew"><button type="button" data-cmd="key-reset">Reset All Keys</button></div>' : '');
       },
       // Optional things, some of them experimental. More will join later.
       extras: () => prefRows(PREF_ROWS.extras),
@@ -11339,6 +11358,8 @@
     }
 
     function closePrefs() {
+      // A key change waiting for its key ends with the sheet.
+      keyRecording = null;
       prefsEl.hidden = true;
       app.focus({ preventScroll: true });
     }
@@ -11477,7 +11498,8 @@
         mutes: rules.map((r) => ({ id: r.id, label: Sweeter.mutes.label(r), expiry: expiry(r), hits: hits.get(r.id) || 0 })),
         durations: Object.entries(DURATION_LABEL),
         layouts: (settings.layouts || []).map((l) => ({ name: l.name, date: new Date(l.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) })),
-        keys: KEY_LIST,
+        // [keys as shown, what they do, the default key a person may move].
+        keys: keyListShown(),
       };
     }
     function pushPrefs() {
@@ -11534,6 +11556,19 @@
         case 'mute-show':
           peekMute(String(a));
           return ok();
+        // The Mac app's Keyboard pane: a key moved, or every key back.
+        case 'key-set': {
+          const def = String((a && a.def) || '');
+          const to = String((a && a.to) || '');
+          const why = keyProblem(def, to);
+          if (why) return no(why);
+          setKey(def, to);
+          return ok(to === def ? '“' + def + '” is back to itself' : '“' + to + '” now does what “' + def + '” did');
+        }
+        case 'key-reset':
+          settings.keyMap = {};
+          persist();
+          return ok('Every key is back to its own');
         case 'layout-save': {
           const name = String(a).trim().slice(0, 40);
           if (!name) return no('Name the layout first.');
@@ -11561,7 +11596,73 @@
     let chord = null;
     let chordTimer = 0;
 
+    // ---------- your own keys ----------
+    // The single keys a person may move (Settings ▸ Keyboard), each by its
+    // default key. settings.keyMap holds the moved ones: default → new.
+    // The chord keys (c, g, d), digits, and f (X Pro's like) stay put.
+    const REBIND = { j: 'next post', k: 'previous post', l: 'like', t: 'repost', r: 'reply', b: 'bookmark', u: 'mute', x: 'block', n: 'new post', s: 'copy link', o: 'open', p: 'Picture in Picture', '.': 'newest posts', '/': 'find', '?': 'the key list', ',': 'Settings' };
+    const keyMap = () => (settings.keyMap && typeof settings.keyMap === 'object' ? settings.keyMap : {});
+    // The default key a pressed key stands for: itself, the one moved to it,
+    // or null when its own command moved to another key.
+    function keyOf(pressed) {
+      const m = keyMap();
+      for (const def in m) if (m[def] === pressed && REBIND[def]) return def;
+      return REBIND[pressed] && m[pressed] && m[pressed] !== pressed ? null : pressed;
+    }
+    function keyProblem(def, now) {
+      if (!REBIND[def]) return 'That key can’t be changed.';
+      if (typeof now !== 'string' || Array.from(now).length !== 1 || /\s/.test(now)) return 'Press one key, a letter or a sign.';
+      if (/^[0-9]$/.test(now) || ['c', 'g', 'd', 'f'].includes(now)) return '“' + now + '” stays Sweeter’s own.';
+      for (const d in REBIND) if (d !== def && (keyMap()[d] || d) === now) return '“' + now + '” is already ' + REBIND[d] + '.';
+      return null;
+    }
+    function setKey(def, now) {
+      const m = Object.assign({}, keyMap());
+      if (now === def) delete m[def];
+      else m[def] = now;
+      settings.keyMap = m;
+      persist();
+    }
+    // The Keyboard list as it is now: moved keys shown, and each row that
+    // holds one movable key names it (the third item).
+    function keyListShown() {
+      const m = keyMap();
+      return KEY_LIST.map(([keys, d]) => {
+        const groups = keys.split(/\s{2}/);
+        if (['c', 'g', 'd'].includes(groups[0])) return [keys, d, ''];
+        let def = '';
+        const shown = groups.map((g) => (/[⌘⌥⇧⌃]/.test(g) ? g : g.split(' ').map((x) => {
+          if (!REBIND[x]) return x;
+          def = def ? '-' : x;
+          return m[x] || x;
+        }).join(' '))).join('  ');
+        return [shown, d, def === '-' ? '' : def];
+      });
+    }
+    // Settings ▸ Keyboard ▸ Change: the next key pressed is the new one.
+    let keyRecording = null;
+    function recordKey(e) {
+      if (e.key === 'Escape') {
+        keyRecording = null;
+        redrawPrefs('keys');
+        return true;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return true;
+      const def = keyRecording;
+      const why = keyProblem(def, e.key);
+      if (why) {
+        toast(why, 'warn');
+        return true;
+      }
+      keyRecording = null;
+      setKey(def, e.key);
+      redrawPrefs('keys');
+      toast(e.key === def ? '“' + def + '” is back to itself' : '“' + e.key + '” now does what “' + def + '” did', 'keyboard');
+      return true;
+    }
+
     function handleKey(e) {
+      if (keyRecording) return recordKey(e);
       if (palette && palette.isOpen()) return palette.handleKey(e) || e.key.length === 1;
       if (e.altKey && e.code === 'KeyX') {
         toggle();
@@ -11661,7 +11762,7 @@
         if (e.key === 'ArrowRight') stepLightbox(1);
         else if (e.key === 'ArrowLeft') stepLightbox(-1);
         else if (e.key === 'Escape' || e.key === ' ') closeLightbox();
-        else if (e.key === 'p') lbPip();
+        else if (keyOf(e.key) === 'p') lbPip();
         else if (e.key === '=' || e.key === '+') lbZoomBy(1.5);
         else if (e.key === '-') lbZoomBy(1 / 1.5);
         else if (e.key === '0') lbFitNow(true);
@@ -11798,7 +11899,11 @@
         if (e.metaKey && e.key === 'ArrowDown') return toEdge(true), true;
         return false;
       }
-      switch (e.key) {
+      // Your own keys (Settings ▸ Keyboard): a key moved elsewhere does
+      // nothing, and its new key does what it did.
+      const key = keyOf(e.key);
+      if (key === null) return false;
+      switch (key) {
         case 'j':
         case 'ArrowDown':
           move(1);
@@ -11884,7 +11989,7 @@
         case 'x': {
           const sp = selectedPost();
           const p = sp && findPost(sp.id);
-          if (p && !refuseDelegated(sp.key)) postXKey(p, sp.key, e.key === 'u' ? 'mute' : 'block');
+          if (p && !refuseDelegated(sp.key)) postXKey(p, sp.key, key === 'u' ? 'mute' : 'block');
           return true;
         }
         case 'n':

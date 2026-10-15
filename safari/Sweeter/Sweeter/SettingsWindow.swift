@@ -703,20 +703,72 @@ struct LayoutsPane: View {
 
 struct KeysPane: View {
     @ObservedObject var model: SettingsModel
+    /// The default key being moved: the next key pressed is its new one.
+    @State private var recording: String?
+    @State private var note = ""
+    @FocusState private var listening: Bool
 
     var body: some View {
         Form {
             Section {
                 ForEach(Array((model.snap?.keys ?? []).enumerated()), id: \.offset) { _, k in
+                    // The third item names the single key a row may move.
+                    let def = k.count > 2 ? k[2] : ""
                     LabeledContent {
-                        KeyCaps(text: k.first ?? "")
+                        HStack(spacing: 8) {
+                            if let r = recording, r == def {
+                                Text("Press a key… (Esc cancels)")
+                                    .foregroundStyle(.tint)
+                                    .focusable()
+                                    .focused($listening)
+                                    .onKeyPress(phases: .down) { press in record(press) }
+                            } else {
+                                KeyCaps(text: k.first ?? "")
+                            }
+                            if !def.isEmpty {
+                                Button("Change") {
+                                    recording = def
+                                    note = ""
+                                    DispatchQueue.main.async { listening = true }
+                                }
+                                .buttonStyle(.link)
+                            }
+                        }
                     } label: {
                         Text(k.count > 1 ? k[1] : "")
                     }
                 }
+            } footer: {
+                Text("Change moves a single key to one you choose. The chord keys (c, g, d), the digits, and f stay put.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                HStack {
+                    Button("Reset All Keys") {
+                        recording = nil
+                        model.run("key-reset", nil) { _, msg in note = msg }
+                    }
+                    if !note.isEmpty { Text(note).foregroundStyle(.secondary) }
+                }
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func record(_ press: KeyPress) -> KeyPress.Result {
+        guard let def = recording else { return .ignored }
+        if press.key == .escape {
+            recording = nil
+            return .handled
+        }
+        let chars = press.characters
+        guard chars.count == 1, press.modifiers.subtracting(.shift).isEmpty else { return .handled }
+        model.run("key-set", ["def": def, "to": chars]) { ok, msg in
+            note = msg
+            if ok { recording = nil }
+        }
+        return .handled
     }
 }
 

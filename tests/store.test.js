@@ -374,3 +374,10 @@ test('a Community and a bookmark folder fill their columns, in X’s response sh
   eq(s.get('folder:18').sorted.map((b) => b.post.plain), ['in the folder']);
   eq(s.get('folder:18').kind, 'bookmarks');
 });
+
+test('a list’s owner, from ListByRestId', () => {
+  const s = createStore();
+  eq(s.listOwner('7'), null);
+  s.ingest({ op: 'ListByRestId', vars: { listId: '7' }, body: { data: { list: { id_str: '7', name: 'WL', user_results: { result: { __typename: 'User', rest_id: '1', core: { screen_name: 'starl3xx', name: 'starl3xx' } } } } } } });
+  eq([s.listName('7'), s.listOwner('7')], ['WL', 'starl3xx']);
+});

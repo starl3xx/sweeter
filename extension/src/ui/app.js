@@ -2553,6 +2553,12 @@
       });
     }
 
+    // A list the signed-in account made (ListByRestId names its owner).
+    function listMine(id) {
+      const owner = store.listOwner(id);
+      const me = xpro.viewerHandle();
+      return !!(owner && me && owner.toLowerCase() === me.toLowerCase());
+    }
     // Columns X Pro keeps that Sweeter shows another way.
     const offStage = (key) => key === 'x:drafts' && settings.xDrafts !== false;
 
@@ -4390,6 +4396,9 @@
         !local && s && s.kind === 'list' ? { id: 'xconvert', title: 'Convert to Search Column…', symbol: 'magnifyingglass', enabled: own && mine } : null,
         local || decksNow().all.length < 2 ? null : { id: 'xmove', title: 'Move to Deck', symbol: 'rectangle.portrait.and.arrow.right', children: decksNow().all.filter((d) => !decksNow().act || d.id !== decksNow().act.id).map((d) => ({ id: 'xm:' + d.id, title: (d.icon ? d.icon + '  ' : '') + (d.title || 'Untitled'), enabled: own && mine })) },
         !local && s && s.kind === 'list' ? { id: 'xreport', title: 'Report List in X Pro…', symbol: 'exclamationmark.bubble', enabled: own && mine } : null,
+        // X Pro has no list editor of its own: x.com's.
+        s && s.kind === 'list' && s.listId && listMine(s.listId) ? { id: 'xlistedit', title: 'Edit List on x.com…', symbol: 'pencil' } : null,
+        s && s.kind === 'list' && s.listId ? { id: 'xlistmembers', title: 'List Members on x.com…', symbol: 'person.2' } : null,
         s && s.kind === 'notifications' ? { id: 'nsettings', title: 'Notification Settings…', symbol: 'gear' } : null,
         local ? null : { id: 'remove', title: 'Remove “' + menuTitleOf(c.vid) + '”…', symbol: 'minus.rectangle', enabled: removable(m) && !removing.has(c.vid) && mine },
       ];
@@ -4438,6 +4447,8 @@
         if (choice === 'xcopy') return xproOp(() => xpro.makeCopy(m.id), 'Copied in X Pro, on all your devices');
         if (choice === 'xconvert') return convertToSearch(c);
         if (choice.startsWith('xm:')) return moveToDeck(c, choice.slice(3));
+        if (choice === 'xlistedit' && s && s.listId) return openUrl('https://x.com/i/lists/' + encodeURIComponent(s.listId) + '/info');
+        if (choice === 'xlistmembers' && s && s.listId) return openUrl('https://x.com/i/lists/' + encodeURIComponent(s.listId) + '/members');
         if (choice === 'xreport') {
           if (refuseDelegated(c.vid)) return;
           if (pendingRemove) commitRemove(pendingRemove);
@@ -5685,8 +5696,8 @@
         body = !s.names
           ? '<p class="anote">Opening your lists in X Pro…</p>'
           : s.names.length
-            ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + '</div>'
-            : '<p class="anote">You have no lists yet. Make one on x.com, then add it here.</p>';
+            ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + row('', 'plus', 'New List…', 'Make one in X Pro, then add it here', false, 'add-newlist') + '</div>'
+            : '<p class="anote">You have no lists yet.</p><div class="alist">' + row('', 'plus', 'New List…', 'Make one in X Pro, then add it here', false, 'add-newlist') + '</div>';
       } else if (s.step === 'search') {
         body = '<form class="asearch"><input id="add-q" type="search" value="' + h(s.q || '') + '" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">' + (s.edit ? 'Save' : 'Add Column') + '</button></form><p class="anote">A search column shows the newest posts first. Write the query, or fill in what you want below.</p>' + searchForm(s.q || '');
       } else {
@@ -9045,6 +9056,13 @@
         case 'add-pick':
           addPick(el.dataset.v);
           break;
+        case 'add-newlist': {
+          // X Pro's own Create List (closing the sheet removes the list
+          // chooser's placeholder column first).
+          closeAddSheet();
+          xproHandoff(() => ({ ok: xpro.openListCreate() }), () => xpro.dialogOpen() || /^\/i\/lists\/(create|\d+\/members)/.test(location.pathname));
+          break;
+        }
         case 'add-list': {
           const pid = addState && addState.pickerId;
           if (!pid) break;

@@ -2231,6 +2231,17 @@
   }
 
   // Report List: X Pro’s own dialog, handed over to the person.
+  // X Pro's Create List page (/i/lists/create: name, description, Make
+  // private, then the people to add), for the person to fill in there.
+  // X Pro's list Edit and Members pages draw empty when opened this way
+  // (they need the state X's own navigation gives them; seen 2026-10-14).
+  function openListCreate() {
+    if (dialogOpen()) return false;
+    history.pushState(history.state, '', '/i/lists/create');
+    window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+    return true;
+  }
+
   async function openReportList(id) {
     if (isDelegated(columnWrap(id))) return { ok: false, reason: 'delegated' };
     const opened = await openDrawer(id);
@@ -2467,5 +2478,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts), saveXDraft: lifted(saveXDraft) };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts), saveXDraft: lifted(saveXDraft), openListCreate };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

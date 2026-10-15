@@ -1034,6 +1034,11 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .ask-in{font:inherit;padding:6px 8px;border:1px solid var(--div);border-radius:6px;background:var(--field);color:var(--t1);outline:none}
 .ask-in:focus{border-color:var(--accent-solid);box-shadow:0 0 0 2px var(--accent-hl)}
 .ask-b{display:flex;justify-content:flex-end;gap:8px}
+.ask-row{display:flex;gap:8px}
+.ask-row .ask-in{flex:1 1 auto;min-width:0}
+.ask-emo{flex:0 0 44px;width:44px;box-sizing:border-box;font:inherit;font-size:18px;line-height:1;text-align:center;padding:4px;border:1px solid var(--div);border-radius:6px;background:var(--field);color:var(--t1);outline:none}
+.ask-emo:focus{border-color:var(--accent-solid);box-shadow:0 0 0 2px var(--accent-hl)}
+.ask-b .ask-x{margin-right:auto;background:none;color:#C93C33;padding-left:4px}
 .ask-b button{font:inherit;border:0;border-radius:6px;padding:5px 14px;background:var(--chip,rgba(127,127,127,.14));color:var(--t2);cursor:pointer}
 .ask-b button.done{background:var(--accent-solid);color:var(--on-accent);font-weight:600}
 .wc-back{position:absolute;inset:0;background:rgba(0,0,0,.28);display:grid;place-items:center;z-index:6;padding:24px}
@@ -1078,7 +1083,12 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .ov-body{overflow:auto;padding:6px 10px}
 .ov-deck{padding:8px 4px;border-bottom:1px solid var(--div)}
 .ov-deck:last-child{border-bottom:0}
-.ov-dt{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;padding:4px;border-radius:6px;font:inherit;color:var(--t1);cursor:pointer;text-align:left}
+.ov-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ov-dt{display:flex;align-items:center;gap:8px;flex:1 1 220px;min-width:0;background:none;border:0;padding:4px;border-radius:6px;font:inherit;color:var(--t1);cursor:pointer;text-align:left}
+.ov-ctl{display:flex;gap:2px;flex:0 0 auto}
+.ov-ctl button{font:inherit;font-size:11.5px;border:0;border-radius:5px;padding:2px 7px;background:none;color:var(--t3);cursor:pointer}
+.ov-ctl button:hover:not([disabled]),.ov-ctl button:focus-visible{background:var(--sub);color:var(--t1);outline:none}
+.ov-ctl button[disabled]{opacity:.35;cursor:default}
 .ov-dt:hover,.ov-dt:focus-visible{background:var(--sub);outline:none}
 .ov-ic{font-size:17px;width:22px;text-align:center}
 .ov-now{margin-left:auto;font-size:11px;color:var(--t3)}

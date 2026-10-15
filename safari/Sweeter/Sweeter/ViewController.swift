@@ -350,7 +350,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
                 replyHandler(nil, "bad alert")
                 return
             }
-            presentAlert(o) { button, text in replyHandler(["button": button, "text": text], nil) }
+            presentAlert(o) { button, text, emoji in replyHandler(["button": button, "text": text, "emoji": emoji], nil) }
         // Settings is a native window (SettingsWindow.swift); the page opens
         // it and, while it is open, sends every change to it.
         case "openSettings":
@@ -596,7 +596,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
     /// The page's question as an NSAlert sheet: a title, text, up to three
     /// buttons (the first is the default; a "Cancel" or "Not Now" takes Esc),
     /// and either a text field (`input`) or release notes in a scrolling box.
-    func presentAlert(_ o: [String: Any], done: @escaping (Int, String) -> Void) {
+    func presentAlert(_ o: [String: Any], done: @escaping (Int, String, String) -> Void) {
         let alert = NSAlert()
         alert.messageText = o["title"] as? String ?? ""
         alert.informativeText = o["text"] as? String ?? ""
@@ -606,7 +606,28 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             if title == "Cancel" || title == "Not Now" { button.keyEquivalent = "\u{1b}" }
         }
         var field: NSTextField?
-        if let value = o["input"] as? String {
+        var emojiField: NSTextField?
+        if let value = o["input"] as? String, let emoji = o["emoji"] as? String {
+            // A name with its emoji (a deck): the emoji's own small field
+            // first, typed or picked with ⌃⌘Space.
+            let e = NSTextField(frame: NSRect(x: 0, y: 0, width: 40, height: 28))
+            e.stringValue = emoji
+            e.alignment = .center
+            e.font = .systemFont(ofSize: 17)
+            e.setAccessibilityLabel("Emoji")
+            e.toolTip = "An emoji: type one, or press ⌃⌘Space"
+            let f = NSTextField(frame: NSRect(x: 48, y: 2, width: 212, height: 24))
+            f.stringValue = value
+            f.placeholderString = "Name"
+            f.lineBreakMode = .byTruncatingTail
+            let box = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 28))
+            box.addSubview(e)
+            box.addSubview(f)
+            alert.accessoryView = box
+            alert.window.initialFirstResponder = f
+            field = f
+            emojiField = e
+        } else if let value = o["input"] as? String {
             let f = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
             f.stringValue = value
             f.lineBreakMode = .byTruncatingTail
@@ -644,7 +665,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             alert.accessoryView = scroll
         }
         let finish = { (response: NSApplication.ModalResponse) in
-            done(response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue, field?.stringValue ?? "")
+            done(response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue, field?.stringValue ?? "", emojiField?.stringValue ?? "")
         }
         showWindow()
         guard let window = view.window else { return finish(alert.runModal()) }

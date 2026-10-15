@@ -1269,8 +1269,11 @@
       placePop(el);
       // What the chain says it is decides the card: a wallet or an NFT
       // collection has no DexScreener pairs to look for. Six seconds at most.
-      let info = kindCache.get(a) || null;
-      if (!info && el.matches('a.ca:not(.tkl)') && ((native && native.chain) || opts.chain)) {
+      // Only for a plain address: a ticker X tagged is a token on the chain
+      // it names, whatever an untagged check of that address found.
+      const plain = el.matches('a.ca:not(.tkl)');
+      let info = plain ? kindCache.get(a) || null : null;
+      if (!info && plain && ((native && native.chain) || opts.chain)) {
         await Promise.race([kindsFor([[a, chain]]).catch(() => {}), new Promise((r) => setTimeout(r, 6000))]);
         info = kindCache.get(a) || null;
         paintKind(a);

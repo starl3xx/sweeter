@@ -874,6 +874,12 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
 
     func perform(_ action: String, url: URL, done: @escaping (Outcome) -> Void) {
         switch action {
+        case "liveVideo":
+            // x.com's own player in a window (X Pro has none for live video).
+            guard LiveVideoWindow.isBroadcast(url) else { return done(.failed) }
+            Log.write("live video: opened in a window")
+            LiveVideoWindow.shared.show(url)
+            done(.done)
         case "readingList":
             guard let service = NSSharingService(named: .addToSafariReadingList), service.canPerform(withItems: [url]) else { return done(.failed) }
             service.perform(withItems: [url])
@@ -1583,6 +1589,141 @@ final class PopoutNavigation: NSObject, WKNavigationDelegate {
         if ["http", "https"].contains(url.scheme ?? "") { LinkOpener.open(url) }
         decisionHandler(.cancel)
     }
+}
+
+/// A live video on X, in x.com's own player. X Pro has no player for live
+/// video (its client never asks X for a stream: checked 2026-10-15), and
+/// Sweeter never asks X itself, so this window shows X's own page, as the
+/// sign-in pages do, signed in the same way. p, or the button in the title
+/// bar, puts the video in Picture in Picture. One window: another live
+/// video takes its place, and closing it ends the video.
+@MainActor
+final class LiveVideoWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate {
+    static let shared = LiveVideoWindow()
+    private var window: NSWindow?
+    private var web: WKWebView?
+
+    /// https://x.com/i/broadcasts/<id> (or twitter.com).
+    static func isBroadcast(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https", let host = url.host?.lowercased(), ViewController.isX(host) else { return false }
+        let parts = url.path.split(separator: "/")
+        return parts.count == 3 && parts[0] == "i" && parts[1] == "broadcasts" && parts[2].allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
+    }
+
+    func show(_ url: URL) {
+        if let web, let window {
+            web.load(URLRequest(url: url))
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        let config = WKWebViewConfiguration()
+        // The app's own website data, where X's sign-in left its cookies.
+        config.websiteDataStore = .default()
+        config.mediaTypesRequiringUserActionForPlayback = []
+        // As for the main window: WebKit keeps PiP off in an app's web view.
+        let prefs = config.preferences
+        if prefs.responds(to: NSSelectorFromString("_setAllowsPictureInPictureMediaPlayback:")) {
+            prefs.setValue(true, forKey: "allowsPictureInPictureMediaPlayback")
+        }
+        // In a world of its own: x.com's scripts can't see or call it.
+        config.userContentController.addUserScript(WKUserScript(source: Self.pipScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
+        let size = NSSize(width: 960, height: 600)
+        let web = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
+        web.customUserAgent = ViewController.safariUserAgent()
+        web.navigationDelegate = self
+        web.uiDelegate = self
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.title = "Live Video"
+        window.tabbingMode = .disallowed
+        // Beside Sweeter in full screen too, as the compose window is.
+        window.collectionBehavior = [.fullScreenAuxiliary]
+        window.contentView = web
+        window.delegate = self
+        window.minSize = NSSize(width: 480, height: 320)
+        let button = NSButton(image: NSImage(systemSymbolName: "pip.enter", accessibilityDescription: "Picture in Picture") ?? NSImage(), target: self, action: #selector(pipPressed))
+        button.isBordered = false
+        button.toolTip = "Picture in Picture (p)"
+        button.frame = NSRect(x: 0, y: 0, width: 36, height: 22)
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = button
+        accessory.layoutAttribute = .trailing
+        window.addTitlebarAccessoryViewController(accessory)
+        if !window.setFrameUsingName("SweeterLive") { window.center() }
+        window.setFrameAutosaveName("SweeterLive")
+        self.window = window
+        self.web = web
+        web.load(URLRequest(url: url))
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func pipPressed() {
+        web?.evaluateJavaScript("sweeterPip()", in: nil, in: .defaultClient) { _ in }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        // The video stops with its window.
+        web?.pauseAllMediaPlayback()
+        web = nil
+        window = nil
+    }
+
+    /// The page stays on x.com: a link clicked in it opens in the browser
+    /// (another live video stays), and x.com's own redirects stay inside.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url else { return decisionHandler(.allow) }
+        if navigationAction.targetFrame?.isMainFrame == false { return decisionHandler(.allow) }
+        if let scheme = url.scheme, ["about", "blob", "data"].contains(scheme) { return decisionHandler(.allow) }
+        let x = ViewController.isX(url.host?.lowercased() ?? "")
+        if navigationAction.navigationType == .linkActivated ? Self.isBroadcast(url) : x { return decisionHandler(.allow) }
+        if ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            Log.write("opened in browser: \(url.host ?? "?")")
+            LinkOpener.open(url)
+        }
+        decisionHandler(.cancel)
+    }
+
+    /// target=_blank and window.open: the browser.
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            Log.write("opened in browser: \(url.host ?? "?")")
+            LinkOpener.open(url)
+        }
+        return nil
+    }
+
+    /// p (outside a text field) or the title bar button: the video into
+    /// Picture in Picture, or back.
+    static let pipScript = """
+    (() => {
+      const video = () => {
+        const all = Array.from(document.querySelectorAll('video'));
+        return all.find((v) => !v.paused) || all.find((v) => v.readyState > 0) || all[0] || null;
+      };
+      // In the window by either API: the standard one, or WebKit's own
+      // presentation mode (which pictureInPictureElement doesn't report).
+      const inWindow = () => Array.from(document.querySelectorAll('video')).find((v) => v.webkitPresentationMode === 'picture-in-picture');
+      const toggle = () => {
+        if (document.pictureInPictureElement) return void document.exitPictureInPicture().catch(() => {});
+        const shown = inWindow();
+        if (shown) return void shown.webkitSetPresentationMode('inline');
+        const v = video();
+        if (!v) return;
+        const fallback = () => { if (v.webkitSetPresentationMode) v.webkitSetPresentationMode('picture-in-picture'); };
+        if (v.requestPictureInPicture) v.requestPictureInPicture().catch(fallback);
+        else fallback();
+      };
+      window.sweeterPip = toggle;
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'p' || e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e.target;
+        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggle();
+      }, true);
+    })();
+    """
 }
 
 /// Photos for Quick Look: downloaded into the app's temporary folder (the

@@ -214,7 +214,8 @@
     // A video page or a live video: a play mark on its still, and LIVE.
     const still = c.image ? '<img src="' + h(safeUrl(c.image)) + '" alt="" loading="lazy" decoding="async">' : '';
     const pic = still && c.play ? '<span class="cim">' + still + '<i class="cpl">' + icon('play') + '</i></span>' : still;
-    // A live video names its stream's key: a click plays it in Sweeter.
+    // A live video names its stream's key: in the Mac app a click opens
+    // x.com's player in a window of its own.
     const live = c.live && c.mediaKey ? ' data-bkey="' + h(c.mediaKey) + '"' : '';
     return '<a class="card' + (compact ? ' summary' : style === 'medium' ? ' medium' : '') + '" href="' + h(safeUrl(c.url)) + '" target="_blank" rel="noopener noreferrer"' + live + '>' +
       pic +

@@ -255,6 +255,11 @@ img{display:block}
 .rpl{color:var(--t3);font-size:.86em;margin-top:1px}
 .tx{margin-top:2px;color:var(--t2);overflow-wrap:anywhere;white-space:normal;text-wrap:pretty}
 .atx,.snip,.hint,.note,.cpv,.fmeta,.dfoot,.empty{text-wrap:pretty}
+/* The reply shield: one row at the end of a conversation; what it folded, once shown, a little quieter. */
+.shield-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:10px 14px;border-top:1px solid var(--sep);font-size:12.5px}
+.shield-row .lnk{font-size:12.5px;font-weight:600;padding:2px 0}
+.shield-why{color:var(--t3);min-width:0}
+.shielded{opacity:.75}
 .ptitle,.boot-t{text-wrap:balance}
 .tx a.m,.tx a.u{color:var(--accent)}
 .tx a.m{font-weight:600}

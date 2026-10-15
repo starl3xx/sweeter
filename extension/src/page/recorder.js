@@ -113,6 +113,9 @@
     // 2026-10-06), and TweetResultByRestId can carry the article itself.
     'TweetResultsByRestIds',
     'TweetResultByRestId',
+    // A Space's title, state, and host, which X Pro asks for as it draws
+    // the Space's card in a post (seen 2026-10-14).
+    'AudioSpaceById',
     // X Pro's answer when the reader posts (CreateTweet, or CreateNoteTweet
     // for a long post): the new post's id or X's error, and the new post
     // itself, as a timeline carries it, so a reply shows in its open

@@ -39,6 +39,7 @@
     const timelines = new Map(); // user id -> Map(op -> { blocks, sorted })
     const watched = new Set();
     let timelineSeq = 0; // which of a person's timelines X Pro loaded last
+    const spaces = new Map(); // Space id -> what AudioSpaceById said (N.space)
     const expected = new Set(); // lowercase handles whose id is not known yet
     // X Pro’s decks and columns (lib/decks.js), from X Pro’s own traffic.
     const decks = Sweeter.decks.createDecks();
@@ -178,6 +179,17 @@
     // One captured response from the recorder: { op, vars, body }.
     function ingest(msg) {
       if (!msg || !msg.op || !msg.body) return null;
+      if (msg.op === 'AudioSpaceById') {
+        if (msg.body.__status) return null;
+        const sp = N.space(msg.body);
+        if (!sp) return null;
+        const was = spaces.get(sp.id);
+        // X Pro asks again as a live Space's count changes: only a change is news.
+        if (was && JSON.stringify(was) === JSON.stringify(sp)) return null;
+        spaces.set(sp.id, sp);
+        emit('space:' + sp.id);
+        return 'space:' + sp.id;
+      }
       // A refused request carries only its status. It touches nothing (no
       // deck or column write X rejected, no profile, no posts): it only lets
       // a column's stale clock say why.
@@ -599,6 +611,7 @@
       xSaved: () => xSaved,
       xScheduled: () => xScheduled,
       post: (id) => posts.get(String(id)) || null,
+      space: (id) => spaces.get(String(id)) || null,
       profile: (handle) => profiles.get(String(handle).toLowerCase()) || null,
       // Route this person’s timelines to the profile, by id or (when only
       // the handle is known) once X Pro’s profile response names the id.

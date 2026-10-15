@@ -2834,7 +2834,35 @@
       }
     }
 
+    // A Space's card shows what X Pro learned about it (AudioSpaceById).
+    R.useSpaces((id) => store.space(id));
+    const hasSpace = (p, id) => !!p && ((p.card && p.card.kind === 'space' && p.card.id === id) || (!!p.quote && hasSpace(p.quote, id)));
+    const showsSpace = (key, id) => {
+      const s = store.get(key);
+      return !!s && s.sorted.some((b) => (b.kind === 'post' ? [b.post] : b.kind === 'thread' ? b.posts : []).some((p) => hasSpace(p, id)));
+    };
+
     store.subscribe((key) => {
+      // A Space changed: redraw the columns and windows whose posts show it.
+      if (key && key.startsWith('space:')) {
+        const id = key.slice(6);
+        for (const c of cols.values()) {
+          if (c.detail) {
+            const d = store.detail(c.detail.id);
+            if (hasSpace(c.detail.post, id) || (d && d.blocks.some((b) => (b.kind === 'post' ? [b.post] : b.posts || []).some((p) => hasSpace(p, id))))) renderDetail(c, false);
+          }
+          if (!showsSpace(c.key, id)) continue;
+          c.full = true;
+          renderColumn(c, false);
+        }
+        if (prof) renderProfile();
+        for (const rec of popouts.values()) {
+          if (!showsSpace(rec.c.key, id)) continue;
+          rec.full = true;
+          drawPop(rec);
+        }
+        return;
+      }
       // X's drafts changed: the Drafts list and the Mac window's menu.
       if (key === 'xdrafts') {
         renderDrafts();

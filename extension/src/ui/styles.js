@@ -366,6 +366,18 @@ img{display:block}
 .card.article .cpv{margin-top:2px;color:var(--t3);font-size:.86em;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card.article img{aspect-ratio:2.5/1}
 .card.article.summary img{aspect-ratio:1}
+.card .cim{position:relative;display:block;flex:0 0 auto}
+.card .cim img{display:block}
+.card.summary .cim{width:calc(var(--fs) * 5)}
+.card .cpl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.card .cpl svg{width:30px;height:30px;padding:9px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;box-sizing:content-box}
+.card.summary .cpl svg{width:14px;height:14px;padding:6px}
+.card .clive{display:inline-block;margin-right:5px;padding:0 4px;border-radius:3px;background:var(--likeic);color:#fff;font-size:.85em;font-weight:700;letter-spacing:.04em}
+.card.space{align-items:center}
+.card .spi{flex:0 0 auto;width:calc(var(--fs) * 3.2);align-self:stretch;display:flex;align-items:center;justify-content:center;background:var(--sub);color:var(--accent)}
+.card .spi svg{width:20px;height:20px}
+.card.space.live .spi{color:var(--likeic)}
+.card.space .cpv{margin-top:1px;color:var(--t3);font-size:.82em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .poll{margin-top:8px;display:flex;flex-direction:column;gap:4px}
 .poll .ch1{position:relative;border-radius:4px;overflow:hidden;background:var(--sub);padding:3px 8px;display:flex;justify-content:space-between;gap:8px;font-size:.93em}
 .poll .bar{position:absolute;inset:0 auto 0 0;background:var(--tint)}

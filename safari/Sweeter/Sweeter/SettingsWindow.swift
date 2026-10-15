@@ -495,6 +495,16 @@ struct FiltersPane: View {
                         Spacer()
                         Text(m.expiry + ((m.hits ?? 0) > 0 ? " · hides \(m.hits ?? 0) \(m.hits == 1 ? "post" : "posts")" : ""))
                             .foregroundStyle(.secondary)
+                        // Lifts this mute for a moment in the main window,
+                        // which shows what it hides (app.js peekMute).
+                        if (m.hits ?? 0) > 0 {
+                            Button("Show") {
+                                model.run("mute-show", m.id)
+                                ViewController.shared?.showWindow()
+                            }
+                            .buttonStyle(.link)
+                            .help("Show what this mute hides, for a moment")
+                        }
                         Button { model.run("mute-delete", m.id) } label: { Image(systemName: "minus.circle") }
                             .buttonStyle(.borderless)
                             .help("Remove")

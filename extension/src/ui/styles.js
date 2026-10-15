@@ -940,6 +940,12 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 /* toast and the way back */
 .toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100% - 32px);box-sizing:border-box;background:var(--accent-solid);color:var(--on-accent);border-radius:10px;padding:8px 15px 8px 11px;font-size:13px;font-weight:500;line-height:1.3;box-shadow:0 8px 26px rgba(0,0,0,.22);z-index:6;pointer-events:none;transition:opacity .2s}
 .toast svg{width:16px;height:16px;flex:none}
+.peekbar{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:calc(100% - 32px);box-sizing:border-box;background:var(--accent-solid);color:var(--on-accent);border-radius:10px;padding:6px 6px 6px 14px;font-size:13px;font-weight:500;line-height:1.3;box-shadow:0 8px 26px rgba(0,0,0,.22);z-index:6}
+.peekbar[hidden]{display:none}
+.peekbar .peek-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.peekbar button{flex:none;border:0;border-radius:7px;padding:4px 10px;font:inherit;font-size:12.5px;font-weight:600;background:rgba(255,255,255,.22);color:inherit;cursor:pointer}
+.cell.peeked{box-shadow:inset 3px 0 0 var(--accent-solid)}
+.cell.peeked>.main::before{content:attr(data-peek);display:block;margin-bottom:3px;font-size:11.5px;font-weight:600;color:var(--accent)}
 .toast span{min-width:0}
 /* A problem never looks like a success: the dark HUD, an amber sign. */
 .toast[data-kind="warn"]{background:rgba(28,28,30,.94);box-shadow:0 8px 26px rgba(0,0,0,.22),inset 0 0 0 1px rgba(255,255,255,.14)}

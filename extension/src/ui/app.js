@@ -533,6 +533,8 @@
     if (native) settings.visible = true;
     let rules = (opts.mutes || []).filter((r) => !r.expires || r.expires > Date.now());
     let match = Sweeter.mutes.compile(rules);
+    // A mute lifted for a moment (Settings ▸ Mutes ▸ Show): { id, label, test }.
+    let peek = null;
     let noteMatch = Sweeter.mutes.compileNote ? Sweeter.mutes.compileNote(rules) : null;
     // Saved custom filters (Ivory’s “create your own”), shared by every column.
     let custom = (opts.filters || []).filter((f) => f && f.id);
@@ -730,6 +732,7 @@
       '<div class="tip-f"><label><input type="checkbox" class="tip-on">Show a tip when Sweeter opens</label><span class="grow"></span>' +
       '<button type="button" data-cmd="tip-act" hidden></button><button type="button" data-cmd="tip-next">Next Tip</button></div></div>' +
       '<div class="utoast" hidden role="status" aria-live="polite"></div>' +
+      '<div class="peekbar" hidden role="status"><span class="peek-t"></span><button type="button" data-cmd="peek-end">Hide Again</button></div>' +
       '<div class="toast" hidden role="status" aria-live="polite"></div></div>' +
       '<button class="fab" type="button" hidden title="Show Sweeter (⌥X)"><i></i>Sweeter</button>';
     while (wrap.firstChild) shadow.appendChild(wrap.firstChild);
@@ -2052,6 +2055,7 @@
       node.dataset.sort = b.sortIndex;
       node.__b = b;
       node.__n = posts ? posts.length : 0;
+      if (peek) markPeek(node);
       return node;
     }
 
@@ -9459,6 +9463,13 @@
         case 'mute-del':
           deleteMute(el.dataset.id);
           break;
+        case 'mute-show':
+          closePrefs();
+          peekMute(el.dataset.id);
+          break;
+        case 'peek-end':
+          endPeek();
+          break;
         case 'filter':
           showFilterMenu(c, el);
           break;
@@ -10621,6 +10632,7 @@
           fresh.dataset.key = b.key;
           fresh.__b = b;
           fresh.__n = n;
+          if (peek) markPeek(fresh);
           if (node) node.replaceWith(fresh);
           node = fresh;
           rec.nodes.set(b.key, node);
@@ -11007,7 +11019,7 @@
       '<button type="button" data-cmd="mute-add">Mute</button></div>' +
       '<div class="mutes">' +
       (rules.length
-        ? rules.map((r) => '<div class="mr"><span class="mk">' + h(Sweeter.mutes.label(r)) + '</span><span class="me2">' + h(expiry(r) + hidesNote(hits, r)) + '</span><button class="x" type="button" data-cmd="mute-del" data-id="' + h(r.id) + '" title="Remove" aria-label="Remove">×</button></div>').join('')
+        ? rules.map((r) => '<div class="mr"><span class="mk">' + h(Sweeter.mutes.label(r)) + '</span><span class="me2">' + h(expiry(r) + hidesNote(hits, r)) + '</span>' + (hits.get(r.id) ? '<button class="lnk" type="button" data-cmd="mute-show" data-id="' + h(r.id) + '" title="Show what this mute hides, for a moment">Show</button>' : '') + '<button class="x" type="button" data-cmd="mute-del" data-id="' + h(r.id) + '" title="Remove" aria-label="Remove">×</button></div>').join('')
         : '<div class="mr"><span class="me2">No mute filters yet.</span></div>') +
       '</div>';
 
@@ -11186,11 +11198,53 @@
 
     function mutesChanged() {
       pushPrefs();
-      match = Sweeter.mutes.compile(rules);
-      noteMatch = Sweeter.mutes.compileNote ? Sweeter.mutes.compileNote(rules) : null;
+      if (peek && !rules.some((r) => r.id === peek.id)) peek = null;
+      compileMatch();
+      paintPeekBar();
       save({ mutes: rules });
       rebuildAll();
       redrawPrefs('mutes');
+    }
+
+    // ---------- what a mute hides ----------
+    // Settings ▸ Mutes ▸ Show lifts one mute for a moment: what it hides
+    // comes back in its columns, each post marked with the mute, under a
+    // bar that names it, until Hide Again (or the mute is removed).
+    function compileMatch() {
+      const live = peek ? rules.filter((r) => r.id !== peek.id) : rules;
+      match = Sweeter.mutes.compile(live);
+      noteMatch = Sweeter.mutes.compileNote ? Sweeter.mutes.compileNote(live) : null;
+    }
+    function peekMute(id) {
+      const r = rules.find((x) => x.id === id);
+      if (!r) return;
+      peek = { id, label: Sweeter.mutes.label(r), test: Sweeter.mutes.compile([r]) };
+      compileMatch();
+      paintPeekBar();
+      rebuildAll();
+    }
+    function endPeek() {
+      if (!peek) return;
+      peek = null;
+      compileMatch();
+      paintPeekBar();
+      rebuildAll();
+    }
+    function paintPeekBar() {
+      const bar = shadow.querySelector('.peekbar');
+      bar.hidden = !peek;
+      if (peek) bar.querySelector('.peek-t').textContent = 'Showing what “' + peek.label + '” hides';
+    }
+    // The posts in a freshly built node that the lifted mute matches.
+    function markPeek(node) {
+      const cells = node.matches('.cell[data-id]') ? [node] : Array.from(node.querySelectorAll('.cell[data-id]'));
+      for (const cell of cells) {
+        const p = findPost(cell.dataset.id);
+        const main = cell.querySelector(':scope > .main');
+        if (!p || !main || !peek.test(p)) continue;
+        cell.classList.add('peeked');
+        main.dataset.peek = 'Muted: ' + peek.label;
+      }
     }
 
     // ---------- the Mac app's Settings window ----------
@@ -11272,6 +11326,9 @@
         }
         case 'mute-delete':
           deleteMute(String(a));
+          return ok();
+        case 'mute-show':
+          peekMute(String(a));
           return ok();
         case 'layout-save': {
           const name = String(a).trim().slice(0, 40);

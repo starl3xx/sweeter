@@ -2855,7 +2855,11 @@
           c.full = true;
           renderColumn(c, false);
         }
-        if (prof) renderProfile();
+        // Same-length news (a listener count) must redraw the sheet too.
+        if (prof) {
+          profList.dataset.sig = '';
+          renderProfile();
+        }
         for (const rec of popouts.values()) {
           if (!showsSpace(rec.c.key, id)) continue;
           rec.full = true;

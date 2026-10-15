@@ -117,6 +117,30 @@ final class ComposeFlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
+/// A rounded outline around what it holds (the quoted post, a link's
+/// card), as tall as that plus its margins. An NSBox can't be: it sizes its
+/// content view, never the other way round, so a box that holds its height
+/// shrank to nothing and its text spilled over the label above it.
+final class ComposeOutline: NSView {
+    func hold(_ content: NSView, margins: NSSize) {
+        content.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margins.width),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.width),
+            content.topAnchor.constraint(equalTo: topAnchor, constant: margins.height),
+            content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -margins.height),
+        ])
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 8, yRadius: 8)
+        path.lineWidth = 1
+        NSColor.separatorColor.setStroke()
+        path.stroke()
+    }
+}
+
 /// The box's own background: the theme's, as a sheet of paper in the
 /// window.
 final class ComposeBackdrop: NSView {

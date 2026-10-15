@@ -9278,8 +9278,10 @@
       if (own) own.pause();
       watchPip(v, p, i);
     }
-    function watchPip(v, post, index) {
-      const me = { v, post, index, closing: false };
+    // item: a viewer item that isn't one of the post's media (a live
+    // video's stream), shown again as itself on return.
+    function watchPip(v, post, index, item) {
+      const me = { v, post, index, item: item || null, closing: false };
       pip = me;
       v.removeAttribute('data-obs');
       if (io) io.unobserve(v);
@@ -9298,7 +9300,7 @@
           if (pip === me) pip = null;
           if (!v.closest('.pip-hold')) return;
           const closed = me.closing || (v.paused && Date.now() - pausedAt < 1500);
-          if (!closed && !pip && !pipStarting && v.ownerDocument === document) pipBack(v, post, index);
+          if (!closed && !pip && !pipStarting && v.ownerDocument === document) pipBack(v, post, index, me.item);
           else pipDrop(v);
         }, 300);
       };
@@ -9307,9 +9309,10 @@
     }
     // The return button: the viewer opens on the post with this video, as
     // it was in the window.
-    function pipBack(v, post, index) {
-      openLightbox(post, index);
-      const fresh = lb && lb.items[lb.i] === post.media[index] ? lbMedia.querySelector('video') : null;
+    function pipBack(v, post, index, item) {
+      if (item) openLightbox(post, 0, [item]);
+      else openLightbox(post, index);
+      const fresh = lb && lb.items[lb.i] === (item || post.media[index]) ? lbMedia.querySelector('video') : null;
       if (!fresh) return pipDrop(v);
       fresh.removeAttribute('src');
       fresh.load();
@@ -9338,11 +9341,12 @@
       v.addEventListener('enterpictureinpicture', () => {
         if (!lb || !lbMedia.contains(v)) return;
         const post = lb.post;
-        const index = (post.media || []).indexOf(lb.items[lb.i]);
+        const shown = lb.items[lb.i];
+        const index = (post.media || []).indexOf(shown);
         // Moved in one step, so it plays on; then the viewer can close.
         pipHold(document).appendChild(v);
         closeLightbox();
-        watchPip(v, post, index);
+        watchPip(v, post, index, index < 0 ? shown : null);
       });
     }
     function lbPip() {
@@ -11847,6 +11851,14 @@
         }
         case 'p': {
           const sp = selectedPost();
+          // p again closes the window for this post's video, whatever it
+          // plays (its live stream too).
+          if (sp && pip && pip.post && pip.post.id === sp.id) {
+            pip.closing = true;
+            pip.v.pause();
+            pip.v.ownerDocument.exitPictureInPicture().catch(() => {});
+            return true;
+          }
           const at = sp && videoAt(findPost(sp.id));
           if (at) pipPost(at[0], at[1], sp.cell);
           else if (sp) toast('This post has no video.', 'info');

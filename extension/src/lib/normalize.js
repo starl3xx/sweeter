@@ -153,7 +153,11 @@
         if (!b['choice' + i + '_label']) break;
         choices.push({ label: str('choice' + i + '_label'), count: Number(str('choice' + i + '_count') || 0) });
       }
-      return { kind: 'poll', choices, ends: str('end_datetime_utc'), final: str('counts_are_final') === 'true' };
+      // counts_are_final is a boolean_value, and selected_choice the
+      // reader's vote, from 1 (X Pro's poll card, module 153256).
+      const fin = b.counts_are_final || {};
+      const sel = Number(str('selected_choice'));
+      return { kind: 'poll', choices, ends: str('end_datetime_utc'), final: fin.boolean_value === true || fin.string_value === 'true', selected: Number.isInteger(sel) && sel >= 1 && sel <= choices.length ? sel : null };
     }
     // A Space (<n>:audiospace, seen 2026-10-14): only its id. X Pro asks
     // AudioSpaceById for the rest as it draws the card (spaceInfo).

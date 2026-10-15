@@ -175,15 +175,38 @@
       '<div class="cb"><div class="cdom">' + h(label) + '</div><div class="ctt" title="' + h(title) + '">' + h(title) + '</div>' + host + '</div></a>';
   }
 
-  function card(c, ctx) {
-    if (!c) return '';
-    if (c.kind === 'poll') {
-      const total = c.choices.reduce((a, x) => a + x.count, 0) || 1;
-      return '<div class="poll">' + c.choices.map((x) => {
-        const pct = Math.round((x.count / total) * 100);
-        return '<div class="ch1"><div class="bar" style="width:' + pct + '%"></div><span>' + h(x.label) + '</span><span>' + pct + '%</span></div>';
-      }).join('') + '<div class="pmeta">' + compactCount(total) + ' votes' + (c.final ? ' · Final results' : '') + '</div></div>';
+  // A poll's time left, as X Pro says it: “2 days left”, “5 minutes left”.
+  function pollLeft(ends, now) {
+    const ms = Date.parse(ends) - now;
+    if (!isFinite(ms) || ms <= 0) return '';
+    const n = (u) => Math.floor(ms / u);
+    const [v, unit] = ms >= 864e5 ? [n(864e5), 'day'] : ms >= 36e5 ? [n(36e5), 'hour'] : [Math.max(1, n(6e4)), 'minute'];
+    return v + ' ' + unit + (v === 1 ? '' : 's') + ' left';
+  }
+
+  // A poll: its choices to vote on, as X Pro offers them (until the reader
+  // votes or it ends, and never on their own post), or its results, with
+  // the reader's vote marked. `p`: the post it is on.
+  function poll(c, ctx, p) {
+    const counted = c.choices.reduce((a, x) => a + x.count, 0);
+    const total = counted || 1;
+    const left = c.final ? '' : pollLeft(c.ends, ctx.now);
+    const own = !!(p && ctx.viewer && ctx.viewer.handle && p.author.handle.toLowerCase() === ctx.viewer.handle.toLowerCase());
+    const meta = '<div class="pmeta">' + compactCount(counted) + (counted === 1 ? ' vote' : ' votes') + (c.final || !left ? ' · Final results' : ' · ' + left) + '</div>';
+    if (!c.final && !c.selected && left && !own && p) {
+      return '<div class="poll vote" role="radiogroup" aria-label="Poll choices">' + c.choices.map((x, i) => '<button type="button" class="pch" role="radio" aria-checked="false" data-act="vote" data-i="' + (i + 1) + '">' + h(x.label) + '</button>').join('') + meta + '</div>';
     }
+    const top = Math.max(...c.choices.map((x) => x.count));
+    return '<div class="poll">' + c.choices.map((x, i) => {
+      const pct = Math.round((x.count / total) * 100);
+      const mine = c.selected === i + 1;
+      return '<div class="ch1' + (c.final && x.count === top && counted ? ' win' : '') + '"><div class="bar" style="width:' + pct + '%"></div><span>' + h(x.label) + (mine ? ' ' + icon('check', 'pmine') : '') + '</span><span>' + pct + '%</span></div>';
+    }).join('') + meta + '</div>';
+  }
+
+  function card(c, ctx, p) {
+    if (!c) return '';
+    if (c.kind === 'poll') return poll(c, ctx, p);
     const style = ctx.settings.cards;
     if (style === 'none') return '';
     if (c.kind === 'space') return spaceCard(c, ctx);
@@ -341,7 +364,7 @@
   // What sits between the name line and the buttons. With small thumbnails
   // the text and the thumbnail share one row, side by side.
   function body(p, ctx, bare, reply, context) {
-    const rest = articleCard(p.article, ctx) + (p.article ? '' : card(p.card, ctx)) + quote(p.quote, ctx) + noteBox(p.note) + staleNote(p) + context;
+    const rest = articleCard(p.article, ctx) + (p.article ? '' : card(p.card, ctx, p)) + quote(p.quote, ctx) + noteBox(p.note) + staleNote(p) + context;
     const pics = media(p.media, p.sensitive, ctx, p.author.handle, bare);
     const tk = tickerCards(p.tickers);
     if (ctx.settings.media === 'small' && pics && !bare) return '<div class="sm"><div class="smt">' + reply + text(p, ctx) + tk + rest + '</div>' + pics + '</div>';

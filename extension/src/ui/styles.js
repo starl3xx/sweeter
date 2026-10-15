@@ -383,6 +383,11 @@ img{display:block}
 .poll .bar{position:absolute;inset:0 auto 0 0;background:var(--tint)}
 .poll .ch1 span{position:relative}
 .poll .pmeta{color:var(--t3);font-size:.82em}
+.poll .ch1.win span:first-of-type{font-weight:700}
+.poll .pmine{width:.95em;height:.95em;vertical-align:-.12em;color:var(--accent)}
+.poll .pch{display:block;width:100%;padding:5px 10px;border:1px solid var(--accent);border-radius:999px;background:none;color:var(--accent);font:inherit;font-size:.93em;font-weight:600;text-align:center;cursor:pointer;overflow-wrap:anywhere}
+.poll .pch:hover{background:var(--sel)}
+.poll .pch:disabled{opacity:.5;cursor:default}
 
 /* actions */
 .acts{display:none;gap:2px;margin-top:6px;margin-left:-8px}

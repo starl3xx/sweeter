@@ -64,3 +64,22 @@ test('a watched person’s timeline goes to the profile, not a column', () => {
   s.ingest({ op: 'UserTweets', vars: { userId: '1000000000000000042' }, body: posts });
   eq(s.all().length, 1, 'unwatched: a real profile column again');
 });
+
+test('a profile tab shows the timeline X Pro loaded last, under its new names too', () => {
+  const s = createStore();
+  s.watch('quietfinch', '1000000000000000042');
+  const vars = { userId: '1000000000000000042' };
+  const one = (text, sort) => F.list([F.tweetEntry(F.tweet({ text }), sort)]);
+  // X Pro's Replies tab now loads UserRepliesTimeline (seen 2026-10-14).
+  s.ingest({ op: 'UserRepliesTimeline', vars, body: one('a reply', '40') });
+  eq(s.all().length, 0, 'still no column');
+  eq(s.timeline('1000000000000000042', ['UserRepliesTimeline', 'UserTweetsAndReplies']).sorted.length, 1);
+  // Its media tab is Photos or Videos: each its own timeline.
+  s.ingest({ op: 'UserVideoTimeline', vars, body: one('a video', '50') });
+  s.ingest({ op: 'UserPhotoTimeline', vars, body: one('a photo', '60') });
+  eq(s.timeline('1000000000000000042', ['UserPhotoTimeline', 'UserMedia']).sorted[0].sortIndex, '60');
+  eq(s.timeline('1000000000000000042', ['UserVideoTimeline']).sorted[0].sortIndex, '50');
+  // Of a tab's operations, the newest wins whatever their order.
+  s.ingest({ op: 'UserMedia', vars, body: one('old shape', '70') });
+  eq(s.timeline('1000000000000000042', ['UserPhotoTimeline', 'UserMedia']).sorted[0].sortIndex, '70');
+});

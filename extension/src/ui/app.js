@@ -3626,8 +3626,10 @@
 
     const PTABS = [
       ['posts', 'Posts', ['UserOriginalsTimeline', 'UserTweets']],
-      ['replies', 'Replies', ['UserTweetsAndReplies']],
-      ['media', 'Media', ['UserMedia']],
+      ['replies', 'Replies', ['UserRepliesTimeline', 'UserTweetsAndReplies']],
+      // X Pro's media tab is Photos or Videos, from a menu (xpro.profileTab).
+      ['photos', 'Photos', ['UserPhotoTimeline', 'UserMedia']],
+      ['videos', 'Videos', ['UserVideoTimeline']],
     ];
     let prof = null; // { handle, id, key, postId, tab, status, xpro, confirm, token }
     let profStack = null; // { handle, key, levels } while X Pro has profile stacks open for Sweeter

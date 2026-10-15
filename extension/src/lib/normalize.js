@@ -46,6 +46,9 @@
       case 'UserTweets':
       case 'UserTweetsAndReplies':
       case 'UserMedia':
+      case 'UserRepliesTimeline':
+      case 'UserPhotoTimeline':
+      case 'UserVideoTimeline':
         return v.userId ? { key: op + ':' + v.userId, kind: 'user', title: 'Profile' } : null;
       case 'UserOriginalsTimeline':
         // A profile column (verified 2026-09-30: X Pro’s profile column).

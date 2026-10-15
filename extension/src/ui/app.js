@@ -4468,7 +4468,10 @@
       const me = entryOf(c.vid);
       const others = layout.filter((x) => x.vid !== c.vid && mergeable(x));
       const mine = actingAs(c.vid) === null;
+      const health = healthLine(c);
       const items = [
+        health ? { id: 'health', title: health, enabled: false, label: true } : null,
+        health ? { separator: true } : null,
         { id: 'read', title: 'Mark All as Read', symbol: 'checkmark.circle' },
         { id: 'find', title: 'Find in Column…', symbol: 'magnifyingglass' },
         s && s.kind !== 'people' ? { id: 'filters', title: 'Filters', symbol: 'line.3.horizontal.decrease.circle', children: filterList(c).map((f) => ({ id: 'f:' + f.id, title: f.name, checked: on.includes(f.id) })).concat([{ separator: true }, { id: 'fclear', title: 'Clear Filters', enabled: on.length > 0 }]) } : null,
@@ -5348,23 +5351,41 @@
       toast('Notifications are on', 'bell');
     });
 
-    // Stale columns: X Pro normally refreshes each column every 30 s. With
-    // no word for 75 s, a clock shows in the header.
+    // Column health. X Pro refreshes a column every 30 s, or 60 or 120 s
+    // for searches and ranked columns (Top lists, For You); the store
+    // measures each one's rhythm (store.cadence). A clock shows in the
+    // header when a column misses 2.5 of its refreshes (75 s at least), and
+    // at once when X refuses one (429: X Pro is backing off). The column's
+    // … menu says when it last refreshed and how often it does.
+    const ago = (ms) => (ms < 60000 ? Math.max(1, Math.round(ms / 1000)) + ' s' : Math.round(ms / 60000) + ' min');
+    function healthLine(c) {
+      const s = store.get(c.key);
+      // An older page the reader scrolled to isn't a refresh: s.refreshed.
+      const last = s && (s.refreshed || s.updated);
+      if (!last || c.merge || s.kind === 'placeholder' || s.kind === 'conversation') return '';
+      const now = Date.now();
+      const err = s.lastError && s.lastError.at > last ? s.lastError.status : 0;
+      if (err) return 'X refused the last refresh (' + (err === 429 ? 'too many requests' : 'HTTP ' + err) + ') · the last good one was ' + ago(now - last) + ' ago';
+      const every = store.cadence(c.key);
+      return 'Refreshed ' + ago(now - last) + ' ago' + (every ? ' · about every ' + ago(Math.round(every / 5000) * 5000 || every) : '');
+    }
     function paintStale() {
       const now = Date.now();
       for (const c of cols.values()) {
         const s = store.get(c.key);
-        const age = s && s.updated && s.kind !== 'placeholder' && s.kind !== 'conversation' ? now - s.updated : 0;
+        const last = s && (s.refreshed || s.updated);
+        const age = last && s.kind !== 'placeholder' && s.kind !== 'conversation' ? now - last : 0;
+        const err = age && s.lastError && s.lastError.at > last ? s.lastError.status : 0;
+        const limit = Math.max(75000, 2.5 * (store.cadence(c.key) || 0));
         // Just back on screen: X Pro was throttled meanwhile; give it a
         // moment to refresh before calling a column stale.
-        const stale = age > 75000 && now - wokeAt > 40000;
+        const stale = (age > limit || !!err) && now - wokeAt > 40000;
         if (c.stl.hidden !== !stale) c.stl.hidden = !stale;
         c.el.classList.toggle('stale', stale);
         if (stale) {
-          const err = s.lastError && s.lastError.at > s.updated ? s.lastError.status : 0;
           const t = err
-            ? 'X refused X Pro’s last refresh of this column (HTTP ' + err + (err === 429 ? ', too many requests' : '') + '). Last good refresh ' + Math.round(age / 60000) + ' min ago; X Pro tries again by itself.'
-            : 'X Pro last refreshed this column ' + Math.round(age / 60000) + ' min ago. It may be off screen in X Pro, or X is slow.';
+            ? 'X refused X Pro’s last refresh of this column (HTTP ' + err + (err === 429 ? ', too many requests: X Pro is backing off' : '') + '). Last good refresh ' + ago(age) + ' ago; X Pro tries again by itself.'
+            : 'X Pro last refreshed this column ' + ago(age) + ' ago. It may be off screen in X Pro, or X is slow.';
           if (c.stl.title !== t) c.stl.title = t;
         }
       }

@@ -154,6 +154,27 @@
     return out + '</div>';
   }
 
+  // What X Pro has said about a Space (app.js gives the store's).
+  let spaceOf = () => null;
+  function useSpaces(fn) {
+    spaceOf = fn;
+  }
+  // A Space: live with its listeners, set for later, or ended, its title
+  // and host, once X Pro has asked AudioSpaceById; until then, a Space.
+  function spaceCard(c, ctx) {
+    const sp = spaceOf(c.id);
+    const live = !!sp && sp.state === 'Running';
+    const ended = !!sp && /^(Ended|Canceled|TimedOut)$/.test(sp.state);
+    const T = Sweeter.text;
+    const when = sp && !live && !ended && sp.start ? T.whenLabel(T.whenOf(new Date(sp.start)), ctx.now) : '';
+    const label = 'Space' + (live ? ' · Live' + (sp.listeners ? ' · ' + compactCount(sp.listeners) + ' listening' : '') : ended ? ' · Ended' + (sp.replay ? ' · Replay' : '') : when ? ' · ' + when : '');
+    const host = sp && sp.host ? '<div class="cpv">Hosted by ' + h(sp.host.name || '@' + sp.host.handle) + '</div>' : '';
+    const title = (sp && sp.title) || 'A Space on X';
+    return '<a class="card summary space' + (live ? ' live' : '') + '" href="' + h(safeUrl(c.url)) + '" target="_blank" rel="noopener noreferrer">' +
+      '<span class="spi">' + icon('mic') + '</span>' +
+      '<div class="cb"><div class="cdom">' + h(label) + '</div><div class="ctt" title="' + h(title) + '">' + h(title) + '</div>' + host + '</div></a>';
+  }
+
   function card(c, ctx) {
     if (!c) return '';
     if (c.kind === 'poll') {
@@ -165,10 +186,14 @@
     }
     const style = ctx.settings.cards;
     if (style === 'none') return '';
+    if (c.kind === 'space') return spaceCard(c, ctx);
     const compact = style === 'compact' || c.kind === 'summary';
+    // A video page or a live video: a play mark on its still, and LIVE.
+    const still = c.image ? '<img src="' + h(safeUrl(c.image)) + '" alt="" loading="lazy" decoding="async">' : '';
+    const pic = still && c.play ? '<span class="cim">' + still + '<i class="cpl">' + icon('play') + '</i></span>' : still;
     return '<a class="card' + (compact ? ' summary' : style === 'medium' ? ' medium' : '') + '" href="' + h(safeUrl(c.url)) + '" target="_blank" rel="noopener noreferrer">' +
-      (c.image ? '<img src="' + h(safeUrl(c.image)) + '" alt="" loading="lazy" decoding="async">' : '') +
-      '<div class="cb"><div class="cdom">' + h(c.domain) + '</div><div class="ctt" title="' + h(c.title) + '">' + h(c.title) + '</div></div></a>';
+      pic +
+      '<div class="cb"><div class="cdom">' + (c.live ? '<b class="clive">LIVE</b>' : '') + h(c.domain) + '</div><div class="ctt" title="' + h(c.title) + '">' + h(c.title) + '</div></div></a>';
   }
 
   // X Article: cover, “Article” label, title and a short preview, like X.
@@ -499,5 +524,5 @@
     return post(b.post, Object.assign({}, ctx, { context: b.context }));
   }
 
-  Sweeter.render = { block, post, notification, scheduled, styledText, timeLabel, avatar, badges, avatarSmall, acts, articlePage, articleMediaList, replyLimitText };
+  Sweeter.render = { useSpaces, block, post, notification, scheduled, styledText, timeLabel, avatar, badges, avatarSmall, acts, articlePage, articleMediaList, replyLimitText };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

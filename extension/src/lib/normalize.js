@@ -155,17 +155,65 @@
       }
       return { kind: 'poll', choices, ends: str('end_datetime_utc'), final: str('counts_are_final') === 'true' };
     }
+    // A Space (<n>:audiospace, seen 2026-10-14): only its id. X Pro asks
+    // AudioSpaceById for the rest as it draws the card (spaceInfo).
+    if (/:audiospace$/.test(name)) {
+      const id = str('id');
+      return /^[A-Za-z0-9]+$/.test(id) ? { kind: 'space', id, url: 'https://x.com/i/spaces/' + id } : null;
+    }
+    // A live video on X (<n>:broadcast): its title, still, and whether it
+    // was live when X sent the post.
+    if (/:broadcast$/.test(name)) {
+      const url = str('broadcast_url');
+      if (!/^https:\/\/(x|twitter)\.com\/i\/broadcasts\//.test(url)) return null;
+      return {
+        kind: 'large',
+        title: str('broadcast_title') || 'Live video',
+        description: '',
+        domain: str('broadcaster_display_name') || 'X',
+        url,
+        image: img('broadcast_thumbnail_large') || img('broadcast_thumbnail') || img('broadcast_thumbnail_small') || '',
+        live: str('broadcast_state') === 'RUNNING',
+        play: true,
+      };
+    }
     const title = str('title');
     if (!title) return null;
     const tco = str('card_url') || r.card.legacy.url || '';
     const match = (urls || []).find((u) => u.url === tco);
-    return {
-      kind: name === 'summary_large_image' ? 'large' : 'summary',
+    // A video page (YouTube and the like) is a player card, with its own still.
+    const player = name === 'player';
+    const out = {
+      kind: name === 'summary_large_image' || (player && (b.player_image_large || b.player_image)) ? 'large' : 'summary',
       title,
       description: str('description'),
       domain: str('vanity_url') || str('domain'),
       url: (match && match.expanded_url) || tco,
-      image: img('photo_image_full_size_small') || img('summary_photo_image_small') || img('thumbnail_image') || img('thumbnail_image_small') || '',
+      image: img('photo_image_full_size_small') || img('summary_photo_image_small') || img('player_image_large') || img('player_image') || img('thumbnail_image') || img('thumbnail_image_small') || '',
+    };
+    if (player) out.play = true;
+    return out;
+  }
+
+  // AudioSpaceById, which X Pro asks for as it draws a Space's card (seen
+  // 2026-10-14): data.audioSpace.metadata, with its state (Running, Ended,
+  // NotStarted, and others), title, times, listeners, and its host.
+  function space(body) {
+    const m = body && body.data && body.data.audioSpace && body.data.audioSpace.metadata;
+    if (!m || !m.rest_id) return null;
+    const ms = (t) => {
+      const n = Number(t);
+      return isFinite(n) && n > 0 ? (n < 1e12 ? n * 1000 : n) : null;
+    };
+    const host = userFromResults(m.creator_results);
+    return {
+      id: String(m.rest_id),
+      state: String(m.state || ''),
+      title: String(m.title || ''),
+      start: ms(m.scheduled_start),
+      listeners: Number(m.total_live_listeners) || 0,
+      replay: !!m.is_space_available_for_replay,
+      host: host ? { name: host.name, handle: host.handle } : null,
     };
   }
 
@@ -801,6 +849,6 @@
     };
   }
 
-  Sweeter.normalize = { sourceFor, user, post, notification, timeline, listInfo, profile, profileOf, drafts, scheduled, PEOPLE_OPS: Object.keys(PEOPLE) };
+  Sweeter.normalize = { sourceFor, user, post, notification, timeline, listInfo, profile, profileOf, drafts, scheduled, space, PEOPLE_OPS: Object.keys(PEOPLE) };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.normalize;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

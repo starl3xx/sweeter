@@ -99,6 +99,7 @@
   // column's own title in X Pro's page says it better.
   const standIn = (s) => (s.kind === 'list' && s.title === 'List') || s.kind === 'user' || s.kind === 'conversation' || (s.kind === 'community' && s.key !== 'communities') || /^folder:/.test(s.key) || s.kind === 'people';
   // X Pro column types Sweeter shows only as a placeholder: [title, icon].
+  // (Scheduled draws X Pro's list of scheduled posts: renderScheduled.)
   // The key is x:<type>, or x:<type>:<path> (decks.js keyFor).
   const PLACEHOLDERS = {
     explore: ['Explore', 'search'], grok: ['Grok', 'spark'], drafts: ['Drafts', 'doc'], scheduled: ['Scheduled posts', 'schedule'],
@@ -2092,6 +2093,7 @@
         c.nodes.clear();
         // X Pro itself sends messages to X Chat on x.com (its Messages column says so).
         const type = s.key.slice(2).split(':')[0];
+        if (type === 'scheduled') return renderScheduled(c);
         if (type === 'chat') c.foot.innerHTML = 'X Pro no longer shows messages. X moved them to X Chat, on x.com.<br><button class="more" type="button" data-cmd="xchat">Open X Chat</button>';
         else c.foot.innerHTML = (type === 'other' ? 'Sweeter can’t show this kind of X Pro column yet.' : 'Sweeter can’t show X’s ' + h(s.title) + ' yet.') + ' It stays in your X Pro deck.<br><button class="more" type="button" data-cmd="xpro">Show X Pro</button>';
         c.rendered = true;
@@ -2839,6 +2841,7 @@
         if (macCmp && compose) native.composeState(macState());
         return;
       }
+      if (key === 'xscheduled') return renderScheduledCols();
       // A post the reader made: the app's log says whether its reply
       // showed in an open conversation, and if not, why (field names only).
       if (key === 'posted') {
@@ -5809,6 +5812,7 @@
           row('list', 'list', 'List…', 'One of your lists', false) +
           row('search', 'search', 'Search…', 'Words, a #hashtag, or from:someone', false) +
           row('bookmarks', 'bookmark', 'Bookmarks', hasCol('bookmarks') ? took : 'Every post you bookmarked', hasCol('bookmarks')) +
+          row('scheduled', 'schedule', 'Scheduled posts', hasCol('x:scheduled') ? took : 'Posts waiting for their time, to edit or delete', hasCol('x:scheduled')) +
           '</div>';
       } else if (s.step === 'lists') {
         body = !s.names
@@ -5933,6 +5937,7 @@
         mentions: () => xpro.addFromTab(mappingFor('notifications:all'), 'Mentions'),
         priority: () => xpro.addFromTab(mappingFor('notifications:all'), 'Priority'),
         bookmarks: () => xpro.addBookmarks(),
+        scheduled: () => xpro.addColumn('scheduled'),
       }[v];
       if (fn) doAdd(fn);
     }
@@ -6464,6 +6469,85 @@
       const r = await xpro.deleteXDrafts(m.id, refs);
       if (!r.ok) toast('Your draft on X is still there. ' + (X_DRAFT_FAIL[r.reason] || ''), 'warn');
     }
+    // ---------- scheduled posts ----------
+    // X Pro's Scheduled column, drawn from what it last listed
+    // (store.xScheduled), soonest first. Edit opens one in X Pro's own
+    // composer, where Update saves it; Delete asks here, then goes through
+    // the column's Edit, as Drafts does (xpro.js).
+    const schedGoing = new Set();
+    // The column's list and foot, for the column or its own window.
+    function scheduledView(c) {
+      const list = store.xScheduled();
+      const ctx = { settings: colSettings(c), now: Date.now(), viewer, expanded };
+      const shown = (list || []).filter((d) => !schedGoing.has(d.id));
+      return {
+        html: shown.map((d) => R.scheduled(d, ctx)).join(''),
+        foot: !list ? 'X Pro hasn’t listed your scheduled posts yet.<br><button class="more" type="button" data-cmd="xpro">Show X Pro</button>' : !shown.length ? 'You have no scheduled posts. To schedule one, choose a time in the composer.' : '',
+      };
+    }
+    function renderScheduled(c) {
+      const v = scheduledView(c);
+      c.list.innerHTML = v.html;
+      c.foot.innerHTML = v.foot;
+      c.rendered = true;
+    }
+    function renderScheduledCols() {
+      for (const c of cols.values()) if (c.key === 'x:scheduled') renderColumn(c, false);
+      for (const rec of popouts.values()) if (rec.c.key === 'x:scheduled') drawPop(rec);
+    }
+    // How xpro.js finds a scheduled post in the column: its place in X's
+    // list, and what it says.
+    function schedRef(id) {
+      const list = store.xScheduled() || [];
+      const at = list.findIndex((d) => d.id === id);
+      return at < 0 ? null : { at, text: list[at].text, replyTo: list[at].replyTo };
+    }
+    const X_SCHED_FAIL = {
+      busy: 'X Pro is busy with another post or dialog. Try again in a moment.',
+      nodraft: 'Sweeter can’t find that post in X Pro’s Scheduled column. Nothing changed.',
+      noopen: 'X Pro’s composer didn’t open that post.',
+      noload: 'X Pro opened that post empty, so Sweeter closed it again. It’s still scheduled.',
+      noedit: 'X Pro’s Scheduled column didn’t start choosing. Nothing was deleted.',
+      notick: 'X Pro’s Scheduled column didn’t take the choice. Nothing was deleted.',
+      noconfirm: 'X Pro didn’t ask to delete. Nothing was deleted.',
+      nochange: 'X Pro didn’t confirm the delete. Check Scheduled in X Pro (⌥X).',
+      nocolumn: 'This deck has no Scheduled column now.',
+    };
+    function openScheduled(id) {
+      const m = mappingFor('x:scheduled');
+      const ref = schedRef(id);
+      if (!m || !m.id || !ref) return toast(X_SCHED_FAIL.nocolumn, 'warn');
+      if (compose && cmpOpen()) closeCompose(true);
+      xproHandoff(
+        () => xpro.openXDraft(m.id, ref).then((r) => (r.ok ? r : Object.assign(r, { msg: X_SCHED_FAIL[r.reason] || X_SCHED_FAIL.noopen }))),
+        () => xpro.composerOpen() || xpro.dialogOpen(),
+      );
+    }
+    function askDeleteScheduled(id) {
+      const d = (store.xScheduled() || []).find((x) => x.id === id);
+      if (!d) return;
+      const T = Sweeter.text;
+      const when = d.when ? T.whenLabel(T.whenOf(new Date(d.when)), Date.now()) : '';
+      showConfirm('Delete this scheduled post' + (when && !d.failed ? ', due ' + when : '') + '? X won’t send it, and this can’t be undone.', 'Delete Post', () => xStep(() => deleteScheduled(id)));
+    }
+    async function deleteScheduled(id) {
+      for (let i = 0; i < 30 && (xpro.composerOpen() || xpro.dialogOpen()); i++) await new Promise((r) => setTimeout(r, 200));
+      const m = mappingFor('x:scheduled');
+      const ref = schedRef(id);
+      if (!ref) return;
+      if (!m || !m.id) return toast(X_SCHED_FAIL.nocolumn, 'warn');
+      schedGoing.add(id);
+      renderScheduledCols();
+      try {
+        const r = await xpro.deleteXDrafts(m.id, [ref]);
+        if (r.ok) toast('Scheduled post deleted', 'info');
+        else toast('Your post is still scheduled. ' + (X_SCHED_FAIL[r.reason] || ''), 'warn');
+      } finally {
+        schedGoing.delete(id);
+        renderScheduledCols();
+      }
+    }
+
     function draftTitle(d) {
       const line = ((d.text || '').trim().split('\n')[0] || '').trim();
       if (line) return line.length > 60 ? line.slice(0, 59).trimEnd() + '…' : line;
@@ -8898,6 +8982,12 @@
         case 'markread':
           markAllRead(c);
           break;
+        case 'sched-open':
+          openScheduled(el.dataset.id);
+          break;
+        case 'sched-del':
+          askDeleteScheduled(el.dataset.id);
+          break;
         case 'xchat':
           openUrl('https://x.com/i/chat');
           break;
@@ -10042,6 +10132,14 @@
       } else delete rec.col.dataset.tint;
       rec.col.dataset.media = colSettings(c).media;
       rec.w.document.title = titleOf(c.vid) + ' · Sweeter';
+      // Scheduled posts aren't blocks: the column's own list.
+      if (c.key === 'x:scheduled') {
+        const v = scheduledView(c);
+        rec.nodes = null;
+        rec.list.innerHTML = v.html;
+        rec.root.querySelector('.foot').innerHTML = v.foot;
+        return;
+      }
       // Keep the reader’s place: the first block on screen stays put. At
       // the top the pop-out follows the newest post, except For You.
       const top = follows(c) && rec.scroll.scrollTop <= PIN_SLOP;
@@ -10145,6 +10243,19 @@
       if (tok) {
         e.preventDefault();
         return openUrl('https://dexscreener.com/search?q=' + encodeURIComponent(tok.dataset.ca));
+      }
+      // A scheduled post's Edit and Delete, and Show X Pro: in the main window.
+      const sc = t.closest('[data-cmd="sched-open"], [data-cmd="sched-del"], [data-cmd="xpro"]');
+      if (sc) {
+        e.preventDefault();
+        showMain();
+        return run(sc.dataset.cmd, sc);
+      }
+      // Its photo opens as it does in the main column (no post to show it in).
+      const sph = t.closest('.cell.sched [data-photo]');
+      if (sph) {
+        e.preventDefault();
+        return openUrl(sph.dataset.photo);
       }
       const cell = t.closest('.cell[data-id]');
       const act = t.closest('[data-act]');

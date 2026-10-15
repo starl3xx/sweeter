@@ -137,6 +137,44 @@
       }
     }
 
+    // Scheduled posts, the soonest first, as X Pro's Scheduled column last
+    // listed them (null until one has), and the reader's edits and deletes
+    // there since. A new one shows at the column's next check: Sweeter gets
+    // no copy of what was scheduled (the recorder passes a post's id alone).
+    let xScheduled = null;
+    const SCHEDULED_OPS = new Set(['FetchScheduledTweets', 'EditScheduledTweet', 'DeleteScheduledTweet']);
+    function ingestScheduled(msg) {
+      const v = msg.vars || {};
+      // X answers a refused change with errors and no data.
+      if (Array.isArray(msg.body.errors) && msg.body.errors.length && !msg.body.data) return false;
+      if (msg.op === 'FetchScheduledTweets') {
+        const list = N.scheduled(msg.body);
+        if (!list) return false;
+        xScheduled = list;
+        return true;
+      }
+      const id = String(v.scheduled_tweet_id || '');
+      const i = xScheduled ? xScheduled.findIndex((d) => d.id === id) : -1;
+      if (i < 0) return false;
+      if (msg.op === 'DeleteScheduledTweet') {
+        xScheduled = xScheduled.slice(0, i).concat(xScheduled.slice(i + 1));
+        return true;
+      }
+      const old = xScheduled[i];
+      const req = Object.assign({}, v.post_tweet_request || {}, { type: 'PostTweetRequest' });
+      // X's writes take seconds; N.scheduled reads either.
+      const at = Number(v.execute_at);
+      const raw = { rest_id: id, tweet_create_request: req, scheduling_info: { execute_at: isFinite(at) && at > 0 ? at : old.when } };
+      const now = (N.scheduled({ data: { viewer: { scheduled_tweet_list: [raw] } } }) || [])[0];
+      if (!now) return false;
+      const n = Array.isArray(req.media_ids) ? req.media_ids.length : old.media.length;
+      now.media = n === old.media.length ? old.media : Array.from({ length: n }, () => ({ type: 'photo', url: '', alt: '' }));
+      now.replyTo = now.reply === old.reply ? old.replyTo : null;
+      xScheduled = xScheduled.slice(0, i).concat(xScheduled.slice(i + 1)).concat([now]);
+      xScheduled.sort((a, b) => (a.when || 0) - (b.when || 0));
+      return true;
+    }
+
     // One captured response from the recorder: { op, vars, body }.
     function ingest(msg) {
       if (!msg || !msg.op || !msg.body) return null;
@@ -156,6 +194,11 @@
         if (!ingestDrafts(msg)) return null;
         emit('xdrafts');
         return 'xdrafts';
+      }
+      if (SCHEDULED_OPS.has(msg.op)) {
+        if (!ingestScheduled(msg)) return null;
+        emit('xscheduled');
+        return 'xscheduled';
       }
       // X Pro's answer when the reader posts (CreateTweet, or CreateNoteTweet
       // for a long post). A reply shows at once in an open conversation of
@@ -554,6 +597,7 @@
       lastPosted: () => lastPosted,
       xDrafts: () => xDrafts,
       xSaved: () => xSaved,
+      xScheduled: () => xScheduled,
       post: (id) => posts.get(String(id)) || null,
       profile: (handle) => profiles.get(String(handle).toLowerCase()) || null,
       // Route this person’s timelines to the profile, by id or (when only

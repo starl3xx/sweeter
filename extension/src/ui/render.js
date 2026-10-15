@@ -438,6 +438,55 @@
       '</div></article>';
   }
 
+  // Text with bold and italic as UTF-16 ranges (what X's composer keeps
+  // for a draft or a scheduled post): escaped, in runs of one style each,
+  // never splitting a surrogate pair, with its line breaks.
+  function styledText(text, styles) {
+    const s = String(text || '');
+    const mask = new Uint8Array(s.length);
+    const mark = (list, bit) => {
+      for (const [a, b] of list || []) for (let i = Math.max(0, a); i < Math.min(s.length, b); i++) mask[i] |= bit;
+    };
+    mark(styles && styles.bold, 1);
+    mark(styles && styles.italic, 2);
+    const low = (i) => i < s.length && (s.charCodeAt(i) & 0xfc00) === 0xdc00;
+    let out = '';
+    for (let i = 0; i < s.length; ) {
+      let j = i + 1;
+      while (j < s.length && (mask[j] === mask[i] || low(j))) j++;
+      const m = mask[i];
+      out += (m & 2 ? '<em>' : '') + (m & 1 ? '<strong>' : '') + h(s.slice(i, j)).replace(/\n/g, '<br>') + (m & 1 ? '</strong>' : '') + (m & 2 ? '</em>' : '');
+      i = j;
+    }
+    return out;
+  }
+
+  // A scheduled post (X Pro's Scheduled column): when it sends, or that X
+  // couldn't, what it says, and Edit and Delete. Its photos show; a video
+  // or GIF is named, since X keeps only a still for it.
+  function scheduled(d, ctx) {
+    const T = Sweeter.text;
+    const when = d.when ? T.whenLabel(T.whenOf(new Date(d.when)), ctx.now) : '';
+    const head = d.failed ? 'X couldn’t send this' + (when ? ' on ' + when : '') : !when ? 'Scheduled' : d.when <= ctx.now ? 'Due ' + when : 'Sends ' + when;
+    const photos = d.media.filter((m) => m.type === 'photo' && m.url);
+    const others = d.media.filter((m) => m.type !== 'photo');
+    const info = [];
+    if (d.quote) info.push('Quotes a post');
+    if (others.length) info.push(others[0].type === 'gif' ? 'A GIF' : others.length === 1 ? 'A video' : others.length + ' videos');
+    if (d.more.length) info.push('Thread of ' + (1 + d.more.length));
+    const reply = d.reply ? '<div class="rpl">Replying to ' + (d.replyTo ? '@' + h(d.replyTo) : 'a post') + '</div>' : '';
+    return '<article class="cell act sched' + (d.failed ? ' failed' : '') + '" data-sched="' + h(d.id) + '">' +
+      '<div class="act-ic sched">' + icon('schedule') + '</div>' +
+      '<div class="main"><div class="meta"><span class="sched-when">' + h(head) + '</span></div>' +
+      reply +
+      (d.text ? '<div class="tx">' + styledText(d.text, d.styles) + '</div>' : '') +
+      (photos.length ? media(photos, false, ctx, (ctx.viewer && ctx.viewer.handle) || 'you', !d.text) : '') +
+      (info.length ? '<div class="pst">' + h(info.join(' · ')) + '</div>' : '') +
+      '<div class="sacts"><button class="more" type="button" data-cmd="sched-open" data-id="' + h(d.id) + '">Edit in X Pro</button>' +
+      '<button class="more del" type="button" data-cmd="sched-del" data-id="' + h(d.id) + '">Delete…</button></div>' +
+      '</div></article>';
+  }
+
   // One timeline block. `visible` is the list of posts that survived the
   // mute filters (threads can lose some of theirs).
   function block(b, ctx, visible) {
@@ -450,5 +499,5 @@
     return post(b.post, Object.assign({}, ctx, { context: b.context }));
   }
 
-  Sweeter.render = { block, post, notification, timeLabel, avatar, badges, avatarSmall, acts, articlePage, articleMediaList, replyLimitText };
+  Sweeter.render = { block, post, notification, scheduled, styledText, timeLabel, avatar, badges, avatarSmall, acts, articlePage, articleMediaList, replyLimitText };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

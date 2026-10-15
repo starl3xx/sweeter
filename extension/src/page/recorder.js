@@ -151,6 +151,11 @@
     'EditDraftTweet',
     'DeleteDraftTweet',
     'DeleteDraftTweets',
+    // Scheduled posts (X Pro's Scheduled column, its API module 957178): the
+    // list, and each change to one. Scheduling one is a post (POSTING).
+    'FetchScheduledTweets',
+    'EditScheduledTweet',
+    'DeleteScheduledTweet',
   ]);
 
   // The deck sync carries more than Sweeter needs (onboarding state, each

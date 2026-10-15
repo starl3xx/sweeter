@@ -1734,13 +1734,23 @@
     const w = colId ? columnWrap(colId) : null;
     return w ? Array.from(w.querySelectorAll('[data-testid="unsentTweet"]')) : [];
   }
+  // The Scheduled column (verified from module 576278, the same page with
+  // its other tab) draws its cells and Edit the same way. Sweeter's list
+  // can run ahead of the column's (an edit moves a scheduled post down
+  // before X Pro lists them again), so a cell elsewhere is taken when it
+  // is the only one that fits.
   function draftCell(colId, ref) {
-    const c = draftCells(colId)[ref.at];
-    if (!c) return null;
-    const shown = norm(c.innerText);
+    const cells = draftCells(colId);
     const first = norm(ref.text).slice(0, 40);
-    if (first) return shown.includes(first) ? c : null;
-    return !ref.replyTo || shown.includes('@' + ref.replyTo) ? c : null;
+    const fits = (c) => {
+      const shown = norm(c.innerText);
+      if (first) return shown.includes(first);
+      return !ref.replyTo || shown.includes('@' + ref.replyTo);
+    };
+    const c = cells[ref.at];
+    if (c && fits(c)) return c;
+    const all = cells.filter(fits);
+    return all.length === 1 ? all[0] : null;
   }
   function draftButton(colId, text) {
     const w = columnWrap(colId);
@@ -1930,10 +1940,11 @@
     return true;
   }
 
-  // Home (X Pro picks Following), Notifications (All), or Drafts (the
-  // picker's "Draft posts", verified 2026-10-14), at the end.
+  // Home (X Pro picks Following), Notifications (All), Drafts (the
+  // picker's "Draft posts", verified 2026-10-14), or Scheduled (its
+  // "Scheduled posts", the next row, from its strings), at the end.
   async function addColumn(kind) {
-    const href = { home: 'https://x.com/home', notifications: 'https://x.com/notifications', drafts: 'https://x.com/compose/post/unsent/drafts' }[kind];
+    const href = { home: 'https://x.com/home', notifications: 'https://x.com/notifications', drafts: 'https://x.com/compose/post/unsent/drafts', scheduled: 'https://x.com/compose/post/unsent/scheduled' }[kind];
     if (!href) return { ok: false, reason: 'kind' };
     const id = await newPicker();
     if (!id) return { ok: false, reason: 'nopicker' };

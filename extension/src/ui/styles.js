@@ -457,6 +457,13 @@ img{display:block}
 .act-ic{width:calc(var(--av));display:flex;justify-content:flex-end;padding-top:2px}
 .act-ic svg{width:18px;height:18px}
 .act-ic.like{color:var(--likeic)}.act-ic.repost{color:var(--rt)}.act-ic.follow,.act-ic.list{color:var(--accent)}.act-ic.bell,.act-ic.news,.act-ic.other,.act-ic.milestone{color:var(--t3)}
+.act-ic.sched{color:var(--accent)}
+.sched .sched-when{font-weight:600;color:var(--t1)}
+.sched.failed .act-ic.sched,.sched.failed .sched-when{color:var(--likeic)}
+.sacts{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:5px}
+.sacts .more{padding-top:0}
+.sacts .del{color:var(--t3)}
+.sacts .del:hover{color:var(--likeic)}
 .minis{display:flex;gap:4px;margin-bottom:5px;flex-wrap:wrap}
 .minis img{width:24px;height:24px;border-radius:5px;background:var(--sub);cursor:pointer}
 .app[data-round="true"] .minis img{border-radius:50%}

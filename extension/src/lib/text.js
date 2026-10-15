@@ -398,6 +398,126 @@
     return day + ' at ' + t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   }
 
-  Sweeter.text = { richText, plainText, editableText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem };
+  // ---------- the search form ----------
+  // X's search operators as a form, as X Pro's search filters (module
+  // 309009) and x.com's advanced search offer them: fields make a query,
+  // and a query fills the fields, keeping what no field holds (rest) as it
+  // was typed. Lists of words or accounts are space- or comma-separated.
+  // Three-way choices: '' (any), 'only', or 'none'.
+  const SEARCH_FIELDS = { all: '', exact: '', any: '', none: '', tags: '', from: '', to: '', mention: '', site: '', replies: '', reposts: '', quotes: '', links: '', media: '', verified: false, follows: false, minReplies: '', minLikes: '', minReposts: '', since: '', until: '', lang: '', rest: '' };
+  const SEARCH_TRI = { replies: 'replies', reposts: 'nativeretweets', quotes: 'quote', links: 'links' };
+  const SEARCH_MEDIA = ['media', 'images', 'videos'];
+  const SEARCH_MIN = { minReplies: 'min_replies', minLikes: 'min_faves', minReposts: 'min_retweets' };
+  const SEARCH_LISTS = { from: ['from:', 'account'], to: ['to:', 'account'], mention: ['@', 'account'], tags: ['#', 'tag'] };
+  // Words, "phrases", and (groups), each with an optional leading minus.
+  function searchTokens(q) {
+    const out = [];
+    const s = String(q || '');
+    let i = 0;
+    while (i < s.length) {
+      if (/\s/.test(s[i])) {
+        i++;
+        continue;
+      }
+      let j = i;
+      if (s[j] === '-') j++;
+      if (s[j] === '"') {
+        const end = s.indexOf('"', j + 1);
+        j = end < 0 ? s.length : end + 1;
+      } else if (s[j] === '(') {
+        let depth = 0;
+        for (; j < s.length; j++) {
+          if (s[j] === '(') depth++;
+          else if (s[j] === ')' && --depth === 0) {
+            j++;
+            break;
+          }
+        }
+      } else while (j < s.length && !/\s/.test(s[j])) j++;
+      out.push(s.slice(i, j));
+      i = j;
+    }
+    return out;
+  }
+  const searchItems = (v, strip) =>
+    String(v || '')
+      .split(/[\s,]+/)
+      .map((x) => (strip ? x.replace(strip, '') : x))
+      .filter(Boolean);
+  function searchParse(q) {
+    const f = Object.assign({}, SEARCH_FIELDS);
+    const add = (k, v) => (f[k] = f[k] ? f[k] + ' ' + v : v);
+    const rest = [];
+    const tokens = searchTokens(q);
+    // A bare OR joins the terms beside it into one choice: the chain stays
+    // in the query as typed, in one piece, whatever its terms are.
+    const chained = new Set();
+    tokens.forEach((t, i) => {
+      if (t === 'OR' && i > 0 && i < tokens.length - 1) [i - 1, i, i + 1].forEach((k) => chained.add(k));
+    });
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      const low = t.toLowerCase();
+      let m;
+      if (chained.has(i) || t === 'OR') rest.push(t);
+      else if (/^"[^"]+"$/.test(t) && !f.exact) f.exact = t.slice(1, -1);
+      else if (/^\(.*\)$/.test(t)) {
+        const items = t.slice(1, -1).trim().split(/\s+OR\s+/);
+        const kind = (re) => items.length > 1 && items.every((x) => re.test(x));
+        if (kind(/^from:\w{1,15}$/i)) items.forEach((x) => add('from', x.slice(5)));
+        else if (kind(/^to:\w{1,15}$/i)) items.forEach((x) => add('to', x.slice(3)));
+        else if (kind(/^@\w{1,15}$/)) items.forEach((x) => add('mention', x.slice(1)));
+        else if (kind(/^#\w+$/)) items.forEach((x) => add('tags', x.slice(1)));
+        else if (kind(/^[^\s"():\-#@][^\s"():]*$/) && !f.any) f.any = items.join(' ');
+        else rest.push(t);
+      } else if ((m = /^from:(\w{1,15})$/i.exec(t))) add('from', m[1]);
+      else if ((m = /^to:(\w{1,15})$/i.exec(t))) add('to', m[1]);
+      else if ((m = /^@(\w{1,15})$/.exec(t))) add('mention', m[1]);
+      else if ((m = /^#(\w+)$/.exec(t))) add('tags', m[1]);
+      else if ((m = /^url:(\S+)$/i.exec(t)) && !f.site) f.site = m[1];
+      else if ((m = /^(-?)filter:(\w+)$/i.exec(low)) && Object.values(SEARCH_TRI).includes(m[2])) {
+        const k = Object.keys(SEARCH_TRI).find((x) => SEARCH_TRI[x] === m[2]);
+        if (f[k]) rest.push(t);
+        else f[k] = m[1] ? 'none' : 'only';
+      } else if ((m = /^filter:(\w+)$/.exec(low)) && SEARCH_MEDIA.includes(m[1]) && !f.media) f.media = m[1];
+      else if (low === 'filter:blue_verified') f.verified = true;
+      else if (low === 'filter:follows') f.follows = true;
+      else if ((m = /^(min_replies|min_faves|min_retweets):(\d+)$/.exec(low))) f[Object.keys(SEARCH_MIN).find((k) => SEARCH_MIN[k] === m[1])] = m[2];
+      else if ((m = /^(since|until):(\d{4}-\d{2}-\d{2})$/.exec(low))) f[m[1]] = m[2];
+      else if ((m = /^lang:([a-z]{2,3}(-[a-z]+)?)$/.exec(low)) && !f.lang) f.lang = m[1];
+      else if (/^-[^\s"():\-][^\s"():]*$/.test(t)) add('none', t.slice(1));
+      else if (/^[^\s"():\-#@][^\s"():]*$/.test(t)) add('all', t);
+      else rest.push(t);
+    }
+    f.rest = rest.join(' ');
+    return f;
+  }
+  function searchBuild(f) {
+    const out = [];
+    const group = (list) => (list.length > 1 ? '(' + list.join(' OR ') + ')' : list[0]);
+    out.push(...searchItems(f.all));
+    if (f.rest) out.push(String(f.rest).trim());
+    const exact = String(f.exact || '').replace(/"/g, '').trim();
+    if (exact) out.push('"' + exact + '"');
+    const any = searchItems(f.any).filter((x) => x !== 'OR');
+    if (any.length) out.push(group(any));
+    for (const w of searchItems(f.none, /^-+/)) out.push('-' + w);
+    for (const k of ['tags', 'from', 'to', 'mention']) {
+      const [pre] = SEARCH_LISTS[k];
+      const list = searchItems(f[k], k === 'tags' ? /^#+/ : /^@+/).map((x) => pre + x);
+      if (list.length) out.push(group(list));
+    }
+    if (String(f.site || '').trim()) out.push('url:' + String(f.site).trim().replace(/^https?:\/\//, '').replace(/\/$/, ''));
+    for (const k of Object.keys(SEARCH_TRI)) if (f[k] === 'only' || f[k] === 'none') out.push((f[k] === 'none' ? '-' : '') + 'filter:' + SEARCH_TRI[k]);
+    if (SEARCH_MEDIA.includes(f.media)) out.push('filter:' + f.media);
+    if (f.verified) out.push('filter:blue_verified');
+    if (f.follows) out.push('filter:follows');
+    for (const k of Object.keys(SEARCH_MIN)) if (/^\d+$/.test(String(f[k] || '').trim()) && +f[k] > 0) out.push(SEARCH_MIN[k] + ':' + +f[k]);
+    for (const k of ['since', 'until']) if (/^\d{4}-\d{2}-\d{2}$/.test(f[k] || '')) out.push(k + ':' + f[k]);
+    if (/^[a-z]{2,3}(-[a-z]+)?$/i.test(f.lang || '')) out.push('lang:' + f.lang.toLowerCase());
+    return out.filter(Boolean).join(' ');
+  }
+
+  Sweeter.text = { richText, plainText, editableText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem, searchParse, searchBuild, SEARCH_FIELDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.text;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

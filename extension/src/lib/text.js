@@ -518,6 +518,75 @@
     return out.filter(Boolean).join(' ');
   }
 
-  Sweeter.text = { richText, plainText, editableText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem, searchParse, searchBuild, SEARCH_FIELDS };
+  // X's count for a post: each link 23, and a character outside the
+  // narrow ranges (most emoji, CJK) 2.
+  function weight(text) {
+    const t = String(text);
+    let n = 0;
+    let rest = '';
+    let at = 0;
+    for (const l of draftLinks(t)) {
+      rest += t.slice(at, l.start);
+      n += 23;
+      at = l.end;
+    }
+    rest += t.slice(at);
+    for (const ch of Array.from(rest)) {
+      const cp = ch.codePointAt(0);
+      n += cp <= 0x10ff || (cp >= 0x2000 && cp <= 0x200d) || (cp >= 0x2010 && cp <= 0x201f) || (cp >= 0x2032 && cp <= 0x2037) ? 1 : 2;
+    }
+    return n;
+  }
+
+  // A long text as a thread: posts of at most `limit` by X's count, cut at
+  // blank lines first, then at line ends, sentence ends, and spaces, and
+  // inside a word only when one word is longer than a post. Numbered, each
+  // post ends “ 1/3” and keeps room for it. What is cut at a post's edge
+  // (the space or line break) goes; the rest of the text stays as written.
+  function splitThread(text, o) {
+    const opt = Object.assign({ limit: 280, numbered: true }, o || {});
+    const whole = String(text || '').trim();
+    // What fits in one post stays one post, whatever room a number needs.
+    if (!whole) return [];
+    if (weight(whole) <= opt.limit) return [whole];
+    const room = opt.limit - (opt.numbered ? 6 : 0);
+    const fits = (s) => weight(s) <= room;
+    const levels = [/\n\s*\n/, /\n/, /(?<=[.!?…]["”’)\]]?)\s+/, /\s+/];
+    const joins = ['\n\n', '\n', ' ', ' '];
+    // Pieces that each fit, with what joins each to the one before it.
+    function pieces(s, lv, join) {
+      if (fits(s)) return [[s, join]];
+      if (lv < levels.length) {
+        const parts = s.split(levels[lv]).map((x) => x.trim()).filter(Boolean);
+        if (parts.length > 1) return parts.flatMap((p, i) => pieces(p, lv + 1, i ? joins[lv] : join));
+        return pieces(s, lv + 1, join);
+      }
+      // One word longer than a post: cut it by characters.
+      const out = [];
+      let cur = '';
+      for (const ch of Array.from(s)) {
+        if (cur && !fits(cur + ch)) {
+          out.push([cur, out.length ? '' : join]);
+          cur = '';
+        }
+        cur += ch;
+      }
+      if (cur) out.push([cur, out.length ? '' : join]);
+      return out;
+    }
+    const posts = [];
+    let cur = '';
+    for (const [p, join] of pieces(whole, 0, '')) {
+      const next = cur ? cur + join + p : p;
+      if (cur && !fits(next)) {
+        posts.push(cur);
+        cur = p;
+      } else cur = next;
+    }
+    if (cur) posts.push(cur);
+    return opt.numbered && posts.length > 1 ? posts.map((p, i) => p + ' ' + (i + 1) + '/' + posts.length) : posts;
+  }
+
+  Sweeter.text = { weight, splitThread, richText, plainText, editableText, draftLinks, normRanges, rangesCover, toggleRange, textEdit, shiftRanges, pollLength, pollChoices, pollProblem, POLL_CHOICE_MAX, whenDate, whenOf, whenLabel, scheduleProblem, searchParse, searchBuild, SEARCH_FIELDS };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.text;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

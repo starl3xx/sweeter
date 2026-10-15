@@ -115,6 +115,8 @@ struct ComposeState: Decodable {
     let avatar: String?
     /// The quoted or replied-to author's picture, the same way.
     let contextAvatar: String?
+    /// How many posts Split into a Thread would make (0 or none: it can't).
+    let split: Int?
 
     struct DraftRef: Decodable, Equatable {
         let key: String
@@ -471,6 +473,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private var dockButtons: [Tool: ComposeDockButton] = [:]
     private let moreButton = ComposeDockButton(symbol: "ellipsis", label: "X Pro", tip: "Finish in X Pro’s own composer")
     private let moreMenu = NSMenu()
+    /// Split into a Thread: shown while the page says a lone long post can split.
+    private let splitItem = NSMenuItem(title: "Split into a Thread", action: nil, keyEquivalent: "")
 
     private init() {
         // A window like Mail's compose window: it stays while another app is
@@ -778,6 +782,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
                 bar.addArrangedSubview(b)
             }
         }
+        splitItem.target = self
+        splitItem.action = #selector(splitPressed)
+        splitItem.isHidden = true
+        moreMenu.addItem(splitItem)
         for (title, tool) in [("Open in X Pro", "xpro"), ("Tag a Location in X Pro", "location"), ("Make an Image with Grok in X Pro", "grok")] {
             let m = NSMenuItem(title: title, action: #selector(xpro(_:)), keyEquivalent: "")
             m.target = self
@@ -959,6 +967,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             avatarView.show(dataURL: a, handle: avatarHandle)
         }
         if let a = s.contextAvatar { quoteAvatar.show(dataURL: a, handle: contextHandle) }
+        let parts = s.split ?? 0
+        splitItem.isHidden = parts < 2
+        if parts >= 2 { splitItem.title = "Split into \(parts) Posts" }
         postButton.title = postTitle(s.post)
         if let t = s.title, !t.isEmpty { window?.title = t }
         if let a = s.at, a != at, a >= 0, a < thread.count, !uploading {
@@ -1969,6 +1980,15 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         var d = draft()
         d["target"] = key
         send("deleteDraft", d)
+    }
+
+    /// The page cuts the post at sentence ends and sends the thread back.
+    @objc private func splitPressed() {
+        guard !busy, !uploading else { return }
+        syncTimer?.invalidate()
+        syncTimer = nil
+        stash()
+        send("split", draft())
     }
 
     @objc private func xpro(_ sender: NSMenuItem) {

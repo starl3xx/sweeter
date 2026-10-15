@@ -64,6 +64,7 @@
     linkBrowser: '', // Mac app: the bundle id of the browser links open in ('' the default one)
     xLinkBrowser: '', // and for x.com and twitter.com links ('' the same as other links)
     replyShield: '30', // conversations: fold replies from accounts newer than this many days ('off': never)
+    threadNumbers: true, // a post split into a thread ends each part “ 1/3”
     fit: 'fill', // 'fill' | 'equal' | 'fixed' | 'fit2' … 'fit5'
     snap: false, // columns snap into place when scrolled sideways
     muteNotes: false, // mutes hide notifications too (Tweetbot left them alone)
@@ -433,6 +434,7 @@
       { k: 'select', key: 'cards', label: 'Link previews', opts: [['large', 'Large, full width'], ['medium', 'Medium, two-thirds width'], ['compact', 'Compact'], ['none', 'None']] },
       { k: 'check', key: 'composeWindow', label: 'Compose', text: 'Write posts in a window of their own', note: 'Like Mail’s compose window: it keeps the size and place you give it, shows in Mission Control, and needs no room in the columns.', app: true },
       { k: 'check', key: 'composeNative', label: '', text: 'Make it a Mac window (beta)', note: 'Native text, bold and italic, photos and video, GIFs, polls, scheduling, threads, and a toolbar in the title bar.', app: true },
+      { k: 'check', key: 'threadNumbers', label: '', text: 'Number the posts of a split thread (1/3)', note: 'A post over 280 characters offers to split into a thread, cut at sentence ends.' },
       { k: 'check', key: 'composeCards', label: '', text: 'Preview a link while you write a post', note: 'Loads that page once, without cookies, for its title and image, so the site sees the visit. Never for links to X.', app: true },
       { k: 'check', key: 'xDrafts', label: 'Drafts', text: 'Keep drafts on X too', note: 'Drafts lists your drafts on X, and Save also saves a new post to them, with its photos, video, or GIF (a poll, a thread, a reply, a send time, and who can reply stay on this Mac). Sweeter uses a Drafts column in your X Pro deck, adds one if needed, and keeps it out of sight. A draft on X with only text opens here; one with media, a reply, a quote, or a thread opens in X Pro’s composer.' },
       { k: 'select', key: 'links', label: 'Links', opts: [['short', 'Short, as X shows them'], ['domain', 'Domain only'], ['full', 'Full address']] },
@@ -689,7 +691,7 @@
       // Closing a window that holds something (askClose).
       '<div class="cmp-ask cmp-save" hidden role="alertdialog" aria-label="Save draft"><span class="cmp-ask-t">Save this post as a draft? You can open it again from Drafts.</span><button class="cmp-ask-b cmp-save-del" type="button" data-cmd="cmp-save-delete">Delete Draft</button><button class="cmp-ask-b" type="button" data-cmd="cmp-save-cancel">Cancel</button><button class="cmp-ask-go" type="button" data-cmd="cmp-save-keep">Save</button></div>' +
       '<div class="cmp-foot"><button class="cmp-xpro" type="button" data-cmd="cmp-xpro" title="Finish in X Pro’s own composer, for a location, a Grok image, and more">Open in X Pro</button>' +
-      '<span class="cmp-status" id="cmp-status" role="status"></span><span class="grow"></span><span class="cmp-count"></span>' +
+      '<span class="cmp-status" id="cmp-status" role="status"></span><span class="grow"></span><button class="cmp-split" type="button" data-cmd="cmp-split" hidden title="Make this long post a thread, cut at sentence ends"></button><span class="cmp-count"></span>' +
       '<button class="cmp-post" type="button" data-cmd="cmp-post" title="Post (⌘Return)">Post</button></div>' +
       '<div class="cmp-grip" title="Drag for a taller text box. Double-click to reset." aria-hidden="true"></div>' +
       '</div>' +
@@ -778,6 +780,7 @@
     const cmpText = shadow.querySelector('#cmp-text');
     Sweeter.editor.textbox(cmpText);
     const cmpCount = shadow.querySelector('.cmp-count');
+    const cmpSplit = shadow.querySelector('.cmp-split');
     const cmpStatus = shadow.querySelector('.cmp-status');
     const cmpAsk = shadow.querySelector('.cmp-ask');
     const cmpSave = shadow.querySelector('.cmp-save');
@@ -7046,6 +7049,36 @@
       loadPost(c.at + 1);
       draftSoon();
     }
+    // ---------- a long post into a thread ----------
+    // A lone post over 280 can become a thread instead (Sweeter.text.
+    // splitThread), its parts numbered “1/3” unless Settings ▸ Media says
+    // not. Its media, GIF, and poll stay with the first part; bold and
+    // italic don't survive the cut.
+    function splitParts() {
+      const c = compose;
+      if (!c || c.kind === 'edit' || !c.thread || c.thread.length !== 1) return [];
+      const text = cmpText.value.trim();
+      if (weighted(text) <= 280) return [];
+      return Sweeter.text.splitThread(text, { numbered: settings.threadNumbers !== false });
+    }
+    function splitPost() {
+      const c = compose;
+      const parts = splitParts();
+      if (parts.length < 2) return false;
+      if (parts.length > THREAD_MAX) {
+        toast('That makes ' + parts.length + ' posts; X takes up to ' + THREAD_MAX + ' in a thread.', 'warn');
+        return false;
+      }
+      stashPost();
+      const p = c.thread[c.at];
+      const styled = (p.styles && ((p.styles.bold || []).length || (p.styles.italic || []).length)) > 0;
+      const posts = parts.map((text, i) => Object.assign(emptyPost(), { text }, i === 0 ? { files: p.files, gif: p.gif, poll: p.poll, held: p.held || null } : {}));
+      c.thread.splice(c.at, 1, ...posts);
+      loadPost(c.at);
+      draftSoon();
+      toast('Split into ' + parts.length + ' posts' + (styled ? '; bold and italic were left out' : ''), 'info');
+      return true;
+    }
     function removeThreadPost(i) {
       const c = compose;
       if (!c || !c.thread[i]) return;
@@ -7077,23 +7110,8 @@
     // X’s weighted length: links (draftLinks: with https:// or a bare
     // domain) count 23; most characters outside Latin and common punctuation
     // (emoji, CJK) count 2.
-    function weighted(text) {
-      const t = String(text);
-      let n = 0;
-      let rest = '';
-      let at = 0;
-      for (const l of Sweeter.text.draftLinks(t)) {
-        rest += t.slice(at, l.start);
-        n += 23;
-        at = l.end;
-      }
-      rest += t.slice(at);
-      for (const ch of Array.from(rest)) {
-        const cp = ch.codePointAt(0);
-        n += cp <= 0x10ff || (cp >= 0x2000 && cp <= 0x200d) || (cp >= 0x2010 && cp <= 0x201f) || (cp >= 0x2032 && cp <= 0x2037) ? 1 : 2;
-      }
-      return n;
-    }
+    // X's count for a post (links 23, wide characters 2): Sweeter.text.weight.
+    const weighted = (text) => Sweeter.text.weight(text);
 
     // Real bold and italic (compose.styles: ranges in UTF-16 units) follow
     // every change to the text, however it came: typing, paste, an emoji,
@@ -7116,6 +7134,9 @@
       draftSoon();
       const n = weighted(cmpText.value);
       cmpCount.textContent = n > 280 ? n.toLocaleString() + ' · long post' : n + ' / 280';
+      const parts = n > 280 ? splitParts().length : 0;
+      cmpSplit.hidden = parts < 2;
+      if (parts >= 2) cmpSplit.textContent = 'Split into ' + parts + ' posts';
       cmpCount.className = 'cmp-count' + (n > 25000 ? ' over' : n > 280 ? ' long' : '');
       cmpPost.disabled = posting;
       if (cmpText.getAttribute('aria-invalid') === 'true' && (cmpText.value.trim() || (compose && (compose.files.length || compose.gif))) && n <= 25000) {
@@ -8209,6 +8230,8 @@
         drafts: draftList(),
         // The picture, once, when it changes (the window keeps it).
         avatar: macAvatarNow !== null && macAvatarNow !== macAvatarSent ? (macAvatarSent = macAvatarNow) : undefined,
+        // How many posts Split into a Thread would make (0: it can't now).
+        split: splitParts().length,
         // The quoted or replied-to author's picture, once it is drawn.
         contextAvatar: macCtxPic !== macCtxPicSent ? (macCtxPicSent = macCtxPic) : undefined,
         status,
@@ -8444,6 +8467,10 @@
           return null;
         case 'save':
           saveDraftNow();
+          return reply();
+        case 'split':
+          // The window shows the new thread from a fresh snapshot.
+          if (splitPost()) native.composeShow(macSnapshot(compose));
           return reply();
         case 'openDraft':
           // The window's draft is kept first; the other one opens in it.
@@ -9314,6 +9341,9 @@
           break;
         case 'lb-pip':
           lbPip();
+          break;
+        case 'cmp-split':
+          splitPost();
           break;
         case 'as-use': {
           const q = addBody.querySelector('#add-q');

@@ -95,6 +95,10 @@
       // How the signed-in account relates to this one (for the Mutuals filter).
       following: !!((u.relationship_perspectives && u.relationship_perspectives.following) || legacy.following),
       followedBy: !!((u.relationship_perspectives && u.relationship_perspectives.followed_by) || legacy.followed_by),
+      // When the account was made, and whether it keeps X's default picture
+      // (for the reply shield). core.created_at in timelines, legacy before.
+      createdMs: Date.parse(core.created_at || legacy.created_at || '') || null,
+      defaultAvatar: !!legacy.default_profile_image || /\/default_profile_images\//.test((u.avatar && u.avatar.image_url) || legacy.profile_image_url_https || ''),
     };
   }
 

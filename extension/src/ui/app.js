@@ -61,6 +61,7 @@
     alertsMuted: false,
     pauseOnHover: true, // a pinned column holds still under the pointer
     dedupe: 'off', // a post already seen in one column: 'dim' | 'hide' | 'off' in the others
+    replyShield: '30', // conversations: fold replies from accounts newer than this many days ('off': never)
     fit: 'fill', // 'fill' | 'equal' | 'fixed' | 'fit2' … 'fit5'
     snap: false, // columns snap into place when scrolled sideways
     muteNotes: false, // mutes hide notifications too (Tweetbot left them alone)
@@ -406,6 +407,7 @@
       { k: 'check', key: 'pinToTop', label: 'Timeline', text: 'Pin timeline to top when at top', note: 'Clicking a column header also jumps to the newest post and keeps it pinned. For You never pins: X adds to it all the time.' },
       { k: 'check', key: 'pauseOnHover', label: '', text: 'Hold a pinned column still under the pointer', note: 'New posts wait above; the count shows how many.' },
       { k: 'select', key: 'dedupe', label: 'Seen elsewhere', opts: [['off', 'Show every post as usual'], ['dim', 'Dim posts you saw earlier in another column'], ['hide', 'Hide them']], note: 'A post counts as seen after a second on screen. Two copies on screen together are never dimmed.' },
+      { k: 'select', key: 'replyShield', label: 'Reply spam', opts: [['off', 'Show every reply'], ['7', 'Fold replies from accounts under a week old'], ['30', 'Fold replies from accounts under a month old'], ['90', 'Fold replies from accounts under 3 months old']], note: 'In a conversation. Replies from accounts with no profile picture, or that one of your mutes matches, fold too. You, the post’s author, and people you follow never fold. “Show hidden replies” at the end brings them back.' },
       { k: 'head', label: 'Action bar' },
       { k: 'check', key: 'barReply', label: 'Show', text: 'Reply' },
       { k: 'check', key: 'barRepost', label: '', text: 'Repost' },
@@ -3335,6 +3337,39 @@
       overlayBar(c.dscroll, el, '28px', c.dlist);
     }
 
+    // ---------- reply shield ----------
+    // In a conversation, a reply folds when its author’s account is newer
+    // than settings.replyShield days (X sends each author’s created_at), keeps
+    // X’s default picture, or one of the reader’s mutes matches it. The
+    // reader, the post’s author, and people the reader follows never fold.
+    // What it folded waits behind one row at the end, as X’s own “Show
+    // additional replies” does.
+    // The reader, the post’s author, and people the reader follows.
+    function shieldExempt(p, focal) {
+      const a = p && p.author;
+      if (!a) return false;
+      const me = viewer && viewer.handle ? viewer.handle.toLowerCase() : '';
+      return !!a.following || a.handle.toLowerCase() === me || !!(focal && focal.author && a.handle.toLowerCase() === focal.author.handle.toLowerCase());
+    }
+    function shieldWhy(p, focal, now) {
+      const days = Number(settings.replyShield);
+      if (!days || !p || p.unavailable || !p.author || shieldExempt(p, focal)) return null;
+      const a = p.author;
+      if (match(p)) return 'muted';
+      if (a.defaultAvatar) return 'nopic';
+      if (a.createdMs && now - a.createdMs < days * 864e5) return 'new';
+      return null;
+    }
+    function shieldRow(folded, shown) {
+      // Replies, not blocks: a folded thread counts each of its posts.
+      const size = (x) => (x.b.kind === 'thread' ? x.b.posts.length : 1);
+      const n = (k) => folded.filter((x) => x.why === k).reduce((t, x) => t + size(x), 0);
+      const parts = [[n('new'), 'from a new account', 'from new accounts'], [n('nopic'), 'with no profile picture'], [n('muted'), 'muted']].filter(([k]) => k).map(([k, one, many]) => k + ' ' + (k > 1 && many ? many : one));
+      const all = folded.reduce((t, x) => t + size(x), 0);
+      const what = all === 1 ? '1 hidden reply' : all + ' hidden replies';
+      return '<div class="shield-row"><button type="button" class="lnk" data-cmd="shield-toggle">' + (shown ? 'Fold ' + what + ' again' : 'Show ' + what) + '</button><span class="shield-why">' + h(parts.join(' · ')) + '</span></div>';
+    }
+
     function renderDetail(c, first) {
       const d = c.detail;
       if (!d || !c.dpane) return;
@@ -3345,15 +3380,27 @@
       let focalSeen = false;
       // A post deleted (or dismissed) while open: a note in its place.
       const gone = d.gone ? '<article class="cell gone-cell"><div></div><div class="main gone">' + h(d.gone) + '</div></article>' : '';
+      // Replies the shield folds: drawn after the rest once shown.
+      const folded = [];
       for (const b of data ? data.blocks : []) {
         if (b.kind === 'post' && b.post.id === d.id) {
           html += gone || R.post(b.post, focalCtx);
           focalSeen = true;
         } else if (b.kind === 'post' && !focalSeen) {
           html += R.post(b.post, ctx, 'ancestor'); // what the post replies to
-        } else html += R.block(b, ctx, b.kind === 'thread' ? b.posts : null);
+        } else {
+          // A thread folds by its first reply, unless someone who never
+          // folds (the reader, say, just now) replied further down it.
+          const why = b.kind === 'thread' && b.posts.some((q) => shieldExempt(q, d.post)) ? null : shieldWhy(b.kind === 'post' ? b.post : b.kind === 'thread' ? b.posts[0] : null, d.post, ctx.now);
+          if (why) folded.push({ b, why });
+          else html += R.block(b, ctx, b.kind === 'thread' ? b.posts : null);
+        }
       }
       if (!focalSeen) html = (gone || R.post(d.post, focalCtx)) + html;
+      if (folded.length) {
+        html += shieldRow(folded, d.showFolded);
+        if (d.showFolded) html += '<div class="shielded">' + folded.map((x) => R.block(x.b, ctx, x.b.kind === 'thread' ? x.b.posts : null)).join('') + '</div>';
+      }
       const keep = c.dscroll.scrollTop;
       const sel = d.selId;
       c.dlist.innerHTML = html;
@@ -9148,6 +9195,11 @@
           persist();
           redrawSearchStep();
           break;
+        case 'shield-toggle':
+          if (!c || !c.detail) break;
+          c.detail.showFolded = !c.detail.showFolded;
+          renderDetail(c, false);
+          break;
         case 'lb-prev':
           stepLightbox(-1);
           break;
@@ -10840,7 +10892,7 @@
       const quick = XF.QUICK.map((f, i) => h(f.name) + ' <kbd>⌥' + (i + 1) + '</kbd>').join(', ');
       return 'A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '. Your own can also ask for at least so many likes, reposts, or replies, or for some languages.';
     }
-    const MUTES_HINT = 'Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd>, or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists, and searches. Words and regexes also check image descriptions, poll choices, link card titles, Article titles, and the post a post quotes; @user and #hashtag check the quoted post too.';
+    const MUTES_HINT = 'Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd>, or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists, and searches, and fold replies in conversations (Settings ▸ General ▸ Reply spam). Words and regexes also check image descriptions, poll choices, link card titles, Article titles, and the post a post quotes; @user and #hashtag check the quoted post too.';
     const MUTE_NOTES_NOTE = 'A like, repost, or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.';
     const LAYOUTS_HINT = 'A layout is Sweeter’s own arrangement: views, merged columns, groups, widths, filters, titles, icons, colors, media and the column layout. X Pro’s decks and columns stay as they are, so a layout fits the decks it was made with.';
     function filtersPart() {

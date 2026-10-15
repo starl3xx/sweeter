@@ -3929,8 +3929,19 @@
       const title = !line ? 'A thread by ' + first.author.name : line.length > 100 ? line.slice(0, 100).replace(/\s+\S*$/, '') + '…' : line;
       const body = [];
       const quotes = new Map();
+      // The title is the first line in full: it isn't said twice.
+      const plainOf = (html) => { const el = document.createElement('div'); el.innerHTML = html; return el.textContent.trim(); };
+      let skip = title === line;
       for (const p of chain) {
-        for (const para of String(p.html || '').split(/(?:<br>\s*){2,}/)) if (para.replace(/<br>/g, '').trim()) body.push({ t: 'p', html: para });
+        for (const para of String(p.html || '').split(/(?:<br>\s*){2,}/)) {
+          if (!para.replace(/<br>/g, '').trim()) continue;
+          if (skip && plainOf(para) === title) {
+            skip = false;
+            continue;
+          }
+          skip = false;
+          body.push({ t: 'p', html: para });
+        }
         const media = (p.media || []).filter((m) => m.type === 'photo' || safeUrl(m.videoUrl || '') !== '#');
         if (media.length) body.push({ t: 'media', items: media });
         if (p.quote && !p.quote.unavailable) {

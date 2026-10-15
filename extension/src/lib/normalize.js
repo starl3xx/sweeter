@@ -739,42 +739,65 @@
     const dl = body && body.data && body.data.viewer && body.data.viewer.draft_list;
     const list = dl && dl.response_data;
     if (!Array.isArray(list)) return null;
+    return list.map(unsent).filter(Boolean);
+  }
+
+  // FetchScheduledTweets, which X Pro's Scheduled column sends (its API
+  // module 957178, read 2026-10-14): data.viewer.scheduled_tweet_list, the
+  // soonest first (X Pro asks with ascending: true). Each is a draft's
+  // shape plus scheduling_info: execute_at in ms (X Pro reads it with
+  // new Date) and a state, “Failed” for one X couldn't send.
+  function scheduled(body) {
+    const list = body && body.data && body.data.viewer && body.data.viewer.scheduled_tweet_list;
+    if (!Array.isArray(list)) return null;
     const out = [];
     for (const d of list) {
-      const req = d && d.tweet_create_request;
-      if (!d || !d.rest_id || !req || req.type !== 'PostTweetRequest') continue;
-      const tags = (req.richtext_options && req.richtext_options.richtext_tags) || [];
-      const ranges = (type) =>
-        tags
-          .filter((t) => (t.richtext_types || []).some((x) => String(x).toLowerCase() === type))
-          .map((t) => [t.from_index | 0, t.to_index | 0])
-          .filter(([s, e]) => e > s);
-      const answered = unwrap(d.replied_tweet_results && d.replied_tweet_results.result);
-      const author = answered && answered.core ? userFromResults(answered.core.user_results) : null;
-      const media = (d.media_entities || [])
-        .map((m) => {
-          const i = (m && m.media_info) || {};
-          const type = i.__typename === 'ApiVideo' ? 'video' : i.__typename === 'ApiGif' ? 'gif' : 'photo';
-          const still = i.original_img_url || (i.preview_image && i.preview_image.original_img_url) || '';
-          return { type, url: /^https:\/\/pbs\.twimg\.com\//.test(still) ? still : '', alt: String(m.alt_text || '') };
-        })
-        .filter((m) => m.url || m.type !== 'photo');
-      const id = String(d.rest_id);
-      out.push({
-        id,
-        at: snowflakeMs(id) || 0,
-        text: String(req.status || ''),
-        styles: { bold: ranges('bold'), italic: ranges('italic') },
-        reply: req.in_reply_to_status_id ? String(req.in_reply_to_status_id) : null,
-        replyTo: author ? author.handle : null,
-        quote: req.attachment_url ? String(req.attachment_url) : null,
-        media,
-        more: (req.thread_tweets || []).map((t) => String((t && t.status) || '')),
-      });
+      const one = unsent(d);
+      if (!one) continue;
+      const info = d.scheduling_info || {};
+      const at = Number(info.execute_at);
+      // Seconds would read as 1970: X sends ms, but its writes take seconds.
+      one.when = isFinite(at) && at > 0 ? (at < 1e12 ? at * 1000 : at) : null;
+      one.failed = info.state === 'Failed';
+      out.push(one);
     }
     return out;
   }
 
-  Sweeter.normalize = { sourceFor, user, post, notification, timeline, listInfo, profile, profileOf, drafts, PEOPLE_OPS: Object.keys(PEOPLE) };
+  // One unsent post (a draft, or a scheduled one) as X's composer keeps it.
+  function unsent(d) {
+    const req = d && d.tweet_create_request;
+    if (!d || !d.rest_id || !req || req.type !== 'PostTweetRequest') return null;
+    const tags = (req.richtext_options && req.richtext_options.richtext_tags) || [];
+    const ranges = (type) =>
+      tags
+        .filter((t) => (t.richtext_types || []).some((x) => String(x).toLowerCase() === type))
+        .map((t) => [t.from_index | 0, t.to_index | 0])
+        .filter(([s, e]) => e > s);
+    const answered = unwrap(d.replied_tweet_results && d.replied_tweet_results.result);
+    const author = answered && answered.core ? userFromResults(answered.core.user_results) : null;
+    const media = (d.media_entities || [])
+      .map((m) => {
+        const i = (m && m.media_info) || {};
+        const type = i.__typename === 'ApiVideo' ? 'video' : i.__typename === 'ApiGif' ? 'gif' : 'photo';
+        const still = i.original_img_url || (i.preview_image && i.preview_image.original_img_url) || '';
+        return { type, url: /^https:\/\/pbs\.twimg\.com\//.test(still) ? still : '', alt: String(m.alt_text || '') };
+      })
+      .filter((m) => m.url || m.type !== 'photo');
+    const id = String(d.rest_id);
+    return {
+      id,
+      at: snowflakeMs(id) || 0,
+      text: String(req.status || ''),
+      styles: { bold: ranges('bold'), italic: ranges('italic') },
+      reply: req.in_reply_to_status_id ? String(req.in_reply_to_status_id) : null,
+      replyTo: author ? author.handle : null,
+      quote: req.attachment_url ? String(req.attachment_url) : null,
+      media,
+      more: (req.thread_tweets || []).map((t) => String((t && t.status) || '')),
+    };
+  }
+
+  Sweeter.normalize = { sourceFor, user, post, notification, timeline, listInfo, profile, profileOf, drafts, scheduled, PEOPLE_OPS: Object.keys(PEOPLE) };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.normalize;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

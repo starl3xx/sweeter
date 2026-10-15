@@ -323,6 +323,19 @@ struct PrefRowView: View {
             } label: {
                 titled(row.label ?? "", row.note)
             }
+        case "browser":
+            // The browsers on this Mac; the row's one option names ''.
+            let chosen = model.string(key).wrappedValue
+            Picker(selection: model.string(key)) {
+                Text(row.opts?.first?.last ?? "Default browser").tag("")
+                Divider()
+                ForEach(LinkOpener.browsers, id: \.id) { b in Text(b.name).tag(b.id) }
+                if !chosen.isEmpty && !LinkOpener.browsers.contains(where: { $0.id == chosen }) {
+                    Text(chosen + " (not found)").tag(chosen)
+                }
+            } label: {
+                titled(row.label ?? "", row.note)
+            }
         case "check":
             Toggle(isOn: model.bool(key)) {
                 titled(row.text ?? row.label ?? "", row.note)

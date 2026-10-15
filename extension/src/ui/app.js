@@ -61,6 +61,8 @@
     alertsMuted: false,
     pauseOnHover: true, // a pinned column holds still under the pointer
     dedupe: 'off', // a post already seen in one column: 'dim' | 'hide' | 'off' in the others
+    linkBrowser: '', // Mac app: the bundle id of the browser links open in ('' the default one)
+    xLinkBrowser: '', // and for x.com and twitter.com links ('' the same as other links)
     replyShield: '30', // conversations: fold replies from accounts newer than this many days ('off': never)
     fit: 'fill', // 'fill' | 'equal' | 'fixed' | 'fit2' … 'fit5'
     snap: false, // columns snap into place when scrolled sideways
@@ -399,6 +401,10 @@
       { k: 'sep' },
       { k: 'check', key: 'round', label: 'Avatars', text: 'Round avatars' },
       { k: 'check', key: 'menuBar', label: 'Menu bar', text: 'Show Sweeter in the menu bar', lbl: true, app: true },
+      // The Mac app lists the browsers installed (SettingsWindow.swift); the
+      // one option is what '' means.
+      { k: 'browser', key: 'linkBrowser', label: 'Open links in', opts: [['', 'Default browser']], app: true },
+      { k: 'browser', key: 'xLinkBrowser', label: 'Open X links in', opts: [['', 'Same as other links']], note: 'Links to x.com and twitter.com, such as a post opened on x.com.', app: true },
       { k: 'check', key: 'updateCheck', label: 'Updates', text: 'Check for updates once a day', btn: ['Check Now', 'check-updates'], note: 'Asks GitHub for the latest release. Nothing is downloaded until you choose Download.', lbl: true },
       { k: 'check', key: 'tips', label: 'Tips', text: 'Show a tip when Sweeter opens', btn: ['Show One Now', 'tip-show'], lbl: true },
       { k: 'check', key: 'telemetry', label: 'Usage data', text: 'Send anonymous usage counts', note: 'Anonymous counts, through TelemetryDeck, of opens, the welcome and its Follow button, tips turned off, and the warnings Sweeter shows (without names or links), with the Sweeter version, the theme and appearance you use, and facts about the Mac such as its macOS version, model, and language. Never anything from X.', lbl: true, app: true },
@@ -10987,6 +10993,8 @@
       let open = false;
       for (const r of rows) {
         if (r.app && !native) continue;
+        // Only the Mac app's own Settings window can list the browsers.
+        if (r.k === 'browser') continue;
         if (r.k === 'head') {
           out += (open ? '</div>' : '') + '<h3 class="psec">' + h(r.label) + '</h3>';
           open = false;
@@ -11326,6 +11334,7 @@
           else if (r.k === 'range') v = Math.min(r.max, Math.max(r.min, Math.round(Number(v) / r.step) * r.step));
           else if (r.k === 'select' && !r.opts.some((o) => o[0] === v)) return no('Unknown value.');
           else if (r.k === 'swatches' && !ACCENTS.some((x) => x[0] === v)) return no('Unknown value.');
+          else if (r.k === 'browser' && (typeof v !== 'string' || !/^[\w.-]{0,200}$/.test(v))) return no('Unknown value.');
           setOne(a.key, v);
           return ok();
         }

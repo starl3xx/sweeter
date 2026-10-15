@@ -1164,6 +1164,10 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .side .deck{width:36px;height:30px;margin:2px auto 6px;display:grid;place-items:center;background:rgba(255,255,255,.06);border:0;border-radius:8px;font-size:17px;line-height:1;cursor:pointer;color:var(--side-on)}
 .side .deck:hover{background:rgba(255,255,255,.14)}
 .side .deck[hidden]{display:none}
+.dhead .dthread{flex:0 0 auto;white-space:nowrap;margin-left:auto;background:none;border:0;color:var(--accent);font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;padding:2px 6px;border-radius:5px}
+.dhead .dthread[hidden]{display:none}
+.dhead .dthread:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.dhead .dthread:not([hidden])+.dcol{margin-left:0}
 .dhead .dcol{flex:0 0 auto;white-space:nowrap;margin-left:auto;background:none;border:0;color:var(--accent);font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;padding:2px 6px;border-radius:5px}
 .dhead .dcol:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .ch .stl{display:grid;place-items:center;flex:0 0 auto;color:#C8650F}

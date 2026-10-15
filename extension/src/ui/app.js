@@ -4164,9 +4164,12 @@
       if (e.key === '-' || e.key === '_') return readerSize(-1), true;
       if (e.key === '=' || e.key === '+') return readerSize(1), true;
       if (e.key === '0') return readerSize(0), true;
+      // Your own keys (Settings ▸ Keyboard) here too.
+      const key = keyOf(e.key);
+      if (key === null) return false;
       // s: the article's post link, as everywhere else (X Pro's Share post).
-      if (e.key === 's') return copyText(rd.post.url, 'Link copied'), true;
-      const act = { r: 'reply', t: 'repost', l: 'like', b: 'bookmark' }[e.key];
+      if (key === 's') return copyText(rd.post.url, 'Link copied'), true;
+      const act = { r: 'reply', t: 'repost', l: 'like', b: 'bookmark' }[key];
       const btn = act && rdFoot.querySelector('[data-act="' + act + '"]');
       if (btn) {
         btn.click();
@@ -11255,7 +11258,7 @@
       keys: () => {
         const k = keyListShown();
         const moved = Object.keys(keyMap()).length > 0;
-        return '<div class="hint">Change moves a single key to one you choose. The chord keys (c, g, d), the digits, and f stay put.</div>' +
+        return '<div class="hint">Change moves a single key to one you choose. The chord keys (c, g, d), the digits, f, [ ], and the size keys (− + =) stay put.</div>' +
           '<div class="keys">' + k.map(([keys, d, def]) => {
             const caps = keyRecording && keyRecording === def ? '<em class="krec">Press a key… (Esc cancels)</em>' : keys.split(/\s{2}/).map((g) => g.split(' ').map((x) => '<kbd>' + h(x) + '</kbd>').join(' ')).join(' ');
             const change = def ? ' <button class="lnk kchg" type="button" data-cmd="key-change" data-def="' + h(def) + '">Change</button>' : '';
@@ -11559,7 +11562,7 @@
         // The Mac app's Keyboard pane: a key moved, or every key back.
         case 'key-set': {
           const def = String((a && a.def) || '');
-          const to = String((a && a.to) || '');
+          const to = normKey(String((a && a.to) || ''));
           const why = keyProblem(def, to);
           if (why) return no(why);
           setKey(def, to);
@@ -11609,10 +11612,17 @@
       for (const def in m) if (m[def] === pressed && REBIND[def]) return def;
       return REBIND[pressed] && m[pressed] && m[pressed] !== pressed ? null : pressed;
     }
+    // A letter is kept as its lowercase key, as the defaults are (Shift or
+    // Caps Lock while recording shouldn't make it a capital).
+    const normKey = (k) => (typeof k === 'string' && /^[A-Za-z]$/.test(k) ? k.toLowerCase() : k);
+    // Keys Sweeter reads before the movable ones: the chords, X Pro's like,
+    // the column keys [ ], and the reader's and viewer's size keys.
+    const KEY_HELD = ['c', 'g', 'd', 'f', '[', ']', '-', '_', '=', '+'];
     function keyProblem(def, now) {
       if (!REBIND[def]) return 'That key can’t be changed.';
+      now = normKey(now);
       if (typeof now !== 'string' || Array.from(now).length !== 1 || /\s/.test(now)) return 'Press one key, a letter or a sign.';
-      if (/^[0-9]$/.test(now) || ['c', 'g', 'd', 'f'].includes(now)) return '“' + now + '” stays Sweeter’s own.';
+      if (/^[0-9]$/.test(now) || KEY_HELD.includes(now)) return '“' + now + '” stays Sweeter’s own.';
       for (const d in REBIND) if (d !== def && (keyMap()[d] || d) === now) return '“' + now + '” is already ' + REBIND[d] + '.';
       return null;
     }
@@ -11649,15 +11659,16 @@
       }
       if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return true;
       const def = keyRecording;
-      const why = keyProblem(def, e.key);
+      const pressed = normKey(e.key);
+      const why = keyProblem(def, pressed);
       if (why) {
         toast(why, 'warn');
         return true;
       }
       keyRecording = null;
-      setKey(def, e.key);
+      setKey(def, pressed);
       redrawPrefs('keys');
-      toast(e.key === def ? '“' + def + '” is back to itself' : '“' + e.key + '” now does what “' + def + '” did', 'keyboard');
+      toast(pressed === def ? '“' + def + '” is back to itself' : '“' + pressed + '” now does what “' + def + '” did', 'keyboard');
       return true;
     }
 

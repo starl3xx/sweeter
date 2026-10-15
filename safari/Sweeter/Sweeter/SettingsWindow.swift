@@ -739,7 +739,7 @@ struct KeysPane: View {
                     }
                 }
             } footer: {
-                Text("Change moves a single key to one you choose. The chord keys (c, g, d), the digits, and f stay put.")
+                Text("Change moves a single key to one you choose. The chord keys (c, g, d), the digits, f, [ ], and the size keys (− + =) stay put.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

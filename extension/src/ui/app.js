@@ -445,7 +445,7 @@
     ],
     extras: [
       { k: 'head', label: 'Crypto' },
-      { k: 'check', key: 'tokenLookup', label: 'Contract addresses', text: 'Show token details on click', note: 'Asks DexScreener only when you click an address or ticker card (and GeckoTerminal for a logo DexScreener lacks). Off: they open DexScreener.', lbl: true },
+      { k: 'check', key: 'tokenLookup', label: 'Contract addresses', text: 'Show token details on click', note: 'Asks the chain (PublicNode) whether an address on screen is a wallet, a token, or an NFT, and DexScreener only when you click an address or ticker card (GeckoTerminal for a logo DexScreener lacks). Off: they open DexScreener.', lbl: true },
       { k: 'check', key: 'tickerPrices', label: 'Ticker cards', text: 'Show prices', note: 'Asks DexScreener for the prices of ticker cards on screen, every few minutes at most, and GeckoTerminal for a logo DexScreener lacks.', lbl: true },
     ],
   };
@@ -1104,16 +1104,147 @@
       if (v >= 1) return '$' + v.toFixed(2);
       return '$' + Number(v.toPrecision(3)).toString();
     }
-    function tokenCard(a, state, data) {
+    // ---------- what an address is ----------
+    // A wallet, a token, an NFT collection, or another contract, asked of
+    // the chain itself (lib/chain.js, through PublicNode's public RPC) once
+    // an address is on screen or clicked, with Contract addresses on. X's
+    // tag names the chain; an untagged 0x address is checked on six chains
+    // and is a wallet only if no chain has a contract there. Kept for the
+    // session: null when it can't be told (no answer, or no such account).
+    const kindCache = new Map();
+    const kindWant = new Map(); // address -> X's chain ('' when untagged)
+    const kindBusy = new Set();
+    let kindTimer = 0;
+    function chainAsk(chain, op, list) {
+      const ask = native && native.chain ? native.chain : opts.chain;
+      if (!ask) return Promise.reject(new Error('no lookup'));
+      return Promise.resolve(ask(chain, op, list.join(','))).then((b) => {
+        const r = typeof b === 'string' ? JSON.parse(b) : b;
+        if (!Array.isArray(r)) throw new Error('bad answer');
+        // id -> result; undefined for a call that failed (a revert).
+        const by = new Map();
+        for (const x of r) if (x && x.id != null) by.set(x.id, x.error ? undefined : x.result);
+        return by;
+      });
+    }
+    const tens = (arr) => Array.from({ length: Math.ceil(arr.length / 10) }, (_, i) => arr.slice(i * 10, i * 10 + 10));
+    // entries: [[address, chain]]. Fills kindCache.
+    async function kindsFor(entries) {
+      const C = Sweeter.chain;
+      const chainsOf = (c) => (C.EVM.includes(c) ? [c] : c ? [] : C.EVM);
+      const evm = entries.filter(([a]) => a.startsWith('0x'));
+      const group = (pick) => {
+        const m = new Map();
+        for (const [a, c] of evm) for (const ch of chainsOf(c)) if (pick(ch, a)) (m.get(ch) || m.set(ch, []).get(ch)).push(a);
+        return m;
+      };
+      // Each chain's code at each address, then a closer look where a contract is.
+      const codes = new Map();
+      await Promise.all([...group(() => true)].flatMap(([ch, list]) => tens(list).map((part) => chainAsk(ch, 'code', part).then((by) => part.forEach((a, i) => codes.set(ch + ' ' + a, by.get(i))), () => {}))));
+      const infos = new Map();
+      await Promise.all([...group((ch, a) => C.isContractCode(codes.get(ch + ' ' + a)))].flatMap(([ch, list]) => tens(list).map((part) => chainAsk(ch, 'evm', part).then((by) => part.forEach((a, i) => infos.set(ch + ' ' + a, C.evmKind(C.PROBE.map((_, j) => by.get(i * 8 + j))))), () => {}))));
+      for (const [a, c] of evm) kindCache.set(a, C.decide(chainsOf(c).map((ch) => ({ chain: ch, code: codes.get(ch + ' ' + a), info: infos.get(ch + ' ' + a) }))));
+      // Solana (base58, untagged or tagged solana).
+      const sol = entries.filter(([a, c]) => !a.startsWith('0x') && (!c || c === 'solana')).map(([a]) => a);
+      await Promise.all(tens(sol).map((part) => chainAsk('solana', 'solana', part).then((by) => part.forEach((a, i) => {
+        const r = by.get(i);
+        if (r !== undefined) kindCache.set(a, C.solanaKind(r && r.value));
+      }), () => {})));
+      while (kindCache.size > 500) kindCache.delete(kindCache.keys().next().value);
+    }
+    const listOr = (xs) => (xs.length < 3 ? xs.join(' or ') : xs.slice(0, -1).join(', ') + ', or ' + xs[xs.length - 1]);
+    function kindLabel(info) {
+      const on = info.chain ? ' on ' + chainName(info.chain) : '';
+      if (info.kind === 'wallet') return (info.smart === 'Safe' ? 'A Safe (smart wallet)' : info.smart ? 'A smart wallet' : 'A wallet') + on;
+      if (info.kind === 'nft') return 'An NFT collection' + (info.name ? ', ' + info.name : '') + on;
+      if (info.kind === 'token') return 'A token' + (info.symbol ? ', $' + info.symbol : '') + on;
+      return (info.program ? 'A program' : 'A contract') + on;
+    }
+    // Every chip showing this address takes its kind: its glyph and title.
+    function paintKind(a) {
+      const info = kindCache.get(a);
+      if (!info) return;
+      for (const root of tickerRoots()) {
+        for (const el of root.querySelectorAll('a.ca:not(.tkl)[data-ca="' + CSS.escape(a) + '"]')) {
+          el.dataset.kind = info.kind;
+          el.title = a + '\n' + kindLabel(info);
+        }
+      }
+    }
+    async function fillKinds() {
+      kindTimer = 0;
+      const list = [...kindWant];
+      kindWant.clear();
+      for (const [a] of list) kindBusy.add(a);
+      try {
+        await kindsFor(list);
+      } catch (e) {}
+      for (const [a] of list) {
+        kindBusy.delete(a);
+        paintKind(a);
+      }
+    }
+    function queueKind(a, chain) {
+      if (!a || kindCache.has(a) || kindBusy.has(a)) return;
+      kindWant.set(a, chain);
+      if (!kindTimer) kindTimer = setTimeout(fillKinds, 300);
+    }
+    const kindIO = 'IntersectionObserver' in window
+      ? new IntersectionObserver((entries) => {
+          for (const en of entries) {
+            if (!en.isIntersecting) continue;
+            kindIO.unobserve(en.target);
+            queueKind(en.target.dataset.ca, en.target.dataset.chain || '');
+          }
+        })
+      : null;
+    // eager: a pop-out window, whose viewport this window can't watch.
+    function watchKinds(root, eager) {
+      if (!settings.tokenLookup || !root || !(native && native.chain) && !opts.chain) return;
+      for (const el of root.querySelectorAll('a.ca:not(.tkl):not([data-kobs])')) {
+        el.dataset.kobs = '1';
+        const a = el.dataset.ca;
+        if (kindCache.get(a)) paintKind(a);
+        else if (eager || !kindIO) queueKind(a, el.dataset.chain || '');
+        else kindIO.observe(el);
+      }
+    }
+    // A wallet's or an NFT collection's card (no DexScreener pairs to find).
+    function addressCard(a, info) {
+      const wallet = info.kind === 'wallet';
+      const chains = info.chains || [];
+      const sub = wallet && !info.smart && chains.length > 1
+        ? 'No contract at this address on ' + listOr(chains.map(chainName)) + (info.delegated ? '. It uses an EIP-7702 delegation.' : '.')
+        : wallet
+          ? (info.smart === 'Safe' ? 'A Safe' : info.smart ? 'A smart account (ERC-4337)' : 'An ordinary wallet') + (info.chain ? ' on ' + chainName(info.chain) : '') + '.'
+          : [info.symbol ? '$' + info.symbol : '', info.standard || '', info.chain ? chainName(info.chain) : ''].filter(Boolean).join(' · ');
+      const title = wallet ? (info.smart ? 'Smart wallet' : 'Wallet') : info.name || 'NFT collection';
+      const scan = wallet ? addressUrl(a, info.smart || chains.length === 1 ? info.chain || chains[0] : '') : explorerUrl(a, info.chain);
+      return '<div class="tok" role="dialog" data-ca="' + h(a) + '" aria-label="' + h(title) + '">' +
+        '<div class="tk-h"><i class="tk-l tk-k" data-kind="' + h(info.kind) + '">' + icon(wallet ? 'wallet' : 'nft') + '</i><b>' + h(title) + '</b>' + (wallet ? '' : '<span class="tk-sym">NFT</span>') + '</div>' +
+        '<div class="tk-sub">' + h(sub) + '</div>' +
+        '<span class="tk-a" role="button" tabindex="-1" data-cmd="tk-copy-a" data-v="' + h(a) + '" title="Copy the address">' + h(a) + '</span>' +
+        '<div class="tk-b"><button type="button" data-cmd="tk-scan" data-v="' + h(scan) + '">' + icon('search') + 'Block Explorer</button>' +
+        '<button type="button" data-cmd="tk-copy" data-v="' + h(a) + '">' + icon('link') + 'Copy Address</button></div>' +
+        '<div class="tk-src">From the chain itself (PublicNode), asked when it came on screen.</div></div>';
+    }
+    // An address's page (not a token's) on a chain's explorer.
+    function addressUrl(a, chain) {
+      if (chain === 'solana' || (!chain && !a.startsWith('0x'))) return 'https://solscan.io/account/' + a;
+      if (EXPLORERS[chain]) return EXPLORERS[chain].replace(/\/token\/$/, '/address/') + a;
+      return 'https://blockscan.com/address/' + a;
+    }
+    // info: what the chain says the address is, if known.
+    function tokenCard(a, state, data, info) {
       const short = a.slice(0, 6) + '…' + a.slice(-4);
       const foot = '<div class="tk-b">' +
         '<button type="button" data-cmd="tk-open" data-v="' + h(data && data.pair ? data.pair.url : 'https://dexscreener.com/search?q=' + encodeURIComponent(a)) + '">' + icon('open') + 'Open on DexScreener</button>' +
-        '<button type="button" data-cmd="tk-scan" data-v="' + h(explorerUrl(a, data && data.pair ? data.pair.chainId : '')) + '">' + icon('search') + 'Block Explorer</button>' +
+        '<button type="button" data-cmd="tk-scan" data-v="' + h(explorerUrl(a, data && data.pair ? data.pair.chainId : (info && info.chain) || '')) + '">' + icon('search') + 'Block Explorer</button>' +
         '<button type="button" data-cmd="tk-copy" data-v="' + h(a) + '">' + icon('link') + 'Copy Address</button></div>';
       let body;
-      if (state === 'loading') body = '<div class="tk-msg">Looking up ' + h(short) + ' on DexScreener…</div>';
+      if (state === 'loading') body = '<div class="tk-msg">Looking up ' + h(short) + '…</div>';
       else if (state === 'error') body = '<div class="tk-msg">DexScreener didn’t answer. Try again, or open it there.</div>';
-      else if (!data) body = '<div class="tk-msg">DexScreener has no trading pairs for ' + h(short) + '. It may be a wallet or an unlisted token.</div>';
+      else if (!data) body = '<div class="tk-msg">DexScreener has no trading pairs for ' + h(short) + (info ? '. ' + h(kindLabel(info)) + ', not one it lists.' : '. It may be a wallet or an unlisted token.') + '</div>';
       else {
         const p = data.pair;
         const chg = p.priceChange && p.priceChange.h24 != null ? Number(p.priceChange.h24) : null;
@@ -1136,11 +1267,28 @@
       tokenAnchor = el;
       pop.innerHTML = tokenCard(a, 'loading');
       placePop(el);
+      // What the chain says it is decides the card: a wallet or an NFT
+      // collection has no DexScreener pairs to look for. Six seconds at most.
+      // Only for a plain address: a ticker X tagged is a token on the chain
+      // it names, whatever an untagged check of that address found.
+      const plain = el.matches('a.ca:not(.tkl)');
+      let info = plain ? kindCache.get(a) || null : null;
+      if (!info && plain && ((native && native.chain) || opts.chain)) {
+        await Promise.race([kindsFor([[a, chain]]).catch(() => {}), new Promise((r) => setTimeout(r, 6000))]);
+        info = kindCache.get(a) || null;
+        paintKind(a);
+        if (tokenFor !== a || pop.hidden) return;
+      }
+      if (info && (info.kind === 'wallet' || info.kind === 'nft')) {
+        pop.innerHTML = addressCard(a, info);
+        placePop(el);
+        return;
+      }
       let html;
       let picked = null;
       try {
         picked = dexPick(await dexLookup(a), a, chain);
-        html = tokenCard(a, 'done', picked);
+        html = tokenCard(a, 'done', picked, info);
       } catch (e) {
         html = tokenCard(a, 'error');
       }
@@ -1194,6 +1342,7 @@
     // eager: a pop-out window (this window's observer can't see its
     // viewport): every card it shows loads at once.
     function watchTickers(root, eager) {
+      watchKinds(root, eager);
       if (!settings.tickerPrices || !root) return;
       for (const el of root.querySelectorAll('.tkc:not([data-filled]):not([data-obs])')) {
         if (paintTicker(el)) continue;

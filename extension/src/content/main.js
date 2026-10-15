@@ -90,6 +90,10 @@
         dex: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
           ? (address) => Promise.resolve(api.runtime.sendMessage({ type: 'dex', address })).then((r) => (r && r.ok ? r.body : Promise.reject(new Error('lookup failed'))))
           : null,
+        // What an address is (lib/chain.js), via the background script.
+        chain: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
+          ? (chain, op, addresses) => Promise.resolve(api.runtime.sendMessage({ type: 'chain', chain, op, addresses })).then((r) => (r && r.ok ? r.body : Promise.reject(new Error('lookup failed'))))
+          : null,
         latestRelease: api.runtime && api.runtime.sendMessage && !globalThis.SweeterNative
           ? () => Promise.resolve(api.runtime.sendMessage({ type: 'latestRelease' })).then((r) => (r && r.ok ? r.body : Promise.reject(new Error('no answer'))))
           : null,

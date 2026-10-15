@@ -65,6 +65,8 @@ let ICONS: [(String, String, NSFont.Weight)] = [
     ("music", "music.note", .semibold),
     ("sports", "sportscourt", .semibold),
     ("coin", "bitcoinsign.circle", .semibold),
+    ("wallet", "wallet.bifold", .semibold),
+    ("nft", "photo.artframe", .semibold),
     ("people", "person.2", .semibold),
     ("cup", "cup.and.saucer", .semibold),
     ("camera", "camera", .semibold),

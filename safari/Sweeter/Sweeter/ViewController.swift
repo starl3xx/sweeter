@@ -267,6 +267,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             covered: (on) => post({ type: 'covered', on: !!on }),
             show: () => post({ type: 'show' }),
             dex: (a) => post({ type: 'dex', address: String(a || '') }),
+            chain: (c, op, a) => post({ type: 'chain', chain: String(c || ''), op: String(op || ''), addresses: String(a || '') }),
             latestRelease: () => post({ type: 'latestRelease' }),
             dexLogo: (u) => post({ type: 'dexLogo', url: String(u || '') }),
             geckoLogo: (n, a) => post({ type: 'geckoLogo', network: String(n || ''), address: String(a || '') }),
@@ -400,6 +401,21 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             }
             Task {
                 guard let (data, response) = try? await URLSession.shared.data(from: url),
+                      let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    replyHandler(nil, "lookup failed")
+                    return
+                }
+                replyHandler(String(data: data, encoding: .utf8), nil)
+            }
+        // What an address is (lib/chain.js), asked of the chain itself:
+        // only ChainProbe's fixed calls, only valid addresses.
+        case "chain":
+            guard let req = ChainProbe.request(chain: body["chain"] as? String ?? "", op: body["op"] as? String ?? "", addresses: body["addresses"] as? String ?? "") else {
+                replyHandler(nil, "bad request")
+                return
+            }
+            Task {
+                guard let (data, response) = try? await URLSession.shared.data(for: req),
                       let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                     replyHandler(nil, "lookup failed")
                     return
@@ -1556,6 +1572,61 @@ final class SweeterWindow: NSWindow {
         out.origin.x = left ? frame.maxX - width : frame.minX
         if let v = visible { out.origin.x = min(max(out.origin.x, v.minX), v.maxX - width) }
         return out
+    }
+}
+
+/// What an address is (a wallet, a token, an NFT, another contract), asked
+/// of the chain itself through PublicNode's public RPC. The only requests
+/// it makes: eth_getCode ("code"); eth_getCode and seven fixed eth_calls
+/// ("evm", in lib/chain.js's order, ids 8 per address); Solana's
+/// getAccountInfo ("solana"). Ten valid addresses at most; no cookies.
+enum ChainProbe {
+    static let endpoints: [String: String] = [
+        "base": "https://base-rpc.publicnode.com",
+        "ethereum": "https://ethereum-rpc.publicnode.com",
+        "arbitrum": "https://arbitrum-one-rpc.publicnode.com",
+        "optimism": "https://optimism-rpc.publicnode.com",
+        "polygon": "https://polygon-bor-rpc.publicnode.com",
+        "bsc": "https://bsc-rpc.publicnode.com",
+        "solana": "https://solana-rpc.publicnode.com",
+    ]
+    /// supportsInterface(ERC-721), supportsInterface(ERC-1155), entryPoint(),
+    /// getThreshold(), decimals(), symbol(), name().
+    static let calls = [
+        "0x01ffc9a780ac58cd00000000000000000000000000000000000000000000000000000000",
+        "0x01ffc9a7d9b67a2600000000000000000000000000000000000000000000000000000000",
+        "0xb0d691fe", "0xe75235b8", "0x313ce567", "0x95d89b41", "0x06fdde03",
+    ]
+
+    static func request(chain: String, op: String, addresses: String) -> URLRequest? {
+        guard let endpoint = endpoints[chain], let url = URL(string: endpoint) else { return nil }
+        let list = addresses.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+        guard (1...10).contains(list.count) else { return nil }
+        let valid = { (pattern: String) in list.allSatisfy { $0.range(of: pattern, options: .regularExpression) != nil } }
+        let rpc = { (id: Int, method: String, params: [Any]) -> [String: Any] in ["jsonrpc": "2.0", "id": id, "method": method, "params": params] }
+        var batch: [[String: Any]] = []
+        if op == "solana", chain == "solana", valid("^[1-9A-HJ-NP-Za-km-z]{32,44}$") {
+            for (i, a) in list.enumerated() { batch.append(rpc(i, "getAccountInfo", [a, ["encoding": "jsonParsed"]])) }
+        } else if op == "code" || op == "evm", chain != "solana", valid("^0x[0-9a-fA-F]{40}$") {
+            for (i, a) in list.enumerated() {
+                if op == "code" {
+                    batch.append(rpc(i, "eth_getCode", [a, "latest"]))
+                    continue
+                }
+                batch.append(rpc(i * 8, "eth_getCode", [a, "latest"]))
+                for (j, data) in calls.enumerated() { batch.append(rpc(i * 8 + j + 1, "eth_call", [["to": a, "data": data], "latest"])) }
+            }
+        } else {
+            return nil
+        }
+        guard let json = try? JSONSerialization.data(withJSONObject: batch) else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpShouldHandleCookies = false
+        req.timeoutInterval = 15
+        req.httpBody = json
+        return req
     }
 }
 

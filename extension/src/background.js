@@ -3,8 +3,9 @@
 // DexScreener's public API, for a contract address the reader clicked or
 // ticker cards on screen (up to 30 addresses, comma-separated); token logos
 // from DexScreener, or GeckoTerminal and CoinGecko when DexScreener has
-// none; the latest Sweeter release on GitHub. Only valid input, only those
-// hosts, no credentials.
+// none; whether an address is a wallet, a token, or an NFT, from
+// PublicNode's public RPC; the latest Sweeter release on GitHub. Only valid
+// input, only those hosts, no credentials.
 (function () {
   'use strict';
   const api = globalThis.browser || globalThis.chrome;
@@ -65,7 +66,44 @@
       .catch(() => sendResponse({ ok: false }));
     return true;
   }
+  // What an address is (lib/chain.js), asked of the chain itself through
+  // PublicNode's public RPC. The only requests: eth_getCode ('code');
+  // eth_getCode and seven fixed eth_calls ('evm', in lib/chain.js's order,
+  // ids 8 per address); Solana's getAccountInfo ('solana'). Ten valid
+  // addresses at most. The Mac app's ChainProbe sends the same.
+  const RPC = {
+    base: 'https://base-rpc.publicnode.com',
+    ethereum: 'https://ethereum-rpc.publicnode.com',
+    arbitrum: 'https://arbitrum-one-rpc.publicnode.com',
+    optimism: 'https://optimism-rpc.publicnode.com',
+    polygon: 'https://polygon-bor-rpc.publicnode.com',
+    bsc: 'https://bsc-rpc.publicnode.com',
+    solana: 'https://solana-rpc.publicnode.com',
+  };
+  // supportsInterface(ERC-721), supportsInterface(ERC-1155), entryPoint(),
+  // getThreshold(), decimals(), symbol(), name().
+  const CALLS = ['0x01ffc9a780ac58cd00000000000000000000000000000000000000000000000000000000', '0x01ffc9a7d9b67a2600000000000000000000000000000000000000000000000000000000', '0xb0d691fe', '0xe75235b8', '0x313ce567', '0x95d89b41', '0x06fdde03'];
+  function chainProbe(chain, op, addresses, sendResponse) {
+    const list = String(addresses || '').split(',');
+    if (!Object.prototype.hasOwnProperty.call(RPC, chain) || list.length > 10) return false;
+    const rpc = (id, method, params) => ({ jsonrpc: '2.0', id, method, params });
+    let batch;
+    if (op === 'solana' && chain === 'solana' && list.every((a) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a))) {
+      batch = list.map((a, i) => rpc(i, 'getAccountInfo', [a, { encoding: 'jsonParsed' }]));
+    } else if ((op === 'code' || op === 'evm') && chain !== 'solana' && list.every((a) => /^0x[0-9a-fA-F]{40}$/.test(a))) {
+      batch = op === 'code'
+        ? list.map((a, i) => rpc(i, 'eth_getCode', [a, 'latest']))
+        : list.flatMap((a, i) => [rpc(i * 8, 'eth_getCode', [a, 'latest'])].concat(CALLS.map((data, j) => rpc(i * 8 + j + 1, 'eth_call', [{ to: a, data }, 'latest']))));
+    } else {
+      return false;
+    }
+    fetch(RPC[chain], { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json' }, body: JSON.stringify(batch) })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then((body) => sendResponse({ ok: true, body }), () => sendResponse({ ok: false }));
+    return true;
+  }
   api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg && msg.type === 'chain') return chainProbe(String(msg.chain || ''), String(msg.op || ''), msg.addresses, sendResponse);
     if (msg && msg.type === 'latestRelease') return latestRelease(sendResponse);
     if (msg && msg.type === 'dexLogo') return logo(msg.url, sendResponse);
     if (msg && msg.type === 'geckoLogo') return geckoLogo(String(msg.network || ''), String(msg.address || ''), sendResponse);

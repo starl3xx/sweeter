@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<!-- Picture in Picture: macOS shows the floating window from its PIPAgent.
+	     The app sandbox lets an app reach it only when PIP.framework is loaded
+	     at launch (frameworks.sb), but WebKit loads it later, when a video
+	     first asks, so the lookup was denied and PiP never opened. -->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.apple.PIPAgent</string>
+	</array>
+</dict>
+</plist>

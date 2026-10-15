@@ -50,6 +50,7 @@
     pureBlack: false,
     // Per column, by view id (see vidOf). Sweeter only; X Pro never sees them.
     colFilters: {}, // view id (before 0.15: source key) -> ids of the filters that are on
+    colDigest: {}, // view id -> true: a notification column's likes and reposts, one row per post per hour
     colWidths: {}, // view id -> width in px
     colTitles: {}, // view id -> the person’s own title
     colIcons: {}, // view id -> icon name (COL_ICON_GROUPS)
@@ -4678,6 +4679,7 @@
           persist();
           c.full = true;
           renderColumn(c, false);
+          redrawPopFor(c.vid);
           return toast(d[c.vid] ? 'Likes and reposts of a post, one row an hour' : 'Every notification, as X sends it', 'info');
         }
         if (choice === 'uncleared') return clearCol(c, false);
@@ -5712,7 +5714,7 @@
       }
       toast('A view of “' + titleOf(c.vid) + '”: the same posts, with its own filters.', 'info');
     }
-    const OWN = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colCleared', 'colAlerts', 'colMedia', 'colGrid'];
+    const OWN = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colCleared', 'colAlerts', 'colMedia', 'colGrid', 'colDigest'];
     function removeView(vid) {
       const v = (settings.views || []).find((x) => x.id === vid);
       if (!v) return;

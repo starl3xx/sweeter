@@ -90,6 +90,8 @@
     { id: 'n:reposts', name: 'Reposts', short: 'Reposts', match: (b) => noteIcon(b) === 'repost' },
     { id: 'n:follows', name: 'Follows', short: 'Follows', match: (b) => noteIcon(b) === 'follow' },
     { id: 'n:other', name: 'Everything else', short: 'Other', match: (b) => b.kind === 'notification' && !KNOWN_ICONS.includes(noteIcon(b)) },
+    // Not a type: it narrows whichever types are on (buildNote).
+    { id: 'n:following', name: 'From people you follow', short: 'Following', match: (b) => (b.kind === 'notification' && b.n ? b.n.users.some((u) => u.following) : b.kind === 'post' ? !!b.post.author.following : b.kind === 'thread' ? b.posts.some((p) => p.author.following) : false) },
   ];
 
   // Everything a word can match: the text, the author, link addresses (so a
@@ -194,11 +196,15 @@
 
   // One test for a notification column’s type filters, or null when none
   // are on. Unlike post filters, a block shows when it is ANY selected type.
+  // From people you follow narrows the types instead: a block shows when
+  // it is a selected type (or any, with none) and comes from someone followed.
   function buildNote(ids) {
     if (!ids || !ids.length) return null;
     const list = NOTE_QUICK.filter((f) => ids.includes(f.id));
     if (!list.length) return null;
-    return (b) => !!b && list.some((f) => f.match(b));
+    const types = list.filter((f) => f.id !== 'n:following');
+    const fol = list.find((f) => f.id === 'n:following');
+    return (b) => !!b && (!types.length || types.some((f) => f.match(b))) && (!fol || fol.match(b));
   }
 
   // Find: every word must appear somewhere in the post (a substring, so a
@@ -232,6 +238,76 @@
     return f.short || f.name || 'Filter';
   }
 
-  Sweeter.filters = { TESTS, CRITERIA, MINS, mins, langs, QUICK, NOTE_QUICK, compile, build, buildNote, all, find, findNote, terms, label, isReply };
+  // A notification column's digest: X's like and repost notifications for
+  // one post within one clock hour become one row (the newest one's place,
+  // time, and post), naming the first people and counting the rest. X's
+  // own rows grow as more people like a post, so a count is the largest
+  // any of them gave (its names plus its “and N others”), never less than
+  // the people named. Everything else passes as it is.
+  function digestNotes(list) {
+    const esc = Sweeter.util.escapeHtml;
+    const groups = new Map();
+    const out = [];
+    for (const item of list) {
+      const b = item.b;
+      const n = b.kind === 'notification' ? b.n : null;
+      if (!n || (n.icon !== 'like' && n.icon !== 'repost') || !n.target || !n.target.id || !n.timeMs) {
+        out.push(item);
+        continue;
+      }
+      const k = n.target.id + ':' + Math.floor(n.timeMs / 3600000);
+      let g = groups.get(k);
+      if (!g) {
+        g = { k, first: b, rows: [], at: out.length };
+        groups.set(k, g);
+        out.push(g);
+      }
+      g.rows.push(n);
+    }
+    return out.map((x) => {
+      if (!x.rows) return x;
+      if (x.rows.length === 1) return { b: x.first, posts: null };
+      const tally = (icon) => {
+        const rows = x.rows.filter((n) => n.icon === icon);
+        const seen = new Map();
+        let most = 0;
+        for (const n of rows) {
+          for (const u of n.users) if (u && u.handle && !seen.has(u.handle)) seen.set(u.handle, u);
+          // “A, B and 3 others liked…”: the names in the text, then the rest
+          // (X sends more avatars than it names, so they can't be added).
+          const m = /^(.*?) and ([\d,]+) others?\b/.exec(n.plain || '');
+          most = Math.max(most, m ? m[1].split(/,\s*/).length + Number(m[2].replace(/,/g, '')) : n.users.length);
+        }
+        const users = Array.from(seen.values());
+        return { users, count: Math.max(most, users.length), noun: rows.length ? (/(?:liked|reposted) your (\w+)/.exec(rows[0].plain || '') || [])[1] || 'post' : 'post' };
+      };
+      const likes = tally('like');
+      const reposts = tally('repost');
+      // As X's own rows: parts, names linked to their profiles.
+      const who = (t, verb) => {
+        const named = t.users.slice(0, t.count > 3 ? 1 : 2);
+        const rest = t.count - named.length;
+        const out = [];
+        named.forEach((u, i) => {
+          if (i) out.push({ text: rest > 0 ? ', ' : ' and ' });
+          out.push({ text: u.name, user: u });
+        });
+        if (rest > 0) out.push({ text: (named.length === 2 ? ',' : '') + ' and ' + rest + (rest === 1 ? ' other ' : ' others ') + verb });
+        else out.push({ text: ' ' + verb });
+        return out;
+      };
+      const noun = likes.count ? likes.noun : reposts.noun;
+      const parts = likes.count && reposts.count
+        ? who(likes, 'liked').concat([{ text: ' your ' + noun + ', and ' }], who(reposts, 'reposted'), [{ text: ' it' }])
+        : who(likes.count ? likes : reposts, likes.count ? 'liked' : 'reposted').concat([{ text: ' your ' + noun }]);
+      const html = parts.map((x) => (x.user ? '<b>' + esc(x.text) + '</b>' : esc(x.text))).join('');
+      const newest = x.first.n;
+      const users = likes.users.concat(reposts.users.filter((u) => !likes.users.some((l) => l.handle === u.handle)));
+      const n = Object.assign({}, newest, { id: 'digest:' + x.k, icon: likes.count >= reposts.count ? 'like' : 'repost', html, parts, plain: parts.map((x) => x.text).join(''), users: users.slice(0, 12) });
+      return { b: Object.assign({}, x.first, { key: 'digest:' + x.k, n, digest: x.rows.length }), posts: null };
+    });
+  }
+
+  Sweeter.filters = { digestNotes, TESTS, CRITERIA, MINS, mins, langs, QUICK, NOTE_QUICK, compile, build, buildNote, all, find, findNote, terms, label, isReply };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.filters;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

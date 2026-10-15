@@ -484,7 +484,7 @@
     ['Esc', 'Deselect, close'], ['⌥ X', 'Switch to X Pro'],
   ];
   // What a layout holds: Sweeter’s own arrangement, never X Pro’s decks.
-  const LAYOUT_KEYS = ['colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
+  const LAYOUT_KEYS = ['colDigest', 'colFilters', 'colWidths', 'colTitles', 'colIcons', 'colTints', 'colModes', 'colAlerts', 'colMedia', 'colGrid', 'views', 'merges', 'groups', 'group', 'fit', 'snap', 'density'];
   const REBUILD = new Set(['barReply', 'barRepost', 'barLike', 'barViews', 'barBookmark', 'barMore', 'barCopy', 'barOpen', 'actions', 'tickerPrices', 'muteNotes', 'dedupe', 'repostLabel', 'longPosts', 'badges', 'dateFormat', 'counts', 'obscureSensitive', 'media', 'autoplayVideo', 'autoplayGifs', 'cards', 'quoteMedia']);
   const REPLY_OPTIONS = ['Everyone', 'Accounts you follow', 'Accounts you follow and who they follow', 'Only accounts you mention', 'Verified accounts'];
   // The picker’s categories (emoji-test.txt’s groups), each with its symbol.
@@ -2014,6 +2014,8 @@
           out.push({ b, posts: null });
         }
       }
+      // Digest (the column's … menu): likes and reposts per post per hour.
+      if (c && s.kind === 'notifications' && (settings.colDigest || {})[c.vid]) return XF.digestNotes(out);
       return out;
     }
 
@@ -4600,6 +4602,7 @@
         { id: 'width', title: 'Width', symbol: 'arrow.left.and.right', children: WIDTHS.map(([n, label]) => ({ id: 'w:' + n, title: label, checked: w === n })).concat([{ separator: true }, { id: 'w:0', title: 'Default Width', checked: !w }, { id: 'equal', title: 'Make All Columns Equal', checked: settings.fit === 'equal' && !Object.keys(settings.colWidths || {}).length }]) },
         { id: 'look', title: 'Icon & Color…', symbol: 'paintpalette' },
         { id: 'media', title: 'Media', symbol: 'photo', children: [['', 'As in Settings'], ['full', 'Full Thumbnails'], ['cropped', 'Cropped Grid'], ['small', 'Small'], ['none', 'None']].map(([v, label]) => ({ id: 'm:' + v, title: label, checked: ((settings.colMedia || {})[c.vid] || '') === v })) },
+        s && s.kind === 'notifications' ? { id: 'digest', title: 'Digest Likes and Reposts', symbol: 'square.stack.3d.up', checked: !!(settings.colDigest || {})[c.vid] } : null,
         s && s.kind !== 'notifications' && s.kind !== 'people' ? { id: 'grid', title: (settings.colGrid || {})[c.vid] ? 'Show as Posts' : 'Show as Media Grid', symbol: 'square.grid.3x3' } : null,
         { id: 'rename', title: 'Rename…', symbol: 'pencil' },
         { id: 'collapse', title: collapsed ? 'Expand' : 'Collapse', symbol: collapsed ? 'arrow.up.left.and.arrow.down.right' : 'arrow.down.right.and.arrow.up.left' },
@@ -4667,6 +4670,16 @@
         if (choice.startsWith('ms:')) return setMergeSource(c.vid, choice.slice(3), !c.merge.srcs.includes(choice.slice(3)));
         if (choice === 'unmerge') return removeMerge(c.vid);
         if (choice === 'clear') return clearCol(c, true);
+        if (choice === 'digest') {
+          const d = Object.assign({}, settings.colDigest || {});
+          if (d[c.vid]) delete d[c.vid];
+          else d[c.vid] = true;
+          settings.colDigest = d;
+          persist();
+          c.full = true;
+          renderColumn(c, false);
+          return toast(d[c.vid] ? 'Likes and reposts of a post, one row an hour' : 'Every notification, as X sends it', 'info');
+        }
         if (choice === 'uncleared') return clearCol(c, false);
         if (choice.startsWith('a:')) return setAlert(c, choice.slice(2));
         if (choice === 'add') return openAddSheet();

@@ -8853,8 +8853,8 @@
     // holder outside the columns, so a redraw of the post can’t end it, and
     // the viewer’s video moves there when it starts, so the viewer can
     // close. The window’s close button pauses the video and ends it; its
-    // return button leaves it playing, and the viewer shows it again.
-    let pip = null; // { v, post, index }: the video in the window now
+    // return button shows it in the viewer again, playing or paused.
+    let pip = null; // { v, post, index, closing }: the video in the window now
     let pipStarting = false;
     function pipHold(doc) {
       const root = doc === document ? shadow : doc.body;
@@ -8892,6 +8892,7 @@
       // p again closes the window, as its close button does (paused, so
       // the viewer doesn't open with it).
       if (pip && pip.post.id === p.id && pip.index === i) {
+        pip.closing = true;
         pip.v.pause();
         pip.v.ownerDocument.exitPictureInPicture().catch(() => {});
         return;
@@ -8930,24 +8931,34 @@
       watchPip(v, p, i);
     }
     function watchPip(v, post, index) {
-      pip = { v, post, index };
+      const me = { v, post, index, closing: false };
+      pip = me;
       v.removeAttribute('data-obs');
       if (io) io.unobserve(v);
+      // WebKit’s close button pauses the video just before the window goes
+      // (its return button doesn’t), so a pause in the last moment is a
+      // close. One paused earlier, from the window’s own play button or at
+      // the end, comes back to the viewer like a playing one.
+      let pausedAt = 0;
+      const paused = () => (pausedAt = Date.now());
       const left = () => {
         v.removeEventListener('leavepictureinpicture', left);
         // A moment later: the close button’s pause has arrived by then, and
         // so has another video that took the window.
         setTimeout(() => {
-          if (pip && pip.v === v) pip = null;
+          v.removeEventListener('pause', paused);
+          if (pip === me) pip = null;
           if (!v.closest('.pip-hold')) return;
-          if (!v.paused && !pip && !pipStarting && v.ownerDocument === document) pipBack(v, post, index);
+          const closed = me.closing || (v.paused && Date.now() - pausedAt < 1500);
+          if (!closed && !pip && !pipStarting && v.ownerDocument === document) pipBack(v, post, index);
           else pipDrop(v);
         }, 300);
       };
+      v.addEventListener('pause', paused);
       v.addEventListener('leavepictureinpicture', left);
     }
-    // The return button: the viewer opens on the post with this video,
-    // still playing.
+    // The return button: the viewer opens on the post with this video, as
+    // it was in the window.
     function pipBack(v, post, index) {
       openLightbox(post, index);
       const fresh = lb && lb.items[lb.i] === post.media[index] ? lbMedia.querySelector('video') : null;

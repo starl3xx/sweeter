@@ -1037,7 +1037,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         // paths, such as /i/jf/onboarding/web) stay inside.
         if navigationAction.navigationType == .linkActivated {
             Log.write("opened in browser: \(host)")
-            NSWorkspace.shared.open(url)
+            LinkOpener.open(url)
             return decisionHandler(.cancel)
         }
         decisionHandler(.allow)
@@ -1082,7 +1082,7 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
         }
         if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme ?? "") {
             Log.write("opened in browser: \(url.host ?? "?")")
-            NSWorkspace.shared.open(url)
+            LinkOpener.open(url)
         }
         return nil
     }
@@ -1371,6 +1371,44 @@ final class DragStrip: NSView {
     }
 }
 
+/// Links leave the app for the browser chosen in Settings ▸ General
+/// (linkBrowser; xLinkBrowser for x.com and twitter.com links, '' meaning
+/// the same as other links), or the default browser when none is chosen or
+/// the chosen one is gone.
+@MainActor
+enum LinkOpener {
+    static func open(_ url: URL) {
+        let settings = ViewController.shared?.storage.get(["settings"])["settings"] as? [String: Any] ?? [:]
+        let host = (url.host ?? "").lowercased()
+        let isX = ["x.com", "twitter.com"].contains { host == $0 || host.hasSuffix("." + $0) }
+        let chosen = { (key: String) -> String in (settings[key] as? String) ?? "" }
+        let id = isX && !chosen("xLinkBrowser").isEmpty ? chosen("xLinkBrowser") : chosen("linkBrowser")
+        if !id.isEmpty, let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+            NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+                // The chosen app refused: the default browser instead.
+                if error != nil { DispatchQueue.main.async { NSWorkspace.shared.open(url) } }
+            }
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// The apps that open web pages, for Settings: bundle id and name.
+    static let browsers: [(id: String, name: String)] = {
+        guard let probe = URL(string: "https://example.com") else { return [] }
+        var seen = Set<String>()
+        var out: [(id: String, name: String)] = []
+        for app in NSWorkspace.shared.urlsForApplications(toOpen: probe) {
+            guard let id = Bundle(url: app)?.bundleIdentifier, id != Bundle.main.bundleIdentifier, seen.insert(id).inserted else { continue }
+            out.append((id, FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")))
+        }
+        // Two apps of one name (a web app wrapped twice) show their ids.
+        let names = Dictionary(grouping: out, by: \.name)
+        out = out.map { names[$0.name, default: []].count > 1 ? ($0.id, $0.name + " (" + $0.id + ")") : $0 }
+        return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }()
+}
+
 /// Sweeter’s settings, mutes and reading positions (browser.storage.local in
 /// the Safari extension), kept as one JSON file in the app’s container.
 final class NativeStorage {
@@ -1536,7 +1574,7 @@ final class PopoutNavigation: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else { return decisionHandler(.allow) }
         if let scheme = url.scheme, ["about", "blob", "data"].contains(scheme) { return decisionHandler(.allow) }
-        if ["http", "https"].contains(url.scheme ?? "") { NSWorkspace.shared.open(url) }
+        if ["http", "https"].contains(url.scheme ?? "") { LinkOpener.open(url) }
         decisionHandler(.cancel)
     }
 }

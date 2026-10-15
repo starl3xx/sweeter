@@ -2400,12 +2400,6 @@
     history.pushState(history.state, '', path);
     window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
   }
-  function setField(el, v) {
-    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-    el.focus();
-    set.call(el, v);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-  }
   const named = (text, root) => Array.from((root || document).querySelectorAll('[role="button"], button')).find((b) => norm(b.textContent) === text && !b.getAttribute('aria-label')) || null;
   const noVS = (t) => String(t || '').replace(/\uFE0F/g, '');
   // Closes the deck page Sweeter opened, by its own Close or Back (the
@@ -2431,7 +2425,7 @@
     const find = () => Array.from(document.querySelectorAll('[role="option"]')).find((o) => noVS(norm(o.textContent)) === noVS(emoji)) || null;
     let o = find();
     for (const w of o ? [] : words || []) {
-      setField(field, w);
+      setField(field, w, 'input');
       if ((o = await waitFor(find, 1200))) break;
     }
     if (!o) {
@@ -2456,7 +2450,8 @@
       return { ok: false, reason };
     };
     if (o.emoji && !(await pickDeckEmoji(o.emoji, o.words))) return fail('noemoji');
-    setField(t, o.title);
+    t.focus();
+    setField(t, o.title, 'input');
     if (!(await waitFor(() => t.value === o.title, 1000))) return fail('notyped');
     const done = await waitFor(() => {
       const b = named('Done');

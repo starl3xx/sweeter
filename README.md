@@ -35,7 +35,7 @@ It is in early testing. Things will break when X changes X Pro.
 
 ## Before you install
 
-1. **You need X Pro.** Sweeter is a new face for pro.x.com, not a separate service. If you can’t open [pro.x.com](https://pro.x.com) with your X account (X includes X Pro with Premium+), Sweeter has nothing to show.
+1. **You need X Pro.** Sweeter is a new face for pro.x.com, not a separate service. If you can’t open [pro.x.com](https://pro.x.com) with your X account (X includes X Pro with its Premium plan and above), Sweeter has nothing to show.
 2. **Mac only.** macOS 14 Sonoma or later. Built and tested on macOS 26 Tahoe; earlier versions are untested.
 3. **No X API.** Sweeter makes no API calls and has no API keys. It reads the timelines the X Pro page already loads in your own window, and when you like, reply or bookmark, it presses X Pro’s own button for you, once. It never sends a request of its own to X and never reads your cookies, passwords or tokens.
 4. **Anonymous usage counts, nothing more.** No accounts and no servers of its own. Your settings, filters, and reading positions stay on your Mac. Besides X Pro itself, Sweeter contacts only:

@@ -370,6 +370,8 @@
       s.lastError = null;
       const firstLoad = s.blocks.size === 0;
       const readBefore = s.readSort;
+      // An older page the reader scrolled to isn't a refresh.
+      const older = !!(msg.vars && msg.vars.cursor && s.cursors.bottom && msg.vars.cursor === s.cursors.bottom);
       // X Pro polls every column every ~30 s, and most answers carry
       // nothing new: only a change redraws (and wakes) anything.
       let changed = isNew;
@@ -412,10 +414,22 @@
         else s.readSort = s.kind === 'notifications' && s.xUnreadAbove ? s.xUnreadAbove : s.sorted[0].sortIndex;
       }
       if (s.readSort !== readBefore) changed = true;
-      // Always: the stale clock reads it.
+      // Always: the stale clock reads it. The last few refreshes give the
+      // column's rhythm (cadence).
       s.updated = Date.now();
+      if (!older) s.refreshes = (s.refreshes || []).concat(s.updated).slice(-6);
       if (changed) emit(s.key);
       return s.key;
+    }
+
+    // How often X Pro refreshes a column, in ms: the middle of the gaps
+    // between its last refreshes (null until there are two gaps).
+    function cadence(key) {
+      const s = sources.get(key);
+      const t = s && s.refreshes;
+      if (!t || t.length < 3) return null;
+      const gaps = t.slice(1).map((x, i) => x - t[i]).sort((a, b) => a - b);
+      return gaps[Math.floor(gaps.length / 2)];
     }
 
     // A block’s own time: a notification’s sortIndex (ms); a post’s id,
@@ -596,6 +610,7 @@
     return {
       ingest,
       decks,
+      cadence,
       markRead,
       markAllRead,
       isUnread,

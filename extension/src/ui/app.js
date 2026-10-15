@@ -4833,14 +4833,14 @@
     }
     function emojiWords(e) {
       const d = emojiData();
-      // A skin tone (⌃⌘Space gives one) is looked up as its base emoji.
-      const i = d.byChar.get(noVS(e).replace(/[\u{1F3FB}-\u{1F3FF}]/gu, ''));
+      const i = d.byChar.get(noVS(e));
       return i == null ? null : [d.all[i].name].concat(d.all[i].keys.slice(0, 4));
     }
     function saveDeckFrom(d, name, emoji) {
       const title = String(name || '').trim().slice(0, 40);
       if (!title) return toast('A deck needs a name.', 'info');
-      const e = firstEmoji(emoji) || (d && d.icon) || '';
+      // X Pro's deck emoji come without skin tones: the base emoji.
+      const e = (firstEmoji(emoji) || (d && d.icon) || '').replace(/[\u{1F3FB}-\u{1F3FF}]/gu, '');
       const words = e ? emojiWords(e) : [];
       if (e && !words) return toast('Choose one emoji for the deck, or leave it as it is.', 'warn');
       if (d && title === (d.title || '') && noVS(e) === noVS(d.icon || '')) return;

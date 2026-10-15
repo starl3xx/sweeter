@@ -38,6 +38,7 @@
     const profileIds = new Map(); // user id -> lowercase handle
     const timelines = new Map(); // user id -> Map(op -> { blocks, sorted })
     const watched = new Set();
+    let timelineSeq = 0; // which of a person's timelines X Pro loaded last
     const expected = new Set(); // lowercase handles whose id is not known yet
     // X Pro’s decks and columns (lib/decks.js), from X Pro’s own traffic.
     const decks = Sweeter.decks.createDecks();
@@ -247,7 +248,8 @@
         let byOp = timelines.get(uid);
         if (!byOp) timelines.set(uid, (byOp = new Map()));
         let t = byOp.get(msg.op);
-        if (!t) byOp.set(msg.op, (t = { blocks: new Map(), sorted: [], pinned: null }));
+        if (!t) byOp.set(msg.op, (t = { blocks: new Map(), sorted: [], pinned: null, seq: 0 }));
+        t.seq = ++timelineSeq;
         for (const ins of N.timeline(msg.body)) {
           if (ins.type === 'clear') t.blocks.clear();
           else if (ins.type === 'add') for (const b of ins.blocks) t.blocks.set(b.key, b);
@@ -567,11 +569,14 @@
         }
         if (handle) expected.delete(String(handle).toLowerCase());
       },
+      // Of a tab's operations, the one X Pro loaded last (a tab X Pro
+      // answers with either, as Replies did before and after a change).
       timeline: (id, ops) => {
         const byOp = timelines.get(String(id));
         if (!byOp) return null;
-        for (const op of ops) if (byOp.has(op)) return byOp.get(op);
-        return null;
+        let best = null;
+        for (const op of ops) if (byOp.has(op) && (!best || byOp.get(op).seq > best.seq)) best = byOp.get(op);
+        return best;
       },
       all: () => Array.from(sources.values()).sort((a, b) => a.order - b.order),
       listName: (id) => listNames.get(id),

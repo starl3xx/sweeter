@@ -1678,12 +1678,40 @@
     }
   }
 
-  // Posts, Replies or Media: X Pro loads the tab when it is chosen.
+  // Posts, Replies, Photos or Videos: X Pro loads the tab when it is
+  // chosen. Its media tab (seen 2026-10-14, linking to /media) reads
+  // Photos or Videos, whichever was chosen last; pressed while selected,
+  // it opens a menu of the two.
+  // One choice at a time, and only the latest: one made while another is
+  // still choosing waits for it, and those overtaken are skipped.
+  let tabTurn = 0;
+  let tabChain = Promise.resolve();
   function profileTab(handle, label) {
+    const turn = ++tabTurn;
+    const go = () => (turn === tabTurn ? chooseProfileTab(handle, label) : false);
+    return (tabChain = tabChain.then(go, go));
+  }
+  async function chooseProfileTab(handle, label) {
     const stack = profileStack(String(handle).toLowerCase());
-    const tab = stack && Array.from(stack.querySelectorAll('[role="tab"]')).find((t) => (t.textContent || '').trim() === label);
+    if (!stack) return false;
+    const media = label === 'Photos' || label === 'Videos';
+    const find = () => Array.from(stack.querySelectorAll('[role="tab"]')).find((t) => (media ? /\/media$/.test(t.getAttribute('href') || '') : (t.textContent || '').trim() === label)) || null;
+    const on = (t) => t.getAttribute('aria-selected') === 'true';
+    const tab = find();
     if (!tab) return false;
-    tab.click();
+    if (!media || (tab.textContent || '').trim() === label) {
+      if (!on(tab)) tab.click();
+      return true;
+    }
+    // It shows the other one: select the tab, then choose from its menu.
+    if (!on(tab)) {
+      tab.click();
+      if (!(await waitFor(() => (find() && on(find()) ? find() : null), 3000))) return false;
+    }
+    find().click();
+    const item = await waitFor(() => Array.from(document.querySelectorAll('[role="menuitem"]')).find((m) => (m.textContent || '').trim() === label) || null, 2000);
+    if (!item) return false;
+    item.click();
     return true;
   }
 

@@ -99,6 +99,12 @@
     'UserTweets',
     'UserTweetsAndReplies',
     'UserMedia',
+    // X Pro's profile tabs since (seen 2026-10-14): Replies loads
+    // UserRepliesTimeline, and its media tab is Photos or Videos (a menu
+    // on the tab, which remembers the last choice).
+    'UserRepliesTimeline',
+    'UserPhotoTimeline',
+    'UserVideoTimeline',
     'Likes',
     'Bookmarks',
     'TweetDetail',

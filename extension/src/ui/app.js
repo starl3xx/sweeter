@@ -5696,8 +5696,8 @@
         body = !s.names
           ? '<p class="anote">Opening your lists in X Pro…</p>'
           : s.names.length
-            ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + row('', 'plus', 'New List…', 'Make one in X Pro, then add it here', false, 'add-newlist') + '</div>'
-            : '<p class="anote">You have no lists yet.</p><div class="alist">' + row('', 'plus', 'New List…', 'Make one in X Pro, then add it here', false, 'add-newlist') + '</div>';
+            ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + row('', 'addcol', 'New List…', 'Make one in X Pro, then add it here', false, 'add-newlist') + '</div>'
+            : '<p class="anote">You have no lists yet.</p><div class="alist">' + row('', 'addcol', 'New List…', 'Make one in X Pro, then add it here', false, 'add-newlist') + '</div>';
       } else if (s.step === 'search') {
         body = '<form class="asearch"><input id="add-q" type="search" value="' + h(s.q || '') + '" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">' + (s.edit ? 'Save' : 'Add Column') + '</button></form><p class="anote">A search column shows the newest posts first. Write the query, or fill in what you want below.</p>' + searchForm(s.q || '');
       } else {

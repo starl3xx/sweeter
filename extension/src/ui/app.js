@@ -10551,7 +10551,7 @@
       const quick = XF.QUICK.map((f, i) => h(f.name) + ' <kbd>⌥' + (i + 1) + '</kbd>').join(', ');
       return 'A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '. Your own can also ask for at least so many likes, reposts, or replies, or for some languages.';
     }
-    const MUTES_HINT = 'Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd>, or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists, and searches.';
+    const MUTES_HINT = 'Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd>, or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists, and searches. Words and regexes also check image descriptions, poll choices, link card titles, Article titles, and the post a post quotes; @user and #hashtag check the quoted post too.';
     const MUTE_NOTES_NOTE = 'A like, repost, or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.';
     const LAYOUTS_HINT = 'A layout is Sweeter’s own arrangement: views, merged columns, groups, widths, filters, titles, icons, colors, media and the column layout. X Pro’s decks and columns stay as they are, so a layout fits the decks it was made with.';
     function filtersPart() {
@@ -10593,7 +10593,30 @@
     }
 
     // Mutes share a tab with Filters (before 0.19 they had their own).
-    const mutesPane = () =>
+    // How many loaded posts each mute hides now, in the columns mutes
+    // apply to (every column of posts): what Settings ▸ Mutes says.
+    function muteHits() {
+      const out = new Map();
+      if (!rules.length) return out;
+      const tests = rules.map((r) => [r.id, Sweeter.mutes.compile([r])]);
+      const seen = new Set();
+      for (const s of store.all()) {
+        if (s.kind === 'notifications' || s.kind === 'people') continue;
+        for (const b of s.sorted) {
+          for (const p of b.kind === 'post' ? [b.post] : b.kind === 'thread' ? b.posts : []) {
+            if (!p || p.unavailable || seen.has(p.id)) continue;
+            seen.add(p.id);
+            for (const [id, t] of tests) if (t(p)) out.set(id, (out.get(id) || 0) + 1);
+          }
+        }
+      }
+      return out;
+    }
+    const hidesNote = (hits, r) => {
+      const n = hits.get(r.id) || 0;
+      return n ? ' · hides ' + n + (n === 1 ? ' post' : ' posts') : '';
+    };
+    const mutesPane = (hits = muteHits()) =>
       '<div class="hint">' + MUTES_HINT + '</div>' +
       '<div class="pgrid">' + row('Notifications:', check('muteNotes', 'Mutes hide notifications too'), MUTE_NOTES_NOTE) + '</div>' +
       '<div class="mute-add"><input type="text" id="mute-in" placeholder="airdrop, /^gm\\b/i, @someone" autocomplete="off" spellcheck="false" aria-label="Words, patterns or accounts to mute">' +
@@ -10601,7 +10624,7 @@
       '<button type="button" data-cmd="mute-add">Mute</button></div>' +
       '<div class="mutes">' +
       (rules.length
-        ? rules.map((r) => '<div class="mr"><span class="mk">' + h(Sweeter.mutes.label(r)) + '</span><span class="me2">' + h(expiry(r)) + '</span><button class="x" type="button" data-cmd="mute-del" data-id="' + h(r.id) + '" title="Remove" aria-label="Remove">×</button></div>').join('')
+        ? rules.map((r) => '<div class="mr"><span class="mk">' + h(Sweeter.mutes.label(r)) + '</span><span class="me2">' + h(expiry(r) + hidesNote(hits, r)) + '</span><button class="x" type="button" data-cmd="mute-del" data-id="' + h(r.id) + '" title="Remove" aria-label="Remove">×</button></div>').join('')
         : '<div class="mr"><span class="me2">No mute filters yet.</span></div>') +
       '</div>';
 
@@ -10798,6 +10821,7 @@
     };
     const prefRowList = () => [].concat(PREF_ROWS.general, PREF_ROWS.media, PREF_ROWS.extras).filter((r) => r.key && (!r.app || native));
     function prefsSnapshot() {
+      const hits = muteHits();
       const values = { muteNotes: !!settings.muteNotes };
       for (const r of prefRowList()) values[r.key] = settings[r.key];
       const n0 = XF.QUICK.length;
@@ -10810,7 +10834,7 @@
         hints: { filters: plain(filtersHint()), mutes: plain(MUTES_HINT), muteNotes: MUTE_NOTES_NOTE, layouts: LAYOUTS_HINT },
         filters: custom.map((f, i) => ({ id: f.id, name: f.name, desc: describe(f), key: n0 + i < 9 ? '⌥' + (n0 + i + 1) : '', include: f.include || '', exclude: f.exclude || '', match: f.match === 'any' ? 'any' : 'all', rules: (f.rules || []).map((r) => ({ k: r.k, not: !!r.not })), min: XF.mins(f), langs: XF.langs(f.langs).join(', ') })),
         criteria: XF.CRITERIA,
-        mutes: rules.map((r) => ({ id: r.id, label: Sweeter.mutes.label(r), expiry: expiry(r) })),
+        mutes: rules.map((r) => ({ id: r.id, label: Sweeter.mutes.label(r), expiry: expiry(r), hits: hits.get(r.id) || 0 })),
         durations: Object.entries(DURATION_LABEL),
         layouts: (settings.layouts || []).map((l) => ({ name: l.name, date: new Date(l.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) })),
         keys: KEY_LIST,

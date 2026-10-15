@@ -84,6 +84,8 @@ struct MuteItem: Decodable, Identifiable {
     let id: String
     let label: String
     let expiry: String
+    /// Loaded posts it hides now (absent before 0.24).
+    let hits: Int?
 }
 
 struct LayoutItem: Decodable, Identifiable {
@@ -491,7 +493,8 @@ struct FiltersPane: View {
                     HStack {
                         Text(m.label).font(.body.monospaced()).lineLimit(1).truncationMode(.tail)
                         Spacer()
-                        Text(m.expiry).foregroundStyle(.secondary)
+                        Text(m.expiry + ((m.hits ?? 0) > 0 ? " · hides \(m.hits ?? 0) \(m.hits == 1 ? "post" : "posts")" : ""))
+                            .foregroundStyle(.secondary)
                         Button { model.run("mute-delete", m.id) } label: { Image(systemName: "minus.circle") }
                             .buttonStyle(.borderless)
                             .help("Remove")

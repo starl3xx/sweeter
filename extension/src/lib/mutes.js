@@ -66,6 +66,27 @@
     return (s) => s.toLowerCase().includes(low);
   }
 
+  // Every text of a post a reader sees: its own words, each image's
+  // description, its poll's choices, its link card's title and
+  // description, its X Article's title, and the same for the post it
+  // quotes. Each is tested on its own, so /^gm/ still means a start.
+  function seenText(p) {
+    const out = [];
+    const add = (q) => {
+      if (!q || q.unavailable) return;
+      out.push(q.plain || '');
+      for (const m of q.media || []) if (m && m.alt) out.push(m.alt);
+      const c = q.card;
+      if (c && c.kind === 'poll') for (const x of c.choices || []) out.push(x.label || '');
+      else if (c) out.push(c.title || '', c.description || '');
+      if (q.article && q.article.title) out.push(q.article.title);
+    };
+    add(p);
+    add(p.quote);
+    return out.filter(Boolean);
+  }
+  const quoted = (p) => (p.quote && !p.quote.unavailable ? p.quote : null);
+
   // Returns a function post -> matching rule (or null).
   function compile(rules, now) {
     const t = now || Date.now();
@@ -79,19 +100,24 @@
           } catch {
             return null;
           }
-          return (p) => re.test(p.plain);
+          return (p) => seenText(p).some((s) => {
+            re.lastIndex = 0;
+            return re.test(s);
+          });
         }
         case 'client': {
           const c = r.value.toLowerCase();
           return (p) => String(p.source || '').toLowerCase() === c;
         }
+        // The quoted post's author and hashtags count too: a quote of a
+        // muted account shows that account.
         case 'user':
-          return (p) => p.author.handle.toLowerCase() === r.value || (p.repostedBy && p.repostedBy.handle.toLowerCase() === r.value);
+          return (p) => p.author.handle.toLowerCase() === r.value || (p.repostedBy && p.repostedBy.handle.toLowerCase() === r.value) || (!!quoted(p) && String(quoted(p).author.handle).toLowerCase() === r.value);
         case 'hashtag':
-          return (p) => (p.hashtags || []).includes(r.value);
+          return (p) => (p.hashtags || []).includes(r.value) || (!!quoted(p) && (quoted(p).hashtags || []).includes(r.value));
         default: {
           const kw = keywordTest(r.value);
-          return (p) => kw(p.plain);
+          return (p) => seenText(p).some(kw);
         }
       }
     });
@@ -116,6 +142,6 @@
     };
   }
 
-  Sweeter.mutes = { parse, compile, compileNote, label, DURATIONS };
+  Sweeter.mutes = { parse, compile, compileNote, label, seenText, DURATIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.mutes;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

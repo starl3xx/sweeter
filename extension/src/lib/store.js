@@ -12,6 +12,7 @@
     const o = opts || {};
     const sources = new Map(); // key -> column state
     const listNames = new Map(); // listId -> name
+    const listOwners = new Map(); // listId -> its owner's handle
     const details = new Map(); // focal post id -> { blocks (X’s order), updated }
     let lastPosted = null; // the last post the reader made: shown or why not
     // Single posts X Pro looked up by id, by id: TweetResultByRestId, and
@@ -221,6 +222,7 @@
         const info = N.listInfo(msg.body);
         if (info && info.id) {
           listNames.set(info.id, info.name);
+          if (info.owner) listOwners.set(info.id, info.owner);
           for (const s of sources.values()) if (s.listId === info.id) s.title = info.name;
           emit(null);
         }
@@ -573,6 +575,8 @@
       },
       all: () => Array.from(sources.values()).sort((a, b) => a.order - b.order),
       listName: (id) => listNames.get(id),
+      // Who made the list, by handle, once X Pro has loaded it.
+      listOwner: (id) => listOwners.get(id) || null,
       // The id of a person X Pro has shown, by handle.
       userId: (handle) => {
         const pr = profiles.get(String(handle).toLowerCase());

@@ -681,7 +681,8 @@
 
   function listInfo(body) {
     const l = body && body.data && body.data.list;
-    return l && l.name ? { id: String(l.id_str || ''), name: l.name } : null;
+    const owner = l && l.user_results ? userFromResults(l.user_results) : null;
+    return l && l.name ? { id: String(l.id_str || ''), name: l.name, owner: owner ? owner.handle : null } : null;
   }
 
   // ---------- profiles ----------

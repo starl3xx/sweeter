@@ -4448,6 +4448,7 @@
         local || !xpro.canClear(m) ? null : { id: 'xclear', title: 'Clear in X Pro Too…', symbol: 'clear', enabled: own && mine },
         !local && m && m.col && m.col.cleared ? { id: 'xlatest', title: 'Show Latest Posts in X Pro', symbol: 'arrow.uturn.backward', enabled: own && mine } : null,
         !local && s && s.kind === 'search' ? { id: 'xsearch', title: 'Edit Search…', symbol: 'magnifyingglass', enabled: own && mine } : null,
+        !local && s && s.kind === 'search' && searchList('searchSaved').length ? { id: 'xsaved', title: 'Saved Searches', symbol: 'bookmark', enabled: own && mine, children: searchList('searchSaved').map((q, i) => ({ id: 'xs:' + i, title: clipTitle(q), checked: q === searchQuery(c.key) })) } : null,
         local ? null : { id: 'xcopy', title: 'Make a Copy in X Pro', symbol: 'plus.square.on.square', enabled: own && mine },
         !local && s && s.kind === 'list' ? { id: 'xconvert', title: 'Convert to Search Column…', symbol: 'magnifyingglass', enabled: own && mine } : null,
         local || decksNow().all.length < 2 ? null : { id: 'xmove', title: 'Move to Deck', symbol: 'rectangle.portrait.and.arrow.right', children: decksNow().all.filter((d) => !decksNow().act || d.id !== decksNow().act.id).map((d) => ({ id: 'xm:' + d.id, title: (d.icon ? d.icon + '  ' : '') + (d.title || 'Untitled'), enabled: own && mine })) },
@@ -4500,6 +4501,11 @@
         if (choice === 'xclear') return clearInXPro(c);
         if (choice === 'xlatest') return xproOp(() => xpro.showLatestInXPro(m.id), 'Showing the latest posts again in X Pro');
         if (choice === 'xsearch') return editSearch(c);
+        if (choice.startsWith('xs:')) {
+          const q = searchList('searchSaved')[Number(choice.slice(3))];
+          if (!q || refuseDelegated(c.key) || (addState && addState.step === 'busy')) return;
+          return submitSearch({ vid: c.vid, id: m.id, key: c.key }, q);
+        }
         if (choice === 'xcopy') return xproOp(() => xpro.makeCopy(m.id), 'Copied in X Pro, on all your devices');
         if (choice === 'xconvert') return convertToSearch(c);
         if (choice.startsWith('xm:')) return moveToDeck(c, choice.slice(3));
@@ -5856,12 +5862,13 @@
             ? '<div class="alist">' + s.names.map((n) => row(n, 'list', n, hasListNamed(n) ? 'Already a column' : '', hasListNamed(n), 'add-list')).join('') + row('', 'addcol', 'New List…', 'Make one in X Pro, then add it here', false, 'add-newlist') + '</div>'
             : '<p class="anote">You have no lists yet.</p><div class="alist">' + row('', 'addcol', 'New List…', 'Make one in X Pro, then add it here', false, 'add-newlist') + '</div>';
       } else if (s.step === 'search') {
-        body = '<form class="asearch"><input id="add-q" type="search" value="' + h(s.q || '') + '" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="submit" class="done">' + (s.edit ? 'Save' : 'Add Column') + '</button></form><p class="anote">A search column shows the newest posts first. Write the query, or fill in what you want below.</p>' + searchForm(s.q || '');
+        body = '<form class="asearch"><input id="add-q" type="search" value="' + h(s.q || '') + '" placeholder="sweeter from:starl3xx -filter:replies" autocomplete="off" spellcheck="false" aria-label="Search for"><button type="button" class="as-save" data-cmd="as-save"></button><button type="submit" class="done">' + (s.edit ? 'Save' : 'Add Column') + '</button></form>' + searchChips() + '<p class="anote">A search column shows the newest posts first. Write the query, or fill in what you want below.</p>' + searchForm(s.q || '');
       } else {
         body = '<p class="anote busy">' + h(s.label || 'Adding the column in X Pro…') + '</p>';
       }
       if (s.error) body += '<p class="anote err" role="alert">' + h(s.error) + '</p>';
       addBody.innerHTML = body;
+      if (s.step === 'search') paintSaveSearch();
       const editing = !!(s.edit || s.editing);
       addBack.querySelector('.atitle').textContent = editing ? 'Edit search' : 'Add a column';
       addBack.querySelector('.addsheet').setAttribute('aria-label', editing ? 'Edit search' : 'Add a column');
@@ -5924,9 +5931,13 @@
       if (!addState || addState.step !== 'search') return;
       if (e.target.id === 'add-q') searchToForm();
       else if (e.target.closest('[data-sf]')) searchFromForm();
+      paintSaveSearch();
     });
     addBody.addEventListener('change', (e) => {
-      if (addState && addState.step === 'search' && e.target.closest('[data-sf]')) searchFromForm();
+      if (addState && addState.step === 'search' && e.target.closest('[data-sf]')) {
+        searchFromForm();
+        paintSaveSearch();
+      }
     });
     async function doAdd(fn, onFail) {
       addState = { step: 'busy' };
@@ -5980,16 +5991,84 @@
       e.preventDefault();
       const q = (addBody.querySelector('#add-q').value || '').trim();
       if (!q) return;
-      const ed = addState.edit;
+      submitSearch(addState.edit, q);
+    });
+    // A query for a new search column (ed null), or for column ed.
+    function submitSearch(ed, q) {
       if (ed && q === searchQuery(ed.key)) return closeAddSheet();
       if (hasCol('search:' + q + ':Latest')) {
-        addState.error = 'A search column for “' + q + '” is already in this deck.';
+        const msg = 'A search column for “' + q + '” is already in this deck.';
+        if (!addState || addState.step !== 'search') return toast(msg, 'info');
+        addState.error = msg;
         addState.q = q;
         return renderAdd();
       }
+      noteSearch(q);
       if (ed) return saveSearch(ed, q);
       doAdd(() => xpro.addSearch(q));
-    });
+    }
+
+    // ---------- saved and recent searches ----------
+    // X Pro keeps neither: its only saved search is a whole column. Sweeter
+    // keeps both on this Mac, with its settings. The bookmark beside the
+    // query saves it, and each search a column gets (added or changed) goes
+    // to the front of Recent. A click puts one in the query, to run in a new
+    // column (Add a column) or in this one (Edit Search); a search column’s
+    // … menu runs a saved one in that column at once.
+    const SEARCH_RECENT_MAX = 10;
+    const searchList = (k) => (Array.isArray(settings[k]) ? settings[k].filter((q) => typeof q === 'string' && q) : []);
+    function noteSearch(q) {
+      settings.searchRecent = [q].concat(searchList('searchRecent').filter((x) => x !== q)).slice(0, SEARCH_RECENT_MAX);
+      persist();
+    }
+    function toggleSavedSearch(q) {
+      const saved = searchList('searchSaved');
+      settings.searchSaved = saved.includes(q) ? saved.filter((x) => x !== q) : [q].concat(saved);
+      persist();
+    }
+    function searchChips() {
+      const saved = searchList('searchSaved');
+      const recent = searchList('searchRecent').filter((q) => !saved.includes(q));
+      if (!saved.length && !recent.length) return '';
+      const chip = (q, own) =>
+        '<span class="as-chip"><button type="button" class="as-use" data-cmd="as-use" data-v="' + h(q) + '" title="' + h(q) + '">' + h(clipTitle(q)) + '</button>' +
+        (own ? '<button type="button" class="as-x" data-cmd="as-unsave" data-v="' + h(q) + '" title="Remove from saved searches" aria-label="Remove “' + h(q) + '” from saved searches">×</button>' : '') + '</span>';
+      return '<div class="asaved">' +
+        (saved.length ? '<div class="as-row"><span class="as-l">' + icon('bookmarkOn') + 'Saved</span>' + saved.map((q) => chip(q, true)).join('') + '</div>' : '') +
+        (recent.length ? '<div class="as-row"><span class="as-l">' + icon('clock') + 'Recent</span>' + recent.map((q) => chip(q, false)).join('') + '<button type="button" class="lnk as-clear" data-cmd="as-clear">Clear</button></div>' : '') +
+        '</div>';
+    }
+    // The bookmark beside the query: filled while the query is saved.
+    function paintSaveSearch() {
+      const b = addBody.querySelector('.as-save');
+      const q = addBody.querySelector('#add-q');
+      if (!b || !q) return;
+      const v = q.value.trim();
+      const on = !!v && searchList('searchSaved').includes(v);
+      b.innerHTML = icon(on ? 'bookmarkOn' : 'bookmark');
+      b.disabled = !v;
+      b.setAttribute('aria-pressed', String(on));
+      b.title = on ? 'Remove from saved searches' : 'Save this search';
+      b.setAttribute('aria-label', b.title);
+    }
+    // The chips changed: draw the step again with the query as typed.
+    function redrawSearchStep() {
+      const q = addBody.querySelector('#add-q');
+      if (q) addState.q = q.value;
+      renderAdd();
+      const nq = addBody.querySelector('#add-q');
+      if (nq) {
+        nq.focus();
+        nq.setSelectionRange(nq.value.length, nq.value.length);
+      }
+    }
+    // A saved search from the command palette: the search step, filled in.
+    function openSearchStep(q) {
+      if (addState && addState.step === 'busy') return;
+      openAddSheet();
+      addState = { step: 'search', q };
+      redrawSearchStep();
+    }
 
     function toggle(show) {
       settings.visible = show == null ? !settings.visible : !!show;
@@ -9032,6 +9111,33 @@
         case 'lb-pip':
           lbPip();
           break;
+        case 'as-use': {
+          const q = addBody.querySelector('#add-q');
+          if (!q) break;
+          q.value = el.dataset.v;
+          searchToForm();
+          paintSaveSearch();
+          q.focus();
+          q.setSelectionRange(q.value.length, q.value.length);
+          break;
+        }
+        case 'as-save': {
+          const q = addBody.querySelector('#add-q');
+          const v = q ? q.value.trim() : '';
+          if (!v) break;
+          toggleSavedSearch(v);
+          redrawSearchStep();
+          break;
+        }
+        case 'as-unsave':
+          toggleSavedSearch(el.dataset.v);
+          redrawSearchStep();
+          break;
+        case 'as-clear':
+          settings.searchRecent = [];
+          persist();
+          redrawSearchStep();
+          break;
         case 'lb-prev':
           stepLightbox(-1);
           break;
@@ -10247,6 +10353,8 @@
       add('prefs', 'Settings', 'Sweeter', openPrefs, { keys: ',', icon: 'gear', keywords: ['preferences'] });
       add('report', 'Report a Problem…', 'Sweeter', openReport, { icon: 'warn' });
       add('updates', 'Check for Updates…', 'Sweeter', () => checkUpdates(true), { icon: 'open' });
+      // Saved searches: the search step, filled in, for a new column.
+      for (const q of searchList('searchSaved')) add('ss:' + q, 'Search: ' + q, 'Saved Searches', () => openSearchStep(q), { icon: 'bookmarkOn', keywords: ['saved search ' + q] });
       add('keys', 'Keyboard Shortcuts', 'Sweeter', () => openPrefsTab('keys'), { icon: 'keyboard' });
       add('welcome', 'Welcome to Sweeter', 'Sweeter', openWelcome, { icon: 'sparkle', keywords: ['tour onboarding help'] });
       add('tip', 'Show a Tip', 'Sweeter', () => showTip(false), { icon: 'bulb', keywords: ['tips hint help'] });

@@ -990,6 +990,19 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .app.reordering .cols{scroll-snap-type:none}
 .dropbar{position:fixed;width:4px;border-radius:2px;background:var(--accent-solid);z-index:9;pointer-events:none;box-shadow:0 0 0 1px var(--bg)}
 .asearch .done{background:var(--accent-solid);color:var(--on-accent);border:0;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer}
+/* Saved and recent searches: the bookmark beside the query, and chips under it. */
+.asearch .as-save{flex:none;width:32px;display:grid;place-items:center;background:none;border:1px solid var(--div);border-radius:6px;color:var(--t2);cursor:pointer;padding:0}
+.asearch .as-save[aria-pressed=true]{color:var(--accent)}
+.asearch .as-save:disabled{opacity:.4;cursor:default}
+.asearch .as-save svg{width:15px;height:15px}
+.asaved{display:flex;flex-direction:column;gap:6px;padding:2px 4px 4px}
+.as-row{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.as-l{display:inline-flex;align-items:center;gap:4px;min-width:70px;font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--t3)}
+.as-l svg{width:12px;height:12px}
+.as-chip{display:inline-flex;align-items:center;max-width:100%;min-width:0;border:1px solid var(--div);border-radius:999px;background:var(--sub)}
+.as-use{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:0;background:none;font:inherit;font-size:12px;color:var(--t1);padding:3px 10px;cursor:pointer;border-radius:999px}
+.as-x{border:0;background:none;color:var(--t3);font-size:14px;line-height:1;padding:2px 8px 3px 0;cursor:pointer}
+@media (hover:hover){.as-use:hover{color:var(--accent)}.as-x:hover{color:var(--t1)}}
 @media (hover:hover){.arow:not([disabled]):hover{background:var(--sub)}}
 /* Popover menus: a submenu becomes a labeled section. */
 .pop{max-height:calc(100vh - 16px);overflow-y:auto}

@@ -7057,7 +7057,7 @@
     function splitParts() {
       const c = compose;
       if (!c || c.kind === 'edit' || !c.thread || c.thread.length !== 1) return [];
-      const text = cmpText.value;
+      const text = cmpText.value.trim();
       if (weighted(text) <= 280) return [];
       return Sweeter.text.splitThread(text, { numbered: settings.threadNumbers !== false });
     }

@@ -8,6 +8,9 @@ const sentence = (n) => 'Sentence number ' + n + ' says a little more about the 
 test('split: a short post stays one post, unnumbered', () => {
   eq(T.splitThread('Just one post.'), ['Just one post.']);
   eq(T.splitThread('  '), []);
+  // 280 with a trailing line break: still one post, never “1/2” and “2/2”.
+  const full = 'y'.repeat(280);
+  eq(T.splitThread(full + '\n'), [full]);
 });
 
 test('split: paragraphs, then sentences, every post within 280 with its number', () => {

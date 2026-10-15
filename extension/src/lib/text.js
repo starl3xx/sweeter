@@ -545,6 +545,10 @@
   // (the space or line break) goes; the rest of the text stays as written.
   function splitThread(text, o) {
     const opt = Object.assign({ limit: 280, numbered: true }, o || {});
+    const whole = String(text || '').trim();
+    // What fits in one post stays one post, whatever room a number needs.
+    if (!whole) return [];
+    if (weight(whole) <= opt.limit) return [whole];
     const room = opt.limit - (opt.numbered ? 6 : 0);
     const fits = (s) => weight(s) <= room;
     const levels = [/\n\s*\n/, /\n/, /(?<=[.!?…]["”’)\]]?)\s+/, /\s+/];
@@ -572,7 +576,7 @@
     }
     const posts = [];
     let cur = '';
-    for (const [p, join] of pieces(String(text || '').trim(), 0, '')) {
+    for (const [p, join] of pieces(whole, 0, '')) {
       const next = cur ? cur + join + p : p;
       if (cur && !fits(next)) {
         posts.push(cur);

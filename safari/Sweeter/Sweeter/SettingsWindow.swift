@@ -75,6 +75,9 @@ struct FilterItem: Decodable, Identifiable {
     let exclude: String
     let match: String
     let rules: [RuleItem]
+    /// At least so many: "like", "repost", "reply" (absent before 0.24).
+    let min: [String: Int]?
+    let langs: String?
 }
 
 struct MuteItem: Decodable, Identifiable {
@@ -405,6 +408,8 @@ struct FilterDraft: Identifiable {
     var exclude = ""
     var match = "all"
     var rules: [String: String] = [:] // criterion -> "yes" | "no"
+    var min: [String: String] = [:] // "like" | "repost" | "reply" -> typed count
+    var langs = ""
 
     init() {}
 
@@ -415,11 +420,14 @@ struct FilterDraft: Identifiable {
         exclude = f.exclude
         match = f.match
         for r in f.rules { rules[r.k] = r.not ? "no" : "yes" }
+        for (k, n) in f.min ?? [:] where n > 0 { min[k] = String(n) }
+        langs = f.langs ?? ""
     }
 
     var request: [String: Any] {
         ["id": filterID, "name": name, "include": include, "exclude": exclude, "match": match,
-         "rules": rules.compactMap { k, v in v.isEmpty ? nil : ["k": k, "not": v == "no"] as [String: Any] }]
+         "rules": rules.compactMap { k, v in v.isEmpty ? nil : ["k": k, "not": v == "no"] as [String: Any] },
+         "min": min, "langs": langs]
     }
 }
 
@@ -552,6 +560,21 @@ struct FilterEditor: View {
                         Text("All rules").tag("all")
                         Text("Any rule").tag("any")
                     }
+                }
+                Section {
+                    ForEach([("like", "Likes"), ("repost", "Reposts"), ("reply", "Replies")], id: \.0) { k, label in
+                        TextField(label, text: Binding(get: { draft.min[k] ?? "" }, set: { draft.min[k] = $0.filter(\.isNumber) }), prompt: Text("0"))
+                            .multilineTextAlignment(.trailing)
+                    }
+                } header: {
+                    Text("At least")
+                } footer: {
+                    Text("X’s counts, as the post last loaded. Empty or 0 means any.").foregroundStyle(.secondary)
+                }
+                Section {
+                    TextField("Languages", text: $draft.langs, prompt: Text("en, ja"))
+                } footer: {
+                    Text("X’s language codes, separated by commas. Posts with no words, like a photo alone, still show.").foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)

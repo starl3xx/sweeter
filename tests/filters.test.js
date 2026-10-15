@@ -177,3 +177,24 @@ test('notification type filters: any selected type shows', () => {
   eq(X.buildNote(['n:gone', 'q:media']), null);
   eq(X.buildNote(['n:likes'])(null), false);
 });
+
+test('custom filters: at least so many likes, reposts, or replies', () => {
+  const p = (like, repost, reply) => Object.assign(post({ text: 'a post' }), { counts: { like, repost, reply, quote: 0, bookmark: 0, views: 0 } });
+  const f = X.compile({ min: { like: '100', repost: 0, reply: '' } });
+  eq([f(p(99, 0, 0)), f(p(100, 0, 0)), f(p(5000, 0, 0))], [false, true, true]);
+  const both = X.compile({ min: { like: 10, reply: 3 } });
+  eq([both(p(10, 0, 2)), both(p(10, 0, 3))], [false, true]);
+  eq(X.mins({ min: { like: '-4', repost: 'x', reply: '2.9' } }), { reply: 2 });
+});
+
+test('custom filters: languages, and posts with no words still show', () => {
+  const lang = (l) => Object.assign(post({ text: 'words' }), { lang: l });
+  const f = X.compile({ langs: 'en, JA' });
+  eq(['en', 'ja', 'fr', 'zxx', 'und', 'qme', ''].map((l) => f(lang(l))), [true, true, false, true, true, true, true]);
+  eq(X.compile({ langs: 'zh' })(lang('zh-tw')), true);
+  eq(X.compile({ langs: 'zh-tw' })(lang('zh')), true);
+  eq(X.langs('en, japanese, pt;  es'), ['en', 'es']);
+  // With words: both must hold.
+  const g = X.compile({ include: 'mac', langs: 'en' });
+  eq([g(Object.assign(post({ text: 'a mac app' }), { lang: 'en' })), g(Object.assign(post({ text: 'a mac app' }), { lang: 'de' }))], [true, false]);
+});

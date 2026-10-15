@@ -122,6 +122,39 @@
       .filter(Boolean);
   }
 
+  // At least so many likes, reposts, or replies: X Pro offers these only
+  // inside a search query (min_faves and the rest). The counts are X's,
+  // as of the post's last fetch. { like, repost, reply }, 0 for none.
+  const MINS = [
+    ['like', 'likes'],
+    ['repost', 'reposts'],
+    ['reply', 'replies'],
+  ];
+  function mins(f) {
+    const out = {};
+    for (const [k] of MINS) {
+      const n = Math.floor(Number(f && f.min && f.min[k]));
+      if (n > 0) out[k] = n;
+    }
+    return out;
+  }
+  // Languages as X tags posts (its lang codes: en, ja, pt, zh-tw...).
+  // X tags a post with no words to read zxx, and one it can't tell und;
+  // those (and its q* codes for media, cashtags and the like) always pass,
+  // so “English” keeps photos.
+  function langs(s) {
+    return String(s || '')
+      .toLowerCase()
+      .split(/[\s,]+/)
+      .filter((x) => /^[a-z]{2,3}(-[a-z0-9]{2,4})?$/.test(x));
+  }
+  const WORDLESS = /^(zxx|und|art|q[a-z]{2})$/;
+  function inLangs(p, list) {
+    const l = String(p.lang || '').toLowerCase();
+    if (!l || WORDLESS.test(l)) return true;
+    return list.some((x) => l === x || l.startsWith(x + '-') || x.startsWith(l + '-'));
+  }
+
   // ctx is optional; see TESTS.
   function compile(f, ctx) {
     if (!f) return null;
@@ -129,12 +162,16 @@
     const exc = words(f.exclude).map(term);
     const rules = (f.rules || []).filter((r) => TESTS[r.k]);
     const any = f.match === 'any';
+    const least = Object.entries(mins(f));
+    const ls = langs(f.langs);
     return (p) => {
       if (inc.length || exc.length) {
         const hay = haystack(p);
         if (inc.length && !inc.some((t) => t(hay))) return false;
         if (exc.some((t) => t(hay))) return false;
       }
+      for (const [k, n] of least) if (!p.counts || (p.counts[k] || 0) < n) return false;
+      if (ls.length && !inLangs(p, ls)) return false;
       if (!rules.length) return true;
       const pass = (r) => TESTS[r.k](p, ctx) !== !!r.not;
       return any ? rules.some(pass) : rules.every(pass);
@@ -195,6 +232,6 @@
     return f.short || f.name || 'Filter';
   }
 
-  Sweeter.filters = { TESTS, CRITERIA, QUICK, NOTE_QUICK, compile, build, buildNote, all, find, findNote, terms, label, isReply };
+  Sweeter.filters = { TESTS, CRITERIA, MINS, mins, langs, QUICK, NOTE_QUICK, compile, build, buildNote, all, find, findNote, terms, label, isReply };
   if (typeof module !== 'undefined' && module.exports) module.exports = Sweeter.filters;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

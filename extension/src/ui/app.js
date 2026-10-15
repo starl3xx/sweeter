@@ -3336,6 +3336,7 @@
       el.className = 'dpane';
       el.innerHTML =
         '<div class="dhead"><button class="dback" type="button" data-cmd="back" title="' + h('Back to ' + (c.title.textContent || 'the column') + ' (←)') + '">‹ <span class="dbl">' + h(c.title.textContent || 'Back') + '</span></button><span class="dtitle">Post</span>' +
+        '<button class="dthread" type="button" data-cmd="readThread" hidden title="Read the author’s thread as one page">Read Thread</button>' +
         '<button class="dcol" type="button" data-cmd="asColumn" title="Open this conversation as a column of its own, in X Pro on all your devices">Open as Column</button></div>' +
         '<div class="dscroll"><div class="dlist"></div><div class="dfoot"></div></div>';
       c.el.appendChild(el);
@@ -3416,6 +3417,8 @@
       c.dlist.innerHTML = html;
       watchTickers(c.dlist);
       c.dfoot.dataset.reason = d.failed || '';
+      // An author's run of replies to themselves reads as one page.
+      c.dpane.querySelector('.dthread').hidden = threadChain(d.id, data).length < 2;
       const dcol = c.dpane.querySelector('.dcol');
       if (dcol) dcol.disabled = !!d.failed;
       c.dfoot.innerHTML = d.failed
@@ -3901,6 +3904,77 @@
       });
     }
 
+    // ---------- a thread as an article ----------
+    // The author's run of replies to themselves around the open post: the
+    // posts of theirs just above it, the post, and the reply thread that
+    // continues it while it stays theirs. That is the first reply block
+    // whose first post is theirs and answers the open post: X sends it
+    // first, but a reply the reader just posted shows above it.
+    function threadChain(focalId, data) {
+      if (!data) return [];
+      const blocks = data.blocks;
+      const i = blocks.findIndex((b) => b.kind === 'post' && b.post.id === focalId);
+      if (i < 0) return [];
+      const focal = blocks[i].post;
+      const who = focal.author ? focal.author.handle.toLowerCase() : '';
+      const same = (p) => !!p && !p.unavailable && !!p.author && p.author.handle.toLowerCase() === who;
+      const up = [];
+      for (let k = i - 1; k >= 0 && blocks[k].kind === 'post' && same(blocks[k].post); k--) up.unshift(blocks[k].post);
+      const runOf = (b) => (b.kind === 'thread' ? b.posts : b.kind === 'post' ? [b.post] : []);
+      const next = blocks.slice(i + 1).find((b) => {
+        const p = runOf(b)[0];
+        return same(p) && (!p.replyToId || p.replyToId === focal.id);
+      });
+      const down = [];
+      for (const p of next ? runOf(next) : []) {
+        if (!same(p)) break;
+        down.push(p);
+      }
+      return up.concat([focal], down);
+    }
+    // The reader's article for a thread: the first line as the title, then
+    // every post's paragraphs, pictures and videos, quoted post, or link.
+    function threadArticle(chain) {
+      const first = chain[0];
+      const line = String(first.plain || '').trim().split('\n')[0];
+      const title = !line ? 'A thread by ' + first.author.name : line.length > 100 ? line.slice(0, 100).replace(/\s+\S*$/, '') + '…' : line;
+      const body = [];
+      const quotes = new Map();
+      // The title is the first line in full: it isn't said twice.
+      const plainOf = (html) => { const el = document.createElement('div'); el.innerHTML = html; return el.textContent.trim(); };
+      let skip = title === line;
+      for (const p of chain) {
+        for (const para of String(p.html || '').split(/(?:<br>\s*){2,}/)) {
+          if (!para.replace(/<br>/g, '').trim()) continue;
+          if (skip && plainOf(para) === title) {
+            skip = false;
+            continue;
+          }
+          skip = false;
+          body.push({ t: 'p', html: para });
+        }
+        const media = (p.media || []).filter((m) => m.type === 'photo' || safeUrl(m.videoUrl || '') !== '#');
+        if (media.length) body.push({ t: 'media', items: media });
+        if (p.quote && !p.quote.unavailable) {
+          quotes.set(p.quote.id, p.quote);
+          body.push({ t: 'post', id: p.quote.id });
+        } else if (p.card && p.card.url) body.push({ t: 'link', url: p.card.url });
+      }
+      return { post: Object.assign({}, first, { article: { title, body, image: null, preview: '' } }), quotes };
+    }
+    function openThreadReader(c) {
+      const d = c && c.detail;
+      const chain = d ? threadChain(d.id, store.detail(d.id)) : [];
+      if (chain.length < 2) return;
+      closePop();
+      const t = threadArticle(chain);
+      rd = { id: chain[0].id, post: t.post, key: c.vid, state: 'ready', token: ++rdToken, find: (id) => t.quotes.get(id) || embedded(id) };
+      rdBack.hidden = false;
+      applyReaderStyle();
+      renderReader(true);
+      rdScroll.focus({ preventScroll: true });
+    }
+
     function readerFailed(token, reason) {
       if (!rd || rd.token !== token || rd.state === 'ready') return;
       rd.state = 'failed';
@@ -3925,7 +3999,7 @@
       // content is another document, and moving a loading picture there
       // and back could restart it.
       const fresh = rdPage.ownerDocument.createElement('div');
-      fresh.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: embedded });
+      fresh.innerHTML = R.articlePage(rd.post, ctx, { state: rd.state, find: rd.find || embedded });
       keepMedia(rdPage, fresh);
       rdPage.replaceChildren(...fresh.childNodes);
       if (first) rdScroll.scrollTop = 0;
@@ -9739,6 +9813,9 @@
           else runDeckOp(() => xpro.manageDeck(d.id, 'move', +el.dataset.d), 'Deck moved');
           break;
         }
+        case 'readThread':
+          openThreadReader(c);
+          break;
         case 'asColumn':
           conversationToColumn(c);
           break;

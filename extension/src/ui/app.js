@@ -6473,16 +6473,25 @@
     // composer, where Update saves it; Delete asks here, then goes through
     // the column's Edit, as Drafts does (xpro.js).
     const schedGoing = new Set();
-    function renderScheduled(c) {
+    // The column's list and foot, for the column or its own window.
+    function scheduledView(c) {
       const list = store.xScheduled();
       const ctx = { settings: colSettings(c), now: Date.now(), viewer, expanded };
       const shown = (list || []).filter((d) => !schedGoing.has(d.id));
-      c.list.innerHTML = shown.map((d) => R.scheduled(d, ctx)).join('');
-      c.foot.innerHTML = !list ? 'X Pro hasn’t listed your scheduled posts yet.<br><button class="more" type="button" data-cmd="xpro">Show X Pro</button>' : !shown.length ? 'You have no scheduled posts. To schedule one, choose a time in the composer.' : '';
+      return {
+        html: shown.map((d) => R.scheduled(d, ctx)).join(''),
+        foot: !list ? 'X Pro hasn’t listed your scheduled posts yet.<br><button class="more" type="button" data-cmd="xpro">Show X Pro</button>' : !shown.length ? 'You have no scheduled posts. To schedule one, choose a time in the composer.' : '',
+      };
+    }
+    function renderScheduled(c) {
+      const v = scheduledView(c);
+      c.list.innerHTML = v.html;
+      c.foot.innerHTML = v.foot;
       c.rendered = true;
     }
     function renderScheduledCols() {
       for (const c of cols.values()) if (c.key === 'x:scheduled') renderColumn(c, false);
+      for (const rec of popouts.values()) if (rec.c.key === 'x:scheduled') drawPop(rec);
     }
     // How xpro.js finds a scheduled post in the column: its place in X's
     // list, and what it says.
@@ -10121,6 +10130,14 @@
       } else delete rec.col.dataset.tint;
       rec.col.dataset.media = colSettings(c).media;
       rec.w.document.title = titleOf(c.vid) + ' · Sweeter';
+      // Scheduled posts aren't blocks: the column's own list.
+      if (c.key === 'x:scheduled') {
+        const v = scheduledView(c);
+        rec.nodes = null;
+        rec.list.innerHTML = v.html;
+        rec.root.querySelector('.foot').innerHTML = v.foot;
+        return;
+      }
       // Keep the reader’s place: the first block on screen stays put. At
       // the top the pop-out follows the newest post, except For You.
       const top = follows(c) && rec.scroll.scrollTop <= PIN_SLOP;
@@ -10224,6 +10241,13 @@
       if (tok) {
         e.preventDefault();
         return openUrl('https://dexscreener.com/search?q=' + encodeURIComponent(tok.dataset.ca));
+      }
+      // A scheduled post's Edit and Delete, and Show X Pro: in the main window.
+      const sc = t.closest('[data-cmd="sched-open"], [data-cmd="sched-del"], [data-cmd="xpro"]');
+      if (sc) {
+        e.preventDefault();
+        showMain();
+        return run(sc.dataset.cmd, sc);
       }
       const cell = t.closest('.cell[data-id]');
       const act = t.closest('[data-act]');

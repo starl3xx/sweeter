@@ -214,7 +214,9 @@
     // A video page or a live video: a play mark on its still, and LIVE.
     const still = c.image ? '<img src="' + h(safeUrl(c.image)) + '" alt="" loading="lazy" decoding="async">' : '';
     const pic = still && c.play ? '<span class="cim">' + still + '<i class="cpl">' + icon('play') + '</i></span>' : still;
-    return '<a class="card' + (compact ? ' summary' : style === 'medium' ? ' medium' : '') + '" href="' + h(safeUrl(c.url)) + '" target="_blank" rel="noopener noreferrer">' +
+    // A live video names its stream's key: a click plays it in Sweeter.
+    const live = c.live && c.mediaKey ? ' data-bkey="' + h(c.mediaKey) + '"' : '';
+    return '<a class="card' + (compact ? ' summary' : style === 'medium' ? ' medium' : '') + '" href="' + h(safeUrl(c.url)) + '" target="_blank" rel="noopener noreferrer"' + live + '>' +
       pic +
       '<div class="cb"><div class="cdom">' + (c.live ? '<b class="clive">LIVE</b>' : '') + h(c.domain) + '</div><div class="ctt" title="' + h(c.title) + '">' + h(c.title) + '</div></div></a>';
   }

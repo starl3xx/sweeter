@@ -10518,6 +10518,11 @@
       if (f.exclude) parts.push('without ' + f.exclude);
       const rs = (f.rules || []).map((r) => (r.not ? 'no ' : '') + ((XF.CRITERIA.find((x) => x[0] === r.k) || [0, r.k])[1]).toLowerCase());
       if (rs.length) parts.push(rs.join(f.match === 'any' ? ' or ' : ' and '));
+      const least = XF.mins(f);
+      const at = XF.MINS.filter(([k]) => least[k]).map(([k, word]) => least[k].toLocaleString() + ' ' + word);
+      if (at.length) parts.push('at least ' + at.join(', '));
+      const ls = XF.langs(f.langs);
+      if (ls.length) parts.push('in ' + ls.join(', '));
       return parts.join(' · ') || 'Every post';
     }
 
@@ -10535,12 +10540,16 @@
         XF.CRITERIA.map(([k, label]) => '<label class="frl"><span>' + h(label) + '</span><select data-rule="' + k + '">' + opt('', 'Doesn’t matter', rule(k)) + opt('yes', 'Yes', rule(k)) + opt('no', 'No', rule(k)) + '</select></label>').join('') +
         '</div></div>' +
         '<label class="pl" for="fe-match">Match:</label><div class="pc"><select id="fe-match">' + opt('all', 'All rules', e.match) + opt('any', 'Any rule', e.match) + '</select></div>' +
+        '<div class="pl">At least:</div><div class="pc"><div class="fmins">' +
+        XF.MINS.map(([k, word]) => '<label class="frl"><span>' + h(word[0].toUpperCase() + word.slice(1)) + '</span><input type="number" min="0" step="1" inputmode="numeric" data-min="' + k + '" value="' + h(String((e.min && e.min[k]) || '')) + '" placeholder="0"></label>').join('') +
+        '</div><div class="note">X’s counts, as the post last loaded. Empty or 0 means any.</div></div>' +
+        '<label class="pl" for="fe-langs">Languages:</label><div class="pc"><input type="text" id="fe-langs" value="' + h(e.langs || '') + '" placeholder="en, ja" autocomplete="off" spellcheck="false"><div class="note">X’s language codes, separated by commas. Posts with no words, like a photo alone, still show.</div></div>' +
         '</div><div class="fbtns"><button type="button" data-cmd="flt-cancel">Cancel</button><button class="done" type="button" data-cmd="flt-save">Save filter</button></div></div>';
     }
 
     function filtersHint() {
       const quick = XF.QUICK.map((f, i) => h(f.name) + ' <kbd>⌥' + (i + 1) + '</kbd>').join(', ');
-      return 'A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '.';
+      return 'A filter shows only some of a column’s loaded posts. Click the funnel in a column header, or press <kbd>⌥1</kbd> to <kbd>⌥9</kbd> for the selected column; <kbd>⌥0</kbd> turns them all off. With several on, a post must match all of them. Built in: ' + quick + '. Your own can also ask for at least so many likes, reposts, or replies, or for some languages.';
     }
     const MUTES_HINT = 'Keywords, <kbd>/regex/</kbd>, <kbd>@user</kbd>, <kbd>#hashtag</kbd>, or <kbd>via:Client</kbd>. Separate several with commas. Mutes hide posts in Home, lists, and searches.';
     const MUTE_NOTES_NOTE = 'A like, repost, or follow from a muted account, or on a muted post, is hidden. Tweetbot left notifications alone.';
@@ -10649,7 +10658,9 @@
       const val = (id) => pbody.querySelector(id).value.trim();
       const rs = [];
       for (const sel of pbody.querySelectorAll('[data-rule]')) if (sel.value) rs.push({ k: sel.dataset.rule, not: sel.value === 'no' });
-      const e = { id: editing.id, name: val('#fe-name'), include: val('#fe-inc'), exclude: val('#fe-exc'), match: pbody.querySelector('#fe-match').value, rules: rs };
+      const min = {};
+      for (const inp of pbody.querySelectorAll('[data-min]')) min[inp.dataset.min] = inp.value;
+      const e = { id: editing.id, name: val('#fe-name'), include: val('#fe-inc'), exclude: val('#fe-exc'), match: pbody.querySelector('#fe-match').value, rules: rs, min, langs: val('#fe-langs') };
       // Closed before it saves (the save redraws the list); back on a no.
       const was = editing;
       editing = null;
@@ -10662,7 +10673,13 @@
     function storeFilter(e) {
       const rs = (Array.isArray(e.rules) ? e.rules : []).filter((r) => r && XF.CRITERIA.some((c) => c[0] === r.k)).map((r) => ({ k: r.k, not: !!r.not }));
       const f = { id: e.id || 'f:' + Date.now().toString(36), name: String(e.name || '').trim() || 'Filter ' + (custom.length + 1), include: String(e.include || '').trim(), exclude: String(e.exclude || '').trim(), match: e.match === 'any' ? 'any' : 'all', rules: rs };
-      if (!f.include && !f.exclude && !rs.length) return 'Add words or a rule first.';
+      const least = XF.mins(e);
+      if (Object.keys(least).length) f.min = least;
+      const typed = String(e.langs || '').trim();
+      const ls = XF.langs(typed);
+      if (typed && !ls.length) return 'Use X’s language codes, like en or ja.';
+      if (ls.length) f.langs = ls.join(', ');
+      if (!f.include && !f.exclude && !rs.length && !f.min && !f.langs) return 'Add words, a rule, a count, or a language first.';
       custom = e.id && custom.some((x) => x.id === e.id) ? custom.map((x) => (x.id === f.id ? f : x)) : custom.concat([f]);
       filtersChanged();
       toast('Saved “' + f.name + '”');
@@ -10791,7 +10808,7 @@
         rows: { general: keep(PREF_ROWS.general), media: keep(PREF_ROWS.media), extras: keep(PREF_ROWS.extras) },
         accents: ACCENTS.map(([id, name, light]) => ({ id, name, color: id === 'system' ? '' : light })),
         hints: { filters: plain(filtersHint()), mutes: plain(MUTES_HINT), muteNotes: MUTE_NOTES_NOTE, layouts: LAYOUTS_HINT },
-        filters: custom.map((f, i) => ({ id: f.id, name: f.name, desc: describe(f), key: n0 + i < 9 ? '⌥' + (n0 + i + 1) : '', include: f.include || '', exclude: f.exclude || '', match: f.match === 'any' ? 'any' : 'all', rules: (f.rules || []).map((r) => ({ k: r.k, not: !!r.not })) })),
+        filters: custom.map((f, i) => ({ id: f.id, name: f.name, desc: describe(f), key: n0 + i < 9 ? '⌥' + (n0 + i + 1) : '', include: f.include || '', exclude: f.exclude || '', match: f.match === 'any' ? 'any' : 'all', rules: (f.rules || []).map((r) => ({ k: r.k, not: !!r.not })), min: XF.mins(f), langs: XF.langs(f.langs).join(', ') })),
         criteria: XF.CRITERIA,
         mutes: rules.map((r) => ({ id: r.id, label: Sweeter.mutes.label(r), expiry: expiry(r) })),
         durations: Object.entries(DURATION_LABEL),

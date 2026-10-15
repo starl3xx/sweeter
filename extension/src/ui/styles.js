@@ -667,6 +667,8 @@ img{display:block}
 .frules{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;width:100%}
 .frl{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;color:var(--t1)}
 .prefs .frl select{font-size:12px;padding:2px 4px}
+.fmins{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 14px;width:100%}
+.prefs .frl input[type=number]{width:5.5em;font-size:12px;padding:2px 4px;text-align:right;font-variant-numeric:tabular-nums}
 .fbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 .swatches{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .sw{position:relative;width:18px;height:18px;border-radius:50%;border:0;padding:0;background:var(--sw);box-shadow:inset 0 0 0 1px rgba(0,0,0,.14);cursor:pointer}

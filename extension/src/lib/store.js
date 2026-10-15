@@ -40,6 +40,7 @@
     const watched = new Set();
     let timelineSeq = 0; // which of a person's timelines X Pro loaded last
     const spaces = new Map(); // Space id -> what AudioSpaceById said (N.space)
+    const streams = new Map(); // a live video's media key -> { url, status, at } (LiveVideoStreamStatus)
     const expected = new Set(); // lowercase handles whose id is not known yet
     // X Pro’s decks and columns (lib/decks.js), from X Pro’s own traffic.
     const decks = Sweeter.decks.createDecks();
@@ -180,6 +181,16 @@
     // One captured response from the recorder: { op, vars, body }.
     function ingest(msg) {
       if (!msg || !msg.op || !msg.body) return null;
+      // A live video's stream, as X Pro asked for it to play the video: its
+      // HLS address (the recorder keeps no tokens).
+      if (msg.op === 'LiveVideoStreamStatus') {
+        const key = msg.vars && msg.vars.mediaKey;
+        const src = msg.body && msg.body.source;
+        if (!key || !src || !/^https:\/\/[a-z0-9.-]+\.video\.pscp\.tv\//.test(src.location || '')) return null;
+        streams.set(String(key), { url: src.location, status: String(src.status || ''), at: Date.now() });
+        emit('stream:' + key);
+        return 'stream:' + key;
+      }
       if (msg.op === 'AudioSpaceById') {
         if (msg.body.__status) return null;
         const sp = N.space(msg.body);
@@ -615,6 +626,8 @@
       ingest,
       decks,
       cadence,
+      // A live video's stream (null until X Pro asked for it).
+      stream: (key) => streams.get(String(key)) || null,
       markRead,
       markAllRead,
       isUnread,

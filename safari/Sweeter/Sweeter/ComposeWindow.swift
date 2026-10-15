@@ -428,8 +428,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private let contextLabel = NSTextField(labelWithString: "")
     private let quoteName = NSTextField(labelWithString: "")
     private let quoteText = NSTextField(wrappingLabelWithString: "")
-    private let quoteBox = NSBox()
-    private let cardBox = NSBox()
+    private let quoteBox = ComposeOutline()
+    private let cardBox = ComposeOutline()
     private let cardImage = NSImageView()
     private let cardHost = NSTextField(labelWithString: "")
     private let cardTitle = NSTextField(labelWithString: "")
@@ -499,20 +499,16 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         quoteName.lineBreakMode = .byTruncatingTail
         quoteText.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         quoteText.textColor = SweeterColor.secondary
+        // Up to four lines, the last one cut short (a tail truncation
+        // alone would make it one line).
         quoteText.maximumNumberOfLines = 4
-        quoteText.lineBreakMode = .byTruncatingTail
+        quoteText.cell?.truncatesLastVisibleLine = true
         let quoteStack = NSStackView(views: [quoteName, quoteText])
         quoteStack.orientation = .vertical
         quoteStack.alignment = .leading
         quoteStack.spacing = 2
-        quoteBox.boxType = .custom
-        quoteBox.cornerRadius = 8
-        quoteBox.borderColor = .separatorColor
-        quoteBox.borderWidth = 1
-        quoteBox.fillColor = .clear
-        quoteBox.titlePosition = .noTitle
-        quoteBox.contentViewMargins = NSSize(width: 10, height: 8)
-        quoteBox.contentView = quoteStack
+        quoteText.widthAnchor.constraint(equalTo: quoteStack.widthAnchor).isActive = true
+        quoteBox.hold(quoteStack, margins: NSSize(width: 10, height: 8))
 
         textView.delegate = self
         textView.font = Self.baseFont
@@ -576,14 +572,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         cardRow.spacing = 8
         cardImage.widthAnchor.constraint(equalToConstant: 44).isActive = true
         cardImage.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        cardBox.boxType = .custom
-        cardBox.cornerRadius = 8
-        cardBox.borderColor = .separatorColor
-        cardBox.borderWidth = 1
-        cardBox.fillColor = .clear
-        cardBox.titlePosition = .noTitle
-        cardBox.contentViewMargins = NSSize(width: 8, height: 6)
-        cardBox.contentView = cardRow
+        cardBox.hold(cardRow, margins: NSSize(width: 8, height: 6))
         cardBox.toolTip = "A preview of the page. X makes the card itself when you post."
 
         replyPill.trailingSymbol = "chevron.down"

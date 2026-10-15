@@ -728,6 +728,9 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-foot{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--div)}
 .cmp-foot .grow{flex:1}
 .cmp-count{font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums}
+.cmp-split{border:0;background:none;color:var(--accent);font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:2px 6px;border-radius:5px;margin-right:6px}
+.cmp-split[hidden]{display:none}
+.cmp-split:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .cmp-count.long{color:#E68A2E}
 .cmp-count.over{color:#E64545}
 .cmp-xpro{background:none;border:1px solid var(--div);color:var(--t2);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}

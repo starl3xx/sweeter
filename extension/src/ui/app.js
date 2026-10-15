@@ -4448,7 +4448,7 @@
         local || !xpro.canClear(m) ? null : { id: 'xclear', title: 'Clear in X Pro Too…', symbol: 'clear', enabled: own && mine },
         !local && m && m.col && m.col.cleared ? { id: 'xlatest', title: 'Show Latest Posts in X Pro', symbol: 'arrow.uturn.backward', enabled: own && mine } : null,
         !local && s && s.kind === 'search' ? { id: 'xsearch', title: 'Edit Search…', symbol: 'magnifyingglass', enabled: own && mine } : null,
-        !local && s && s.kind === 'search' && searchList('searchSaved').length ? { id: 'xsaved', title: 'Saved Searches', symbol: 'bookmark', enabled: own && mine, children: searchList('searchSaved').map((q, i) => ({ id: 'xs:' + i, title: clipTitle(q), checked: q === searchQuery(c.key) })) } : null,
+        !local && s && s.kind === 'search' && searchList('searchSaved').length ? { id: 'xsaved', title: 'Saved Searches', symbol: 'bookmark', enabled: own && mine, children: searchList('searchSaved').map((q, i) => ({ id: 'xs:' + i, title: clipTitle(q), checked: q === searchQuery(c.key), enabled: own && mine })) } : null,
         local ? null : { id: 'xcopy', title: 'Make a Copy in X Pro', symbol: 'plus.square.on.square', enabled: own && mine },
         !local && s && s.kind === 'list' ? { id: 'xconvert', title: 'Convert to Search Column…', symbol: 'magnifyingglass', enabled: own && mine } : null,
         local || decksNow().all.length < 2 ? null : { id: 'xmove', title: 'Move to Deck', symbol: 'rectangle.portrait.and.arrow.right', children: decksNow().all.filter((d) => !decksNow().act || d.id !== decksNow().act.id).map((d) => ({ id: 'xm:' + d.id, title: (d.icon ? d.icon + '  ' : '') + (d.title || 'Untitled'), enabled: own && mine })) },
@@ -4503,8 +4503,7 @@
         if (choice === 'xsearch') return editSearch(c);
         if (choice.startsWith('xs:')) {
           const q = searchList('searchSaved')[Number(choice.slice(3))];
-          if (!q || refuseDelegated(c.key) || (addState && addState.step === 'busy')) return;
-          return submitSearch({ vid: c.vid, id: m.id, key: c.key }, q);
+          return q && runSavedSearch(c, q);
         }
         if (choice === 'xcopy') return xproOp(() => xpro.makeCopy(m.id), 'Copied in X Pro, on all your devices');
         if (choice === 'xconvert') return convertToSearch(c);
@@ -5993,19 +5992,30 @@
       if (!q) return;
       submitSearch(addState.edit, q);
     });
-    // A query for a new search column (ed null), or for column ed.
+    // The sheet’s query: a new search column (ed null), or column ed’s.
     function submitSearch(ed, q) {
       if (ed && q === searchQuery(ed.key)) return closeAddSheet();
       if (hasCol('search:' + q + ':Latest')) {
-        const msg = 'A search column for “' + q + '” is already in this deck.';
-        if (!addState || addState.step !== 'search') return toast(msg, 'info');
-        addState.error = msg;
+        addState.error = 'A search column for “' + q + '” is already in this deck.';
         addState.q = q;
         return renderAdd();
       }
       noteSearch(q);
       if (ed) return saveSearch(ed, q);
       doAdd(() => xpro.addSearch(q));
+    }
+    // A saved search from a search column’s … menu, run in that column
+    // with Edit Search’s checks. An open sheet closes first (with any list
+    // chooser it left in X Pro).
+    function runSavedSearch(c, q) {
+      const m = mapOf(c);
+      if (!m || refuseDelegated(c.key)) return;
+      if (addState && addState.step === 'busy') return;
+      if (addState) closeAddSheet();
+      if (q === searchQuery(c.key)) return;
+      if (hasCol('search:' + q + ':Latest')) return toast('A search column for “' + q + '” is already in this deck.', 'info');
+      noteSearch(q);
+      saveSearch({ vid: c.vid, id: m.id, key: c.key }, q);
     }
 
     // ---------- saved and recent searches ----------

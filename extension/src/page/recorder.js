@@ -80,9 +80,6 @@
   };
 
   const OPS = new Set([
-    // A live video's stream (REST, not GraphQL: opOf names it), asked for as
-    // X Pro plays the video.
-    'LiveVideoStreamStatus',
     'HomeLatestTimeline',
     'HomeTimeline',
     'NotificationsTimeline',
@@ -170,12 +167,6 @@
   const POSTING = new Set(['CreateTweet', 'CreateNoteTweet', 'CreateScheduledTweet']);
   const GIFS = new Set(['GifSearch', 'GifEnumerateCategory']);
   function trim(op, json, status) {
-    // Only the stream's address and state: never its chat or session tokens.
-    if (op === 'LiveVideoStreamStatus') {
-      const src = json && json.source;
-      if (status === undefined && json && json.__status) return json;
-      return src && typeof src.location === 'string' ? { source: { location: src.location, status: String(src.status || ''), streamType: String(src.streamType || '') } } : null;
-    }
     if (GIFS.has(op)) {
       try {
         const d = json.data || {};
@@ -238,16 +229,12 @@
     }
   }
 
-  const LIVE = /\/1\.1\/live_video_stream\/status\/([A-Za-z0-9_-]+)/;
   function opOf(url) {
-    if (LIVE.test(String(url || ''))) return 'LiveVideoStreamStatus';
     const m = /\/graphql\/[^/]+\/([A-Za-z0-9_]+)/.exec(String(url || ''));
     return m ? m[1] : null;
   }
 
   function varsOf(url, body) {
-    const live = LIVE.exec(String(url || ''));
-    if (live) return { mediaKey: live[1] };
     try {
       const q = new URL(url, location.href).searchParams.get('variables');
       if (q) return JSON.parse(q);

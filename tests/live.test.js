@@ -1,11 +1,10 @@
-// A live video on X: the card names the stream's key, and the store keeps
-// the HLS address X Pro got when it played the video (shape read on x.com,
-// 2026-10-15; keys and addresses here are made up).
+// A live video on X: the card names the stream's key, which marks it for
+// the Mac app's live video window (shape read on x.com, 2026-10-15; the
+// keys here are made up).
 const path = require('path');
 for (const f of ['symbols', 'icons', 'render']) require(path.join(__dirname, '../extension/src/ui', f + '.js'));
 const N = globalThis.Sweeter.normalize;
 const R = globalThis.Sweeter.render;
-const createStore = globalThis.Sweeter.createStore;
 const F = require('./fixtures');
 
 const s = (key, v) => ({ key, value: { type: 'STRING', string_value: v } });
@@ -19,16 +18,3 @@ test('live: the card names its stream key, and a live one says so in its link', 
   eq(live('RUNNING', '28_1 bad"').card.mediaKey, '');
 });
 
-test('live: the store keeps the stream X Pro asked for, only from X’s video servers', () => {
-  const st = createStore();
-  let heard = 0;
-  st.subscribe((k) => k === 'stream:28_7' && heard++);
-  eq(st.stream('28_7'), null);
-  const body = (location) => ({ source: { location, status: 'LIVE_PUBLIC', streamType: 'HLS' } });
-  st.ingest({ op: 'LiveVideoStreamStatus', vars: { mediaKey: '28_7' }, body: body('https://example.com/a.m3u8') });
-  eq(st.stream('28_7'), null, 'not X’s video servers');
-  st.ingest({ op: 'LiveVideoStreamStatus', vars: { mediaKey: '28_7' }, body: { __status: 403 } });
-  eq(st.stream('28_7'), null, 'a refusal');
-  st.ingest({ op: 'LiveVideoStreamStatus', vars: { mediaKey: '28_7' }, body: body('https://prod-fastly-us-east-1.video.pscp.tv/Transcoding/v1/hls/x/master_dynamic_delta.m3u8?type=live') });
-  eq([st.stream('28_7').url.endsWith('?type=live'), st.stream('28_7').status, heard], [true, 'LIVE_PUBLIC', 1]);
-});

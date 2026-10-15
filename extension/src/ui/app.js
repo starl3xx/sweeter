@@ -3117,45 +3117,18 @@
 
     // index is the position in post.media (photos and videos together).
     // ---------- a live video ----------
-    // A live video's stream is HLS, which WebKit plays (and p puts in
-    // Picture in Picture). X Pro asks X for it (live_video_stream/status)
-    // only as it plays the video itself, and Sweeter never asks X: with no
-    // stream yet, the post's conversation opens in X Pro, where X Pro draws
-    // the video, and Sweeter waits a few seconds for it. Without one, the
-    // video opens on x.com, as before.
-    async function playBroadcast(p, a, cell) {
-      const key = a.dataset.bkey;
+    // X Pro can't play a live video: its client never asks X for a stream
+    // and has no player for one (checked 2026-10-15), and Sweeter never
+    // asks X itself. So the Mac app opens x.com's own player in a window of
+    // its own, where p puts the video in Picture in Picture; if it can't,
+    // the video opens on x.com, as before.
+    function playBroadcast(a) {
       const page = a.getAttribute('href');
-      const card = p.card || {};
-      const show = (st) => {
-        if (native) native.log('live video: playing in the viewer');
-        openLightbox(p, 0, [{ type: 'video', videoUrl: st.url, url: card.image || '', w: 16, h: 9, alt: card.title || 'Live video', page }]);
-      };
-      const have = store.stream(key);
-      if (have) return show(have);
-      const colEl = cell.closest('.col');
-      const c = colEl ? cols.get(colEl.dataset.vid) : null;
-      if (!c) return openUrl(page);
-      toast('Opening the live video…', 'info');
-      if (!c.detail || c.detail.id !== p.id) openDetail(c, p);
-      const st = await new Promise((done) => {
-        let off = null;
-        const end = (v) => {
-          clearTimeout(timer);
-          if (off) off();
-          done(v);
-        };
-        const timer = setTimeout(() => end(store.stream(key)), 8000);
-        off = store.subscribe((k) => k === 'stream:' + key && end(store.stream(key)));
-      });
-      if (st) return show(st);
-      if (native) native.log('live video: X Pro sent no stream');
-      openUrl(page);
+      native.act({ action: 'liveVideo', url: page }).then((r) => r || openUrl(page), () => openUrl(page));
     }
 
-    // items: what to show instead of the post's media (a live video).
-    function openLightbox(post, index, only) {
-      const items = only || (post.media || []).filter((m) => m.type === 'photo' || (m.videoUrl && safeUrl(m.videoUrl) !== '#'));
+    function openLightbox(post, index) {
+      const items = (post.media || []).filter((m) => m.type === 'photo' || (m.videoUrl && safeUrl(m.videoUrl) !== '#'));
       if (!items.length) return;
       closePop();
       for (const v of shadow.querySelectorAll('.m[data-auto] video')) v.pause();
@@ -3321,7 +3294,7 @@
       shadow.querySelector('.lb-count').textContent = many ? lb.i + 1 + ' of ' + lb.items.length : '';
       shadow.querySelector('.lb-prev').hidden = !many;
       shadow.querySelector('.lb-next').hidden = !many;
-      shadow.querySelector('.lb-orig').href = m.page ? safeUrl(m.page) : m.type === 'photo' ? sized(m.url, 'orig') : safeUrl(m.videoUrl);
+      shadow.querySelector('.lb-orig').href = m.type === 'photo' ? sized(m.url, 'orig') : safeUrl(m.videoUrl);
       const p = lb.post;
       const text = p.plain.length > 280 ? p.plain.slice(0, 280) + '…' : p.plain;
       shadow.querySelector('.lb-cap').innerHTML =
@@ -9297,10 +9270,8 @@
       if (own) own.pause();
       watchPip(v, p, i);
     }
-    // item: a viewer item that isn't one of the post's media (a live
-    // video's stream), shown again as itself on return.
-    function watchPip(v, post, index, item) {
-      const me = { v, post, index, item: item || null, closing: false };
+    function watchPip(v, post, index) {
+      const me = { v, post, index, closing: false };
       pip = me;
       v.removeAttribute('data-obs');
       if (io) io.unobserve(v);
@@ -9319,7 +9290,7 @@
           if (pip === me) pip = null;
           if (!v.closest('.pip-hold')) return;
           const closed = me.closing || (v.paused && Date.now() - pausedAt < 1500);
-          if (!closed && !pip && !pipStarting && v.ownerDocument === document) pipBack(v, post, index, me.item);
+          if (!closed && !pip && !pipStarting && v.ownerDocument === document) pipBack(v, post, index);
           else pipDrop(v);
         }, 300);
       };
@@ -9328,10 +9299,9 @@
     }
     // The return button: the viewer opens on the post with this video, as
     // it was in the window.
-    function pipBack(v, post, index, item) {
-      if (item) openLightbox(post, 0, [item]);
-      else openLightbox(post, index);
-      const fresh = lb && lb.items[lb.i] === (item || post.media[index]) ? lbMedia.querySelector('video') : null;
+    function pipBack(v, post, index) {
+      openLightbox(post, index);
+      const fresh = lb && lb.items[lb.i] === post.media[index] ? lbMedia.querySelector('video') : null;
       if (!fresh) return pipDrop(v);
       fresh.removeAttribute('src');
       fresh.load();
@@ -9360,12 +9330,11 @@
       v.addEventListener('enterpictureinpicture', () => {
         if (!lb || !lbMedia.contains(v)) return;
         const post = lb.post;
-        const shown = lb.items[lb.i];
-        const index = (post.media || []).indexOf(shown);
+        const index = (post.media || []).indexOf(lb.items[lb.i]);
         // Moved in one step, so it plays on; then the viewer can close.
         pipHold(document).appendChild(v);
         closeLightbox();
-        watchPip(v, post, index, index < 0 ? shown : null);
+        watchPip(v, post, index);
       });
     }
     function lbPip() {
@@ -10119,15 +10088,12 @@
           return;
         }
       }
-      // A live video on X plays in Sweeter's viewer (⌘-click: x.com).
+      // A live video on X, in the Mac app: x.com's player in a window of
+      // its own (⌘-click: x.com in the browser).
       const bcard = t.closest('a.card[data-bkey]');
-      if (bcard && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        const bc = bcard.closest('.cell[data-id]');
-        const bp = bc && findPost(bc.dataset.id);
-        if (bp) {
-          e.preventDefault();
-          return playBroadcast(bp, bcard, bc);
-        }
+      if (bcard && native && native.act && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        return playBroadcast(bcard);
       }
       if (t.closest('a[href]')) return; // links open in a new tab by themselves
       const prof = t.closest('[data-profile]');
@@ -11984,8 +11950,7 @@
         }
         case 'p': {
           const sp = selectedPost();
-          // p again closes the window for this post's video, whatever it
-          // plays (its live stream too).
+          // p again closes the window for this post's video.
           if (sp && pip && pip.post && pip.post.id === sp.id) {
             pip.closing = true;
             pip.v.pause();

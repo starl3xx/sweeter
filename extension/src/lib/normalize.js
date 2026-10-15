@@ -182,7 +182,7 @@
         url,
         image: img('broadcast_thumbnail_large') || img('broadcast_thumbnail') || img('broadcast_thumbnail_small') || '',
         live: str('broadcast_state') === 'RUNNING',
-        // The key X Pro asks for the stream with (live_video_stream/status).
+        // The stream's key: it marks a live video's card (data-bkey).
         mediaKey: /^[A-Za-z0-9_-]+$/.test(str('broadcast_media_key')) ? str('broadcast_media_key') : '',
         play: true,
       };

@@ -156,7 +156,7 @@ function noteBlocks() {
 
 test('notification type filters pick by kind', () => {
   const blocks = noteBlocks();
-  eq(X.NOTE_QUICK.map((f) => f.id), ['n:mentions', 'n:likes', 'n:reposts', 'n:follows', 'n:other']);
+  eq(X.NOTE_QUICK.map((f) => f.id), ['n:mentions', 'n:likes', 'n:reposts', 'n:follows', 'n:other', 'n:following']);
   const run = (ids) => blocks.map(X.buildNote(ids));
   eq(run(['n:mentions']), [true, false, false, false, false, false, true, true]);
   eq(run(['n:likes']), [false, true, false, false, false, false, false, false]);
@@ -169,7 +169,7 @@ test('notification type filters pick by kind', () => {
 test('notification type filters: any selected type shows', () => {
   const blocks = noteBlocks();
   eq(blocks.map(X.buildNote(['n:likes', 'n:follows'])), [false, true, false, true, false, false, false, false]);
-  eq(blocks.map(X.buildNote(X.NOTE_QUICK.map((f) => f.id))).every(Boolean), true);
+  eq(blocks.map(X.buildNote(X.NOTE_QUICK.filter((f) => f.id !== 'n:following').map((f) => f.id))).every(Boolean), true);
   // Unknown ids are ignored; nothing known on means no filter at all.
   eq(blocks.map(X.buildNote(['n:likes', 'q:media'])), [false, true, false, false, false, false, false, false]);
   eq(X.buildNote([]), null);
@@ -197,4 +197,36 @@ test('custom filters: languages, and posts with no words still show', () => {
   // With words: both must hold.
   const g = X.compile({ include: 'mac', langs: 'en' });
   eq([g(Object.assign(post({ text: 'a mac app' }), { lang: 'en' })), g(Object.assign(post({ text: 'a mac app' }), { lang: 'de' }))], [true, false]);
+});
+
+test('notification filters: From people you follow narrows the types', () => {
+  const who = (following) => ({ name: 'n', handle: 'h', following });
+  const note = (icon, following) => ({ kind: 'notification', n: { icon, users: [who(following)] } });
+  const blocks = [note('like', true), note('like', false), note('follow', true), { kind: 'post', post: { author: who(false) } }];
+  eq(blocks.map(X.buildNote(['n:following'])), [true, false, true, false]);
+  eq(blocks.map(X.buildNote(['n:likes', 'n:following'])), [true, false, false, false]);
+});
+
+test('notification digest: likes and reposts of one post in one hour become one row', () => {
+  const H = Date.UTC(2026, 9, 15, 12);
+  const u = (h) => ({ name: h.toUpperCase(), handle: h });
+  const note = (id, icon, target, at, users, plain) => ({ b: { kind: 'notification', key: id, sortIndex: String(at), n: { id, icon, target: { id: target }, timeMs: at, users: users.map(u), plain, html: plain } }, posts: null });
+  const list = [
+    note('a', 'like', 'p1', H + 50 * 60000, ['ann', 'bob'], 'ANN and 4 others liked your post'),
+    note('b', 'repost', 'p1', H + 40 * 60000, ['cat'], 'CAT reposted your post'),
+    note('c', 'like', 'p2', H + 30 * 60000, ['dan'], 'DAN liked your reply'),
+    note('d', 'like', 'p1', H + 20 * 60000, ['ann', 'eve'], 'ANN and EVE liked your post'),
+    note('e', 'like', 'p1', H - 10 * 60000, ['fay'], 'FAY liked your post'),
+    { b: { kind: 'post', key: 'x' }, posts: null },
+  ];
+  const out = X.digestNotes(list);
+  eq(out.map((x) => x.b.key), ['digest:p1:' + Math.floor((H + 50 * 60000) / 3600000), 'c', 'e', 'x']);
+  const d = out[0].b;
+  eq([d.digest, d.n.icon, d.sortIndex], [3, 'like', String(H + 50 * 60000)]);
+  // 5 likers (ANN and 4 others: the most any row gave), 1 reposter.
+  eq(d.n.plain, 'ANN and 4 others liked your post, and CAT reposted it');
+  eq(d.n.users.map((x) => x.handle), ['ann', 'bob', 'eve', 'cat']);
+  // Two or three people are all named, with the Oxford comma before “and”.
+  const three = X.digestNotes([note('f', 'like', 'p3', H, ['ann', 'bob'], 'ANN and BOB liked your post'), note('g', 'like', 'p3', H + 1, ['cat'], 'CAT liked your post')]);
+  eq(three[0].b.n.plain, 'ANN, BOB, and 1 other liked your post');
 });

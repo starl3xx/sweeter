@@ -10632,6 +10632,7 @@
           fresh.dataset.key = b.key;
           fresh.__b = b;
           fresh.__n = n;
+          if (peek) markPeek(fresh);
           if (node) node.replaceWith(fresh);
           node = fresh;
           rec.nodes.set(b.key, node);

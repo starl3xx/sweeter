@@ -84,8 +84,10 @@
     .join('\n');
   Sweeter.PALETTES = PALETTES;
 
-  // The coin a token pill shows until its logo is known (a CSS mask).
-  const COIN = 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><path d="' + ((Sweeter.SYMBOLS && Sweeter.SYMBOLS.coin) || '') + '"/></svg>') + '")';
+  // The coin a token pill shows until its logo is known, and the glyphs an
+  // address pill takes once the chain says what it is (CSS masks).
+  const MASK = (name) => 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><path d="' + ((Sweeter.SYMBOLS && Sweeter.SYMBOLS[name]) || '') + '"/></svg>') + '")';
+  const COIN = MASK('coin');
 
   // A narrow column's action bar: at most `cap` items stay, and the ones
   // past that step aside in this order: Open on x.com, Copy link, the view
@@ -116,7 +118,7 @@
 
   Sweeter.css = `
 :host{all:initial}
-.app,.popout{--coin:${COIN}}
+.app,.popout{--coin:${COIN};--wallet:${MASK('wallet')};--nft:${MASK('nft')};--cube:${MASK('cube')}}
 *{box-sizing:border-box}
 .app{${LIGHT}
   --fs:14px; --chh:26px; --av:calc(var(--fs) * 2.475); /* avatar: 75% of Tweetbot’s 3.3em */ --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
@@ -445,6 +447,10 @@ img{display:block}
 .tx a.ca{display:inline-flex;align-items:center;gap:3px;padding:0 5px 0 3px;border-radius:6px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:600;white-space:nowrap;text-decoration:none;line-height:1.35;vertical-align:baseline}
 .tx a.ca::before{content:'';flex:none;width:1em;height:1em;border-radius:50%;background:currentColor;-webkit-mask:var(--coin) center/contain no-repeat;mask:var(--coin) center/contain no-repeat}
 .tx a.ca.has-logo::before{-webkit-mask:none;mask:none;background:var(--logo) center/cover no-repeat}
+.tx a.ca[data-kind=wallet]::before{border-radius:0;-webkit-mask-image:var(--wallet);mask-image:var(--wallet)}
+.tx a.ca[data-kind=nft]::before{border-radius:0;-webkit-mask-image:var(--nft);mask-image:var(--nft)}
+.tx a.ca[data-kind=contract]::before{border-radius:0;-webkit-mask-image:var(--cube);mask-image:var(--cube)}
+.tok .tk-l.tk-k svg{width:16px;height:16px}
 .tx a.ca:hover{background:color-mix(in srgb,var(--accent) 22%,transparent)}
 .tx a.ca:not(.tkl){font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;font-weight:500}
 .pop .tok{width:280px;padding:8px 8px 4px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--t2)}

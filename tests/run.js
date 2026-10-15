@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const LIB = ['util', 'text', 'normalize', 'mutes', 'filters', 'decks', 'store'];
+const LIB = ['util', 'text', 'chain', 'normalize', 'mutes', 'filters', 'decks', 'store'];
 for (const f of LIB) require(path.join(__dirname, '../extension/src/lib', f + '.js'));
 // UI files whose logic runs without a DOM.
 const UI = ['styles', 'palette', 'tips'];

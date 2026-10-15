@@ -27,6 +27,7 @@
       "js": [
         "src/lib/util.js",
         "src/lib/text.js",
+        "src/lib/chain.js",
         "src/lib/normalize.js",
         "src/lib/mutes.js",
         "src/lib/filters.js",

@@ -3900,8 +3900,10 @@
 
     // ---------- a thread as an article ----------
     // The author's run of replies to themselves around the open post: the
-    // posts of theirs just above it, the post, and the first reply thread
-    // while it stays theirs (X sends their own continuation first).
+    // posts of theirs just above it, the post, and the reply thread that
+    // continues it while it stays theirs. That is the first reply block
+    // whose first post is theirs and answers the open post: X sends it
+    // first, but a reply the reader just posted shows above it.
     function threadChain(focalId, data) {
       if (!data) return [];
       const blocks = data.blocks;
@@ -3912,10 +3914,13 @@
       const same = (p) => !!p && !p.unavailable && !!p.author && p.author.handle.toLowerCase() === who;
       const up = [];
       for (let k = i - 1; k >= 0 && blocks[k].kind === 'post' && same(blocks[k].post); k--) up.unshift(blocks[k].post);
-      const next = blocks[i + 1];
-      const run = !next ? [] : next.kind === 'thread' ? next.posts : next.kind === 'post' ? [next.post] : [];
+      const runOf = (b) => (b.kind === 'thread' ? b.posts : b.kind === 'post' ? [b.post] : []);
+      const next = blocks.slice(i + 1).find((b) => {
+        const p = runOf(b)[0];
+        return same(p) && (!p.replyToId || p.replyToId === focal.id);
+      });
       const down = [];
-      for (const p of run) {
+      for (const p of next ? runOf(next) : []) {
         if (!same(p)) break;
         down.push(p);
       }

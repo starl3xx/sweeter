@@ -95,3 +95,22 @@ test('compileNote ignores expired rules', () => {
   const k = note('heart_icon', 'Priya liked your post', [priya], F.tweet({ text: 'airdrop' }));
   ok(!M.compileNote([kw], now + 2 * 864e5)(k));
 });
+
+test('mutes see what the reader sees: descriptions, polls, cards, Articles, and quotes', () => {
+  const m = (tok) => M.compile([M.parse(tok, 'forever', now)], now);
+  const base = () => post({ text: 'nothing here' });
+  const withAlt = Object.assign(base(), { media: [{ type: 'photo', url: 'u', alt: 'An airdrop claim screen' }] });
+  const withPoll = Object.assign(base(), { card: { kind: 'poll', choices: [{ label: 'Yes', count: 1 }, { label: 'Airdrop', count: 2 }] } });
+  const withCard = Object.assign(base(), { card: { kind: 'large', title: 'Claim your AIRDROP', description: '', url: 'https://x.example' } });
+  const withArticle = Object.assign(base(), { article: { title: 'Why airdrops fail' } });
+  const quoting = Object.assign(base(), { quote: Object.assign(post({ text: 'free airdrop', user: F.user('spammer', 'Spam') }), { hashtags: ['claim'] }) });
+  eq([withAlt, withPoll, withCard, quoting].map((p) => !!m('airdrop')(p)), [true, true, true, true]);
+  eq(!!m('airdrop')(withArticle), false, 'whole words: airdrops is another word');
+  eq(!!m('/airdrop/i')(withArticle), true);
+  eq(!!m('@spammer')(quoting), true);
+  eq(!!m('#claim')(quoting), true);
+  // A regex still tests each text on its own: ^ is the start of one.
+  eq(!!m('/^claim/i')(withCard), true);
+  eq(!!m('/^nothing here Claim/i')(withCard), false);
+  eq(!!m('airdrop')(base()), false);
+});

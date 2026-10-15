@@ -1378,6 +1378,12 @@ final class DragStrip: NSView {
 @MainActor
 enum LinkOpener {
     static func open(_ url: URL) {
+        // Only web pages go to the chosen browser: mailto:, tel: and the
+        // rest keep their usual app.
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+            NSWorkspace.shared.open(url)
+            return
+        }
         let settings = ViewController.shared?.storage.get(["settings"])["settings"] as? [String: Any] ?? [:]
         let host = (url.host ?? "").lowercased()
         let isX = ["x.com", "twitter.com"].contains { host == $0 || host.hasSuffix("." + $0) }

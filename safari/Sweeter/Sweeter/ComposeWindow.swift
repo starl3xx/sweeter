@@ -88,6 +88,8 @@ struct ComposeState: Decodable {
         let host: String
         let title: String
         let image: String
+        /// The page asks for X's big card (summary_large_image).
+        let large: Bool?
     }
 
     let status: String
@@ -111,6 +113,8 @@ struct ComposeState: Decodable {
     /// The person's picture as a data: URL, sent once when it changes
     /// ("" when the page can't make one).
     let avatar: String?
+    /// The quoted or replied-to author's picture, the same way.
+    let contextAvatar: String?
 
     struct DraftRef: Decodable, Equatable {
         let key: String
@@ -426,10 +430,20 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private var bodyStack: NSStackView?
     private let noteLabel = NSTextField(wrappingLabelWithString: "")
     private let contextLabel = NSTextField(labelWithString: "")
+    private let quoteAvatar = ComposeMiniAvatar(size: 20)
     private let quoteName = NSTextField(labelWithString: "")
+    private let quoteHandle = NSTextField(labelWithString: "")
     private let quoteText = NSTextField(wrappingLabelWithString: "")
     private let quoteBox = ComposeOutline()
+    private var contextHandle = ""
     private let cardBox = ComposeOutline()
+    /// X's big card: the picture across the post, its title on it, and
+    /// where it's from under it.
+    private let cardBig = NSStackView()
+    private let cardBigImage = ComposeFillImage()
+    private let cardBigPill = NSView()
+    private let cardBigTitle = NSTextField(labelWithString: "")
+    private let cardBigFrom = NSTextField(labelWithString: "")
     private let cardImage = NSImageView()
     private let cardHost = NSTextField(labelWithString: "")
     private let cardTitle = NSTextField(labelWithString: "")
@@ -495,20 +509,35 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
 
         contextLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         contextLabel.textColor = SweeterColor.secondary
-        quoteName.font = .boldSystemFont(ofSize: NSFont.smallSystemFontSize)
+        // The quoted or replied-to post as a card: the author's picture,
+        // name, and handle, then the text.
+        quoteName.font = .systemFont(ofSize: 13, weight: .semibold)
+        quoteName.textColor = SweeterColor.text
         quoteName.lineBreakMode = .byTruncatingTail
-        quoteText.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        quoteText.textColor = SweeterColor.secondary
+        quoteName.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        quoteHandle.font = .systemFont(ofSize: 13)
+        quoteHandle.textColor = SweeterColor.secondary
+        quoteHandle.lineBreakMode = .byTruncatingTail
+        quoteHandle.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(249), for: .horizontal)
+        let quoteHead = NSStackView(views: [quoteAvatar, quoteName, quoteHandle])
+        quoteHead.spacing = 5
+        quoteHead.alignment = .centerY
+        quoteHead.setCustomSpacing(8, after: quoteAvatar)
+        quoteText.font = .systemFont(ofSize: 13)
+        quoteText.textColor = SweeterColor.text
         // Up to four lines, the last one cut short (a tail truncation
         // alone would make it one line).
         quoteText.maximumNumberOfLines = 4
         quoteText.cell?.truncatesLastVisibleLine = true
-        let quoteStack = NSStackView(views: [quoteName, quoteText])
+        let quoteStack = NSStackView(views: [quoteHead, quoteText])
         quoteStack.orientation = .vertical
         quoteStack.alignment = .leading
-        quoteStack.spacing = 2
+        quoteStack.spacing = 6
         quoteText.widthAnchor.constraint(equalTo: quoteStack.widthAnchor).isActive = true
-        quoteBox.hold(quoteStack, margins: NSSize(width: 10, height: 8))
+        quoteHead.widthAnchor.constraint(lessThanOrEqualTo: quoteStack.widthAnchor).isActive = true
+        quoteBox.filled = true
+        quoteBox.radius = 12
+        quoteBox.hold(quoteStack, margins: NSSize(width: 12, height: 10))
 
         textView.delegate = self
         textView.font = Self.baseFont
@@ -574,6 +603,39 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         cardImage.heightAnchor.constraint(equalToConstant: 44).isActive = true
         cardBox.hold(cardRow, margins: NSSize(width: 8, height: 6))
         cardBox.toolTip = "A preview of the page. X makes the card itself when you post."
+        cardBigTitle.font = .systemFont(ofSize: 12, weight: .medium)
+        cardBigTitle.textColor = .white
+        cardBigTitle.lineBreakMode = .byTruncatingTail
+        cardBigTitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        cardBigTitle.translatesAutoresizingMaskIntoConstraints = false
+        cardBigPill.wantsLayer = true
+        cardBigPill.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.62).cgColor
+        cardBigPill.layer?.cornerRadius = 4
+        cardBigPill.translatesAutoresizingMaskIntoConstraints = false
+        cardBigPill.addSubview(cardBigTitle)
+        cardBigImage.addSubview(cardBigPill)
+        cardBigFrom.font = .systemFont(ofSize: 12)
+        cardBigFrom.textColor = SweeterColor.secondary
+        cardBigFrom.lineBreakMode = .byTruncatingTail
+        cardBig.orientation = .vertical
+        cardBig.alignment = .leading
+        cardBig.spacing = 5
+        cardBig.addArrangedSubview(cardBigImage)
+        cardBig.addArrangedSubview(cardBigFrom)
+        cardBig.isHidden = true
+        cardBig.toolTip = cardBox.toolTip
+        NSLayoutConstraint.activate([
+            cardBigTitle.leadingAnchor.constraint(equalTo: cardBigPill.leadingAnchor, constant: 6),
+            cardBigTitle.trailingAnchor.constraint(equalTo: cardBigPill.trailingAnchor, constant: -6),
+            cardBigTitle.topAnchor.constraint(equalTo: cardBigPill.topAnchor, constant: 2),
+            cardBigTitle.bottomAnchor.constraint(equalTo: cardBigPill.bottomAnchor, constant: -2),
+            cardBigPill.leadingAnchor.constraint(equalTo: cardBigImage.leadingAnchor, constant: 10),
+            cardBigPill.trailingAnchor.constraint(lessThanOrEqualTo: cardBigImage.trailingAnchor, constant: -10),
+            cardBigPill.bottomAnchor.constraint(equalTo: cardBigImage.bottomAnchor, constant: -10),
+            // X's big card is 1.91 to 1.
+            cardBigImage.widthAnchor.constraint(equalTo: cardBig.widthAnchor),
+            cardBigImage.heightAnchor.constraint(equalTo: cardBigImage.widthAnchor, multiplier: 1 / 1.91),
+        ])
 
         replyPill.trailingSymbol = "chevron.down"
         replyPill.target = self
@@ -646,12 +708,12 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
 
         // The body: the thread's rows, the text, media, a poll, a card and
         // Add Another Post, scrolling as one when it outgrows the window.
-        let body = NSStackView(views: [prevRows, textView, mediaScroll, pollView, cardBox, addRow, nextRows])
+        let body = NSStackView(views: [prevRows, textView, mediaScroll, pollView, cardBox, cardBig, addRow, nextRows])
         body.orientation = .vertical
         body.alignment = .leading
         body.spacing = 10
         body.translatesAutoresizingMaskIntoConstraints = false
-        for v in [prevRows, textView, mediaScroll, pollView, cardBox, addRow, nextRows] as [NSView] {
+        for v in [prevRows, textView, mediaScroll, pollView, cardBox, cardBig, addRow, nextRows] as [NSView] {
             v.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
         }
         let page = ComposeFlippedView()
@@ -789,8 +851,14 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         noteLabel.isHidden = snap.note.isEmpty
         if let c = snap.context {
             contextLabel.stringValue = c.label
-            quoteName.stringValue = c.name.isEmpty ? c.handle : c.name + "  " + c.handle
+            quoteName.stringValue = c.name.isEmpty ? c.handle : c.name
+            quoteHandle.stringValue = c.name.isEmpty ? "" : c.handle
+            quoteHandle.isHidden = c.name.isEmpty
             quoteText.stringValue = c.text
+            quoteText.isHidden = c.text.isEmpty
+            // The letter until the page sends the picture (contextAvatar).
+            contextHandle = c.handle
+            quoteAvatar.show(dataURL: "", handle: c.handle)
             contextLabel.isHidden = c.label.isEmpty
             quoteBox.isHidden = false
         } else {
@@ -890,6 +958,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             avatarShown = a
             avatarView.show(dataURL: a, handle: avatarHandle)
         }
+        if let a = s.contextAvatar { quoteAvatar.show(dataURL: a, handle: contextHandle) }
         postButton.title = postTitle(s.post)
         if let t = s.title, !t.isEmpty { window?.title = t }
         if let a = s.at, a != at, a >= 0, a < thread.count, !uploading {
@@ -1073,19 +1142,32 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private func showCard(_ card: ComposeState.Card?) {
         guard let card, !(card.title.isEmpty && card.image.isEmpty) else {
             cardBox.isHidden = true
+            cardBig.isHidden = true
             return
         }
-        cardHost.stringValue = card.host.hasPrefix("www.") ? String(card.host.dropFirst(4)) : card.host
+        let host = card.host.hasPrefix("www.") ? String(card.host.dropFirst(4)) : card.host
+        var img: NSImage?
+        if let comma = card.image.firstIndex(of: ","), card.image.hasPrefix("data:image/"), let data = Data(base64Encoded: String(card.image[card.image.index(after: comma)...])) {
+            img = NSImage(data: data)
+        }
+        // A page that asks for the big card gets it, as X will draw it.
+        if card.large == true, let img {
+            cardBigImage.image = img
+            cardBigTitle.stringValue = card.title
+            cardBigPill.isHidden = card.title.isEmpty
+            cardBigFrom.stringValue = "From " + host
+            cardBig.isHidden = false
+            cardBox.isHidden = true
+            fitSoon()
+            return
+        }
+        cardHost.stringValue = host
         cardTitle.stringValue = card.title
         cardTitle.isHidden = card.title.isEmpty
-        if let comma = card.image.firstIndex(of: ","), card.image.hasPrefix("data:image/"), let data = Data(base64Encoded: String(card.image[card.image.index(after: comma)...])), let img = NSImage(data: data) {
-            cardImage.image = img
-            cardImage.isHidden = false
-        } else {
-            cardImage.image = nil
-            cardImage.isHidden = true
-        }
+        cardImage.image = img
+        cardImage.isHidden = img == nil
         cardBox.isHidden = false
+        cardBig.isHidden = true
         fitSoon()
     }
 

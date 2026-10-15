@@ -7049,7 +7049,8 @@
       }, 700);
     }
     function showCard(card) {
-      macCard = card && (card.title || card.image) ? { host: String(card.host || ''), title: String(card.title || ''), image: String(card.image || '') } : null;
+      // large: the page asks for X's big card (twitter:card summary_large_image).
+      macCard = card && (card.title || card.image) ? { host: String(card.host || ''), title: String(card.title || ''), image: String(card.image || ''), large: card.large === '1' && !!card.image } : null;
       if (!card || !(card.title || card.image)) {
         if (!cmpCard.hidden) {
           cmpCard.hidden = true;
@@ -7990,6 +7991,41 @@
     let macAvatarUrl = '';
     let macAvatarNow = null;
     let macAvatarSent = null;
+    // The quoted or replied-to author's picture for the window's card, a
+    // small data: URL drawn through a canvas, as the reader's own is.
+    const macPics = new Map(); // url → data: URL ('' when it failed); null while loading
+    let macCtxPic = '';
+    let macCtxPicSent = null;
+    function macCtxAvatar(p) {
+      const url = p && p.author && p.author.avatar ? safeUrl(p.author.avatar.replace(/_(normal|mini|x96)\./, '_bigger.')) : '';
+      if (!url || url === '#') return (macCtxPic = '');
+      if (macPics.has(url)) return (macCtxPic = macPics.get(url) || '');
+      macPics.set(url, null);
+      macCtxPic = '';
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const done = (data) => {
+        macPics.set(url, data);
+        const c = compose;
+        const now = c && c.id ? findPost(c.id, c.kind === 'edit') : null;
+        if (!now || !now.author || safeUrl(now.author.avatar.replace(/_(normal|mini|x96)\./, '_bigger.')) !== url) return;
+        macCtxPic = data;
+        if (macCmp && native && native.composeState) native.composeState(macState());
+      };
+      img.onload = () => {
+        try {
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = 48;
+          cv.getContext('2d').drawImage(img, 0, 0, 48, 48);
+          done(cv.toDataURL('image/png'));
+        } catch (e) {
+          done('');
+        }
+      };
+      img.onerror = () => done('');
+      img.src = url;
+      return macCtxPic;
+    }
     function macAvatar() {
       const url = viewer && viewer.avatar ? viewer.avatar.replace(/_(normal|bigger|mini|x96)\./, '_200x200.') : '';
       if (url === macAvatarUrl) return;
@@ -8021,6 +8057,10 @@
       macAvatar();
       const p = c.id ? findPost(c.id, c.kind === 'edit') : null;
       const quoted = p && (c.kind === 'reply' || c.kind === 'quote');
+      // A new window or post: its card's picture goes again.
+      macCtxPicSent = null;
+      if (quoted) macCtxAvatar(p);
+      else macCtxPic = '';
       return {
         key: draftKey(c),
         kind: c.kind,
@@ -8064,6 +8104,8 @@
         drafts: draftList(),
         // The picture, once, when it changes (the window keeps it).
         avatar: macAvatarNow !== null && macAvatarNow !== macAvatarSent ? (macAvatarSent = macAvatarNow) : undefined,
+        // The quoted or replied-to author's picture, once it is drawn.
+        contextAvatar: macCtxPic !== macCtxPicSent ? (macCtxPicSent = macCtxPic) : undefined,
         status,
         busy: !!posting,
         post: cmpPost.textContent || 'Post',

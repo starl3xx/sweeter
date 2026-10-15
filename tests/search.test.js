@@ -18,10 +18,15 @@ test('search form: a query fills the fields and keeps the rest as typed', () => 
   eq(f.rest, 'near:tokyo list:123');
 });
 
-test('search form: a bare OR keeps its words as typed, and fields round-trip', () => {
+test('search form: a bare OR keeps its chain whole, and fields round-trip', () => {
   const f = searchParse('cats OR dogs -filter:replies');
   eq([f.all, f.rest, f.replies], ['', 'cats OR dogs', 'none']);
   eq(searchBuild(f), 'cats OR dogs -filter:replies');
+  // Operators in a chain stay in it: a form edit can't split the choice.
+  const g = searchParse('sweeter from:a OR from:b OR to:c');
+  eq([g.all, g.from, g.to, g.rest], ['sweeter', '', '', 'from:a OR from:b OR to:c']);
+  eq(searchBuild(Object.assign(g, { minLikes: '5' })), 'sweeter from:a OR from:b OR to:c min_faves:5');
+  eq(searchParse('OR cats').rest, 'OR');
   const q = 'sweeter "mac app" (a OR b) -x (from:c OR from:d) filter:links min_faves:3 lang:en';
   eq(searchBuild(searchParse(q)), q);
 });

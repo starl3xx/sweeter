@@ -449,12 +449,18 @@
     const add = (k, v) => (f[k] = f[k] ? f[k] + ' ' + v : v);
     const rest = [];
     const tokens = searchTokens(q);
-    // A bare OR joins the words beside it: those stay as typed.
-    const loose = tokens.includes('OR');
-    for (const t of tokens) {
+    // A bare OR joins the terms beside it into one choice: the chain stays
+    // in the query as typed, in one piece, whatever its terms are.
+    const chained = new Set();
+    tokens.forEach((t, i) => {
+      if (t === 'OR' && i > 0 && i < tokens.length - 1) [i - 1, i, i + 1].forEach((k) => chained.add(k));
+    });
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
       const low = t.toLowerCase();
       let m;
-      if (/^"[^"]+"$/.test(t) && !f.exact) f.exact = t.slice(1, -1);
+      if (chained.has(i) || t === 'OR') rest.push(t);
+      else if (/^"[^"]+"$/.test(t) && !f.exact) f.exact = t.slice(1, -1);
       else if (/^\(.*\)$/.test(t)) {
         const items = t.slice(1, -1).trim().split(/\s+OR\s+/);
         const kind = (re) => items.length > 1 && items.every((x) => re.test(x));
@@ -479,8 +485,8 @@
       else if ((m = /^(min_replies|min_faves|min_retweets):(\d+)$/.exec(low))) f[Object.keys(SEARCH_MIN).find((k) => SEARCH_MIN[k] === m[1])] = m[2];
       else if ((m = /^(since|until):(\d{4}-\d{2}-\d{2})$/.exec(low))) f[m[1]] = m[2];
       else if ((m = /^lang:([a-z]{2,3}(-[a-z]+)?)$/.exec(low)) && !f.lang) f.lang = m[1];
-      else if (!loose && /^-[^\s"():\-][^\s"():]*$/.test(t)) add('none', t.slice(1));
-      else if (!loose && /^[^\s"():\-#@][^\s"():]*$/.test(t)) add('all', t);
+      else if (/^-[^\s"():\-][^\s"():]*$/.test(t)) add('none', t.slice(1));
+      else if (/^[^\s"():\-#@][^\s"():]*$/.test(t)) add('all', t);
       else rest.push(t);
     }
     f.rest = rest.join(' ');

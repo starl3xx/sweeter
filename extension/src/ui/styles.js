@@ -730,6 +730,8 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .cmp-count{font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums}
 .cmp-split{border:0;background:none;color:var(--accent);font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:2px 6px;border-radius:5px;margin-right:6px}
 .cmp-split[hidden]{display:none}
+.keys .kchg{margin-left:6px;font-size:11.5px}
+.keys .krec{font-style:normal;font-size:12px;color:var(--accent)}
 .cmp-split:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .cmp-count.long{color:#E68A2E}
 .cmp-count.over{color:#E64545}

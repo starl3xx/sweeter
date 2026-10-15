@@ -244,14 +244,16 @@
   }
 
   // Move Left / Right: the content script asks for X Pro’s own keyboard
-  // drag on one column’s handle (Space, arrows, Space). X Pro’s sensor reads
+  // drag on one column’s handle (Space, arrows, Space), or on one deck's in
+  // X Pro's Manage Decks (Space, up or down, Space). X Pro’s sensor reads
   // keyCode in this world, so the keys are made here. Nothing else.
   window.addEventListener('message', (e) => {
     const d = e.data;
-    if (e.source !== window || !d || d.__sweeterKeys !== 1 || typeof d.column !== 'string' || !Array.isArray(d.keys) || d.keys.length > 20) return;
-    const box = document.querySelector('[data-rfd-droppable-id="deck-columns"]');
-    const w = box && box.querySelector('[data-rfd-draggable-id="' + CSS.escape(d.column) + '"]');
-    const h = w && w.querySelector('[aria-label^="Reorder column - "]');
+    const deck = d && typeof d.deck === 'string';
+    if (e.source !== window || !d || d.__sweeterKeys !== 1 || (typeof d.column !== 'string' && !deck) || !Array.isArray(d.keys) || d.keys.length > 20) return;
+    const box = document.querySelector(deck ? '[data-rfd-droppable-id="gryphon-manage-decks"]' : '[data-rfd-droppable-id="deck-columns"]');
+    const w = box && box.querySelector('[data-rfd-draggable-id="' + CSS.escape(deck ? d.deck : d.column) + '"]');
+    const h = w && w.querySelector(deck ? '[aria-label="Reorder Deck"]' : '[aria-label^="Reorder column - "]');
     if (!h) return;
     h.focus();
     d.keys.forEach(([code, name], i) => {

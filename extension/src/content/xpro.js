@@ -2388,6 +2388,150 @@
   }
   const deckDialogOpen = () => !!(document.querySelector('[role="dialog"]') || document.querySelector('input[name="deckTitle"]') || /\/i\/decks\/(new|manage|\d+\/edit)/.test(location.pathname));
 
+  // Decks from Sweeter's own sheets, through X Pro's deck pages (verified
+  // 2026-10-14, nothing saved): /i/decks/new and /i/decks/<id>/edit hold
+  // the title (input deckTitle), "Change Emoji <emoji>", whose picker
+  // searches by name ("Search emojis") and lists each emoji as an option,
+  // and Done (and on Edit, Delete Deck). /i/decks/manage lists every deck
+  // with Reorder Deck, Pin or Unpin Deck "<title>", and Done, which saves
+  // the order and the pins; Close leaves them. X Pro's router follows a
+  // pushed path and a popstate, as its own links do.
+  function routeTo(path) {
+    history.pushState(history.state, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+  }
+  const named = (text, root) => Array.from((root || document).querySelectorAll('[role="button"], button')).find((b) => norm(b.textContent) === text && !b.getAttribute('aria-label')) || null;
+  const noVS = (t) => String(t || '').replace(/\uFE0F/g, '');
+  // Closes the deck page Sweeter opened, by its own Close or Back (the
+  // columns' stacks use the same test IDs), or, when it never drew, by
+  // going back from its path.
+  function leaveDeckPage() {
+    const mark = document.querySelector('input[name="deckTitle"], [data-rfd-droppable-id="gryphon-manage-decks"]');
+    const dlg = mark && mark.closest('[role="dialog"]');
+    const c = dlg && dlg.querySelector('[data-testid="app-bar-close"], [data-testid="app-bar-back"]');
+    if (c) c.click();
+    else if (/^\/i\/decks\/(new|manage|\d+\/edit)$/.test(location.pathname)) history.back();
+  }
+  // The deck's emoji from X Pro's picker: the one shown, or found by the
+  // words given (its name, then keywords), and pressed.
+  async function pickDeckEmoji(emoji, words) {
+    const btn = () => document.querySelector('[role="button"][aria-label^="Change Emoji"]');
+    const b = btn();
+    if (!b) return false;
+    if (noVS(b.getAttribute('aria-label').slice(13)) === noVS(emoji)) return true;
+    b.click();
+    const field = await waitFor(() => document.querySelector('input[placeholder="Search emojis"]'), 2000);
+    if (!field) return false;
+    const find = () => Array.from(document.querySelectorAll('[role="option"]')).find((o) => noVS(norm(o.textContent)) === noVS(emoji)) || null;
+    let o = find();
+    for (const w of o ? [] : words || []) {
+      setField(field, w, 'input');
+      if ((o = await waitFor(find, 1200))) break;
+    }
+    if (!o) {
+      dismiss();
+      await waitFor(() => !document.querySelector('input[placeholder="Search emojis"]'), 1000);
+      return false;
+    }
+    o.click();
+    return !!(await waitFor(() => btn() && noVS(btn().getAttribute('aria-label').slice(13)) === noVS(emoji), 1500));
+  }
+  // o: { id (to edit one), title, emoji, words }
+  async function saveDeck(o) {
+    if (dialogOpen()) return { ok: false, reason: 'busy' };
+    routeTo(o.id ? '/i/decks/' + o.id + '/edit' : '/i/decks/new');
+    const t = await waitFor(() => document.querySelector('input[name="deckTitle"]'), 4000);
+    if (!t) {
+      leaveDeckPage();
+      return { ok: false, reason: 'noopen' };
+    }
+    const fail = (reason) => {
+      leaveDeckPage();
+      return { ok: false, reason };
+    };
+    if (o.emoji && !(await pickDeckEmoji(o.emoji, o.words))) return fail('noemoji');
+    t.focus();
+    setField(t, o.title, 'input');
+    if (!(await waitFor(() => t.value === o.title, 1000))) return fail('notyped');
+    const done = await waitFor(() => {
+      const b = named('Done');
+      return b && b.getAttribute('aria-disabled') !== 'true' ? b : null;
+    }, 2000);
+    if (!done) return fail('nodone');
+    done.click();
+    return (await waitFor(() => !document.querySelector('input[name="deckTitle"]'), 5000)) ? { ok: true } : { ok: false, reason: 'nochange' };
+  }
+  // Delete Deck on the deck's Edit page, then X Pro's own confirm (Sweeter
+  // asked first).
+  async function deleteDeck(id) {
+    if (dialogOpen()) return { ok: false, reason: 'busy' };
+    routeTo('/i/decks/' + id + '/edit');
+    const del = await waitFor(() => document.querySelector('input[name="deckTitle"]') && named('Delete Deck'), 4000);
+    if (!del) {
+      leaveDeckPage();
+      return { ok: false, reason: 'noopen' };
+    }
+    del.click();
+    const yes = await waitFor(() => {
+      const d = document.querySelector('[data-testid="confirmationSheetDialog"]');
+      return d && /delete/i.test(d.innerText) ? d.querySelector('[data-testid="confirmationSheetConfirm"]') : null;
+    }, 2500);
+    if (!yes) {
+      leaveDeckPage();
+      return { ok: false, reason: 'noconfirm' };
+    }
+    yes.click();
+    return (await waitFor(() => !document.querySelector('input[name="deckTitle"]') && !document.querySelector('[data-testid="confirmationSheetDialog"]'), 5000)) ? { ok: true } : { ok: false, reason: 'nochange' };
+  }
+  // Manage Decks: pin or unpin one deck, or move it up or down (delta),
+  // then Done.
+  async function manageDeck(id, op, delta) {
+    if (dialogOpen()) return { ok: false, reason: 'busy' };
+    routeTo('/i/decks/manage');
+    const list = () => document.querySelector('[data-rfd-droppable-id="gryphon-manage-decks"]');
+    const row = () => {
+      const l = list();
+      return l ? l.querySelector('[data-rfd-draggable-id="' + CSS.escape(id) + '"]') : null;
+    };
+    if (!(await waitFor(row, 4000))) {
+      leaveDeckPage();
+      return { ok: false, reason: 'noopen' };
+    }
+    if (op === 'pin' || op === 'unpin') {
+      const b = row().querySelector('[aria-label^="' + (op === 'pin' ? 'Pin' : 'Unpin') + ' Deck "]');
+      if (!b || b.getAttribute('aria-disabled') === 'true') {
+        leaveDeckPage();
+        return { ok: false, reason: op === 'unpin' ? 'lastpinned' : 'nopin' };
+      }
+      b.click();
+      if (!(await waitFor(() => row() && row().querySelector('[aria-label^="' + (op === 'pin' ? 'Unpin' : 'Pin') + ' Deck "]'), 1500))) {
+        leaveDeckPage();
+        return { ok: false, reason: 'nochange' };
+      }
+    } else {
+      const order = () => Array.from(list().querySelectorAll('[data-rfd-draggable-id]')).map((x) => x.getAttribute('data-rfd-draggable-id')).join('|');
+      const before = order();
+      const keys = [[32, ' ']];
+      for (let i = 0; i < Math.abs(delta); i++) keys.push(delta > 0 ? [40, 'ArrowDown'] : [38, 'ArrowUp']);
+      keys.push([32, ' ']);
+      window.postMessage({ __sweeterKeys: 1, deck: id, keys }, location.origin);
+      const moved = await waitFor(() => order() !== before, 1500 + keys.length * 160);
+      await wait(keys.length * 150 + 100);
+      if (!moved) {
+        window.postMessage({ __sweeterKeys: 1, deck: id, keys: [[27, 'Escape']] }, location.origin);
+        leaveDeckPage();
+        return { ok: false, reason: 'nomove' };
+      }
+    }
+    const done = named('Done');
+    if (!done) {
+      leaveDeckPage();
+      return { ok: false, reason: 'nodone' };
+    }
+    done.click();
+    return (await waitFor(() => !list(), 4000)) ? { ok: true } : { ok: false, reason: 'nochange' };
+  }
+
   function undoRemove() {
     const t = document.querySelector('[data-testid="undoDeleteToast"]');
     const b = t && Array.from(t.querySelectorAll('button,[role="button"]')).find((x) => (x.textContent || '').trim() === 'Undo');
@@ -2478,5 +2622,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts), saveXDraft: lifted(saveXDraft), openListCreate };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts), saveXDraft: lifted(saveXDraft), saveDeck: lifted(saveDeck), deleteDeck: lifted(deleteDeck), manageDeck: lifted(manageDeck, 300), openListCreate };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

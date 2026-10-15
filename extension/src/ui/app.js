@@ -707,8 +707,8 @@
       '<div class="add-body"></div>' +
       '<div class="pfoot"><span class="afoot">Sweeter adds it through X Pro, so it appears on all your devices.</span></div>' +
       '</div></div>' +
-      '<div class="ask-back" hidden><form class="ask" role="dialog" aria-modal="true"><div class="ask-t"></div><input class="ask-in" type="text" autocomplete="off" spellcheck="false" maxlength="40"><div class="ask-b"><button type="button" data-cmd="ask-no">Cancel</button><button type="submit" class="done">OK</button></div></form></div>' +
-      '<div class="ov-back" hidden><div class="ov" role="dialog" aria-modal="true" aria-label="All decks"><div class="ptitle">All decks<button class="x" type="button" data-cmd="ov-close" aria-label="Close">×</button></div><div class="ov-body"></div><div class="pfoot"><span>Only the deck on screen loads posts. A click switches X Pro to that deck, on all your devices.</span></div></div></div>' +
+      '<div class="ask-back" hidden><form class="ask" role="dialog" aria-modal="true"><div class="ask-t"></div><div class="ask-row"><input class="ask-emo" type="text" autocomplete="off" spellcheck="false" maxlength="16" aria-label="Emoji" title="An emoji: type or paste one (⌃⌘Space)" hidden><input class="ask-in" type="text" autocomplete="off" spellcheck="false" maxlength="40"></div><div class="ask-b"><button type="button" class="ask-x" data-cmd="ask-x" hidden></button><button type="button" data-cmd="ask-no">Cancel</button><button type="submit" class="done">OK</button></div></form></div>' +
+      '<div class="ov-back" hidden><div class="ov" role="dialog" aria-modal="true" aria-label="All decks"><div class="ptitle">All decks<button class="x" type="button" data-cmd="ov-close" aria-label="Close">×</button></div><div class="ov-body"></div><div class="pfoot"><span>Only the deck on screen loads posts. A click switches X Pro to that deck; Up, Down, Pin, Edit, and Delete change it in X Pro. Both reach all your devices.</span></div></div></div>' +
       '<div class="ip-back" hidden><div class="ip" role="dialog" aria-modal="true" aria-label="Icon and color"><div class="ptitle">Icon &amp; Color<button class="x" type="button" data-cmd="ip-cancel" aria-label="Cancel">×</button></div>' +
       '<div class="ip-head"><span class="ip-prev"></span><input class="ip-q" type="search" placeholder="Search icons" aria-label="Search icons" autocomplete="off" spellcheck="false"></div>' +
       '<div class="ip-colors" role="radiogroup" aria-label="Color"></div><div class="ip-body" role="radiogroup" aria-label="Icon"></div>' +
@@ -1658,6 +1658,7 @@
 
     // A small sheet that asks for a name.
     let askDone = null;
+    let askExtra = null; // the sheet's left button (Delete Deck…), when it has one
     // In the Mac app Sweeter’s questions are real macOS alert sheets on the
     // window (Return, Esc and VoiceOver work as in every Mac app); Safari
     // draws its own. Resolves { button: index, -1 for none, text }, or null
@@ -1678,8 +1679,13 @@
         return;
       }
       askBack.querySelector('.ask-t').textContent = title;
+      askBack.querySelector('.ask-emo').hidden = true;
+      askBack.querySelector('.ask-x').hidden = true;
+      askExtra = null;
+      askBack.querySelector('.ask-b .done').textContent = 'OK';
       const input = askBack.querySelector('.ask-in');
       input.value = value || '';
+      input.placeholder = '';
       askDone = onOk;
       askBack.hidden = false;
       input.focus();
@@ -1688,14 +1694,17 @@
     function closeAsk() {
       askBack.hidden = true;
       askDone = null;
+      askExtra = null;
       app.focus({ preventScroll: true });
     }
     askBack.addEventListener('submit', (e) => {
       e.preventDefault();
       const v = askBack.querySelector('.ask-in').value.trim();
+      const emo = askBack.querySelector('.ask-emo');
+      const em = emo.hidden ? '' : emo.value.trim();
       const fn = askDone;
       closeAsk();
-      if (v && fn) fn(v);
+      if (v && fn) fn(v, em);
     });
 
     // ---------- icon and color picker ----------
@@ -1894,8 +1903,15 @@
     }
     function openOverview() {
       const { all, act } = decksNow();
+      // Each deck's controls do what X Pro's Manage Decks does (xpro.manageDeck).
+      const pinnedN = all.filter((d) => d.pinned).length;
+      const ctl = (d, i) => {
+        const name = d.title || 'Untitled';
+        const b = (cmd, label, aria, off, extra) => '<button type="button" data-cmd="' + cmd + '" data-v="' + h(d.id) + '"' + (extra || '') + ' aria-label="' + h(aria) + '"' + (off ? ' disabled' : '') + '>' + h(label) + '</button>';
+        return '<div class="ov-ctl">' + b('ov-move', 'Up', 'Move “' + name + '” up', i === 0, ' data-d="-1"') + b('ov-move', 'Down', 'Move “' + name + '” down', i === all.length - 1, ' data-d="1"') + b('ov-pin', d.pinned ? 'Unpin' : 'Pin', (d.pinned ? 'Unpin “' : 'Pin “') + name + '”', d.pinned && pinnedN < 2) + b('ov-edit', 'Edit…', 'Edit “' + name + '”') + b('ov-del', 'Delete…', 'Delete “' + name + '”', all.length < 2) + '</div>';
+      };
       ovBack.querySelector('.ov-body').innerHTML = all.length
-        ? all.map((d) => '<div class="ov-deck' + (act && act.id === d.id ? ' on' : '') + '"><button type="button" class="ov-dt" data-cmd="ov-deck" data-v="' + h(d.id) + '"><span class="ov-ic">' + h(d.icon || '★') + '</span><b>' + h(d.title || 'Untitled') + '</b>' + (act && act.id === d.id ? '<span class="ov-now">On screen</span>' : '') + (d.pinned ? '' : '<span class="ov-now">Unpinned</span>') + '</button>' +
+        ? all.map((d, i) => '<div class="ov-deck' + (act && act.id === d.id ? ' on' : '') + '"><div class="ov-head"><button type="button" class="ov-dt" data-cmd="ov-deck" data-v="' + h(d.id) + '"><span class="ov-ic">' + h(d.icon || '★') + '</span><b>' + h(d.title || 'Untitled') + '</b>' + (act && act.id === d.id ? '<span class="ov-now">On screen</span>' : '') + (d.pinned ? '' : '<span class="ov-now">Unpinned</span>') + '</button>' + ctl(d, i) + '</div>' +
             '<div class="ov-cols">' + (d.columns.length ? d.columns.filter((c) => !/^\/i\/columns\/picker/.test(c.pathname || '')).map((c) => '<button type="button" class="ov-col" data-cmd="ov-col" data-v="' + h(d.id) + '" data-c="' + h(c.id) + '">' + h(colLabel(c)) + '</button>').join('') : '<span class="ov-none">No columns</span>') + '</div></div>').join('')
         : '<p class="anote">X Pro hasn’t sent its decks yet.</p>';
       closePop();
@@ -4757,12 +4773,112 @@
       pop.__run = run;
       placePop(anchor);
     }
-    // New, Edit and Manage Decks are X Pro’s own dialogs. Deleting a deck
-    // happens there too: X Pro asks, and Sweeter never answers for you.
+    // New and Edit Deck are Sweeter's own sheets, and Manage Decks is All
+    // Decks with each deck's controls; Sweeter makes each change through
+    // X Pro's deck pages (xpro.saveDeck, deleteDeck, manageDeck), so it
+    // reaches every device. Deleting a deck asks first.
     function deckAction(v) {
+      if (v === 'new') return askDeck(null);
+      if (v === 'edit') {
+        const { act } = decksNow();
+        return act ? askDeck(act) : toast('X Pro hasn’t said which deck is open yet.', 'info');
+      }
+      if (v === 'manage') return openOverview();
+    }
+    const DECK_FAIL = {
+      busy: 'X Pro is busy with a dialog. Try again in a moment.',
+      noopen: 'X Pro’s deck page didn’t open. Nothing changed.',
+      noemoji: 'X Pro’s emoji picker didn’t have that emoji. Nothing changed.',
+      notyped: 'X Pro didn’t take the name. Nothing changed.',
+      nodone: 'X Pro didn’t let the change be saved. Nothing changed.',
+      noconfirm: 'X Pro didn’t ask to delete the deck. Nothing was deleted.',
+      lastpinned: 'X Pro keeps at least one deck pinned.',
+      nopin: 'X Pro didn’t offer to pin that deck.',
+      nomove: 'X Pro didn’t move the deck.',
+      nochange: 'X Pro didn’t confirm the change. Check X Pro (⌥X).',
+    };
+    // One deck change at a time, as column changes are; the deck model
+    // X Pro sends back (CreateDeck, UpdateDeck, …) redraws Sweeter.
+    async function runDeckOp(fn, done) {
+      if (deckBusy()) return { ok: false };
+      if (pendingRemove) await commitRemove(pendingRemove);
+      colOp = true;
+      holds.add('deck');
+      let r;
+      try {
+        r = await fn();
+      } catch (e) {
+        r = { ok: false };
+      } finally {
+        holds.delete('deck');
+        colOp = false;
+      }
+      if (remap(true)) for (const c of cols.values()) renderColumn(c, false);
+      if (r && r.ok) {
+        if (done) toast(done, 'decks');
+      } else toast(DECK_FAIL[r && r.reason] || 'X Pro didn’t make that change. Nothing changed.', 'warn');
+      if (!ovBack.hidden) openOverview();
+      return r;
+    }
+    // The first emoji of what was typed, and words X Pro's picker finds it by.
+    function firstEmoji(t) {
+      const v = String(t || '').trim();
+      if (!v) return '';
+      try {
+        const it = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(v)[Symbol.iterator]().next();
+        return it.done ? '' : it.value.segment;
+      } catch (e) {
+        return Array.from(v)[0] || '';
+      }
+    }
+    function emojiWords(e) {
+      const d = emojiData();
+      const i = d.byChar.get(noVS(e));
+      return i == null ? null : [d.all[i].name].concat(d.all[i].keys.slice(0, 4));
+    }
+    function saveDeckFrom(d, name, emoji) {
+      const title = String(name || '').trim().slice(0, 40);
+      if (!title) return toast('A deck needs a name.', 'info');
+      // X Pro's deck emoji come without skin tones: the base emoji.
+      const e = (firstEmoji(emoji) || (d && d.icon) || '').replace(/[\u{1F3FB}-\u{1F3FF}]/gu, '');
+      const words = e ? emojiWords(e) : [];
+      if (e && !words) return toast('Choose one emoji for the deck, or leave it as it is.', 'warn');
+      if (d && title === (d.title || '') && noVS(e) === noVS(d.icon || '')) return;
+      runDeckOp(() => xpro.saveDeck({ id: d ? d.id : null, title, emoji: e, words }), d ? 'Deck saved' : 'Deck “' + title + '” added');
+    }
+    function askDeleteDeck(d) {
+      showConfirm('Delete the deck “' + (d.title || 'Untitled') + '”? Its columns go with it, on every device.', 'Delete Deck', () => runDeckOp(() => xpro.deleteDeck(d.id), 'Deck deleted'));
+    }
+    // New Deck, or Edit Deck: a name and an emoji. A sheet on the Mac app's
+    // window; in Safari, Sweeter's own.
+    function askDeck(d) {
       if (deckBusy()) return;
-      const fn = { new: xpro.newDeck, edit: xpro.editDeck, manage: xpro.manageDecks }[v];
-      if (fn) xproHandoff(() => ({ ok: fn() }), () => xpro.deckDialogOpen());
+      const title = d ? 'Edit Deck' : 'New Deck';
+      const a = macAlert({ title, text: 'The emoji shows beside its name. Sweeter saves it in X Pro, so it appears on all your devices.', input: d ? d.title || '' : '', emoji: (d && d.icon) || '⭐️', buttons: d ? ['Save', 'Cancel', 'Delete Deck…'] : ['Add Deck', 'Cancel'] });
+      if (a) {
+        a.then((r) => {
+          app.focus({ preventScroll: true });
+          if (r.button === 0) saveDeckFrom(d, r.text, r.emoji);
+          else if (r.button === 2 && d) askDeleteDeck(d);
+        });
+        return;
+      }
+      askBack.querySelector('.ask-t').textContent = title;
+      const emo = askBack.querySelector('.ask-emo');
+      emo.hidden = false;
+      emo.value = (d && d.icon) || '⭐️';
+      const extra = askBack.querySelector('.ask-x');
+      extra.hidden = !d;
+      extra.textContent = 'Delete Deck…';
+      askExtra = d ? () => askDeleteDeck(d) : null;
+      askBack.querySelector('.ask-b .done').textContent = d ? 'Save' : 'Add Deck';
+      const input = askBack.querySelector('.ask-in');
+      input.value = d ? d.title || '' : '';
+      input.placeholder = 'Name';
+      askDone = (v, e) => saveDeckFrom(d, v, e);
+      askBack.hidden = false;
+      input.focus();
+      input.select();
     }
     function deckByNumber(n) {
       const { all } = decksNow();
@@ -8924,6 +9040,12 @@
         case 'ask-no':
           closeAsk();
           break;
+        case 'ask-x': {
+          const fn = askExtra;
+          closeAsk();
+          if (fn) fn();
+          break;
+        }
         case 'lay-save':
           saveLayout();
           break;
@@ -9039,6 +9161,20 @@
         case 'ov-col':
           overviewGo(el.dataset.v, el.dataset.c);
           break;
+        case 'ov-move':
+        case 'ov-pin':
+        case 'ov-edit':
+        case 'ov-del': {
+          const d = decksNow().all.find((x) => x.id === el.dataset.v);
+          if (!d) break;
+          if (cmd === 'ov-edit') {
+            closeOverview();
+            askDeck(d);
+          } else if (cmd === 'ov-del') askDeleteDeck(d);
+          else if (cmd === 'ov-pin') runDeckOp(() => xpro.manageDeck(d.id, d.pinned ? 'unpin' : 'pin'), d.pinned ? 'Deck unpinned' : 'Deck pinned');
+          else runDeckOp(() => xpro.manageDeck(d.id, 'move', +el.dataset.d), 'Deck moved');
+          break;
+        }
         case 'asColumn':
           conversationToColumn(c);
           break;

@@ -2408,9 +2408,15 @@
   }
   const named = (text, root) => Array.from((root || document).querySelectorAll('[role="button"], button')).find((b) => norm(b.textContent) === text && !b.getAttribute('aria-label')) || null;
   const noVS = (t) => String(t || '').replace(/\uFE0F/g, '');
+  // Closes the deck page Sweeter opened, by its own Close or Back (the
+  // columns' stacks use the same test IDs), or, when it never drew, by
+  // going back from its path.
   function leaveDeckPage() {
-    const c = document.querySelector('[data-testid="app-bar-close"], [data-testid="app-bar-back"]');
+    const mark = document.querySelector('input[name="deckTitle"], [data-rfd-droppable-id="gryphon-manage-decks"]');
+    const dlg = mark && mark.closest('[role="dialog"]');
+    const c = dlg && dlg.querySelector('[data-testid="app-bar-close"], [data-testid="app-bar-back"]');
     if (c) c.click();
+    else if (/^\/i\/decks\/(new|manage|\d+\/edit)$/.test(location.pathname)) history.back();
   }
   // The deck's emoji from X Pro's picker: the one shown, or found by the
   // words given (its name, then keywords), and pressed.
@@ -2441,7 +2447,10 @@
     if (dialogOpen()) return { ok: false, reason: 'busy' };
     routeTo(o.id ? '/i/decks/' + o.id + '/edit' : '/i/decks/new');
     const t = await waitFor(() => document.querySelector('input[name="deckTitle"]'), 4000);
-    if (!t) return { ok: false, reason: 'noopen' };
+    if (!t) {
+      leaveDeckPage();
+      return { ok: false, reason: 'noopen' };
+    }
     const fail = (reason) => {
       leaveDeckPage();
       return { ok: false, reason };

@@ -4833,7 +4833,8 @@
     }
     function emojiWords(e) {
       const d = emojiData();
-      const i = d.byChar.get(noVS(e));
+      // A skin tone (⌃⌘Space gives one) is looked up as its base emoji.
+      const i = d.byChar.get(noVS(e).replace(/[\u{1F3FB}-\u{1F3FF}]/gu, ''));
       return i == null ? null : [d.all[i].name].concat(d.all[i].keys.slice(0, 4));
     }
     function saveDeckFrom(d, name, emoji) {

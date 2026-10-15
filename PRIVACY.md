@@ -1,6 +1,6 @@
 # Sweeter Privacy Policy
 
-Last updated: October 13, 2026
+Last updated: October 15, 2026
 
 Sweeter is a Mac app and a Safari extension that gives X Pro a different interface. Starl3xx Labs LLC (“we”, “us”) makes it. Sweeter runs on your Mac, inside the X Pro page you are signed in to. We run no server for Sweeter and have no accounts, so we never see who you are.
 
@@ -16,7 +16,7 @@ Sweeter is a Mac app and a Safari extension that gives X Pro a different interfa
 - **Your X sign-in.** You sign in on X’s own pages. Sweeter never reads your password, cookies, or tokens, and never sends them anywhere.
 - **What X Pro shows you.** Sweeter reads the timelines the X Pro page loads in your window and draws them in its own columns. That content stays in memory on your Mac.
 - **Your drafts on X.** Sweeter reads the drafts X Pro loads into the Drafts column of your deck and lists them in its own Drafts, keeping them in memory only. When you save a draft, Sweeter saves it to X through X Pro’s own composer, as you could there, and adds a Drafts column to your deck if it has none. To turn it off: Settings ▸ Media ▸ Drafts.
-- **Your settings and drafts.** Settings, filters, mute filters, layouts, where you stopped reading in each column, and drafts of posts you haven’t sent (their text, for up to 30 days; attached photos and videos are not saved) are saved on your Mac: in `~/Library/Containers/fun.starl3xx.Sweeter` for the Mac app, and in Safari’s storage for the extension. The Mac app also keeps a small log of errors there. Neither is sent anywhere.
+- **Your settings and drafts.** Settings, filters, mute filters, saved and recent searches, layouts, where you stopped reading in each column, and drafts of posts you haven’t sent (their text, for up to 30 days; attached photos and videos are not saved) are saved on your Mac: in `~/Library/Containers/fun.starl3xx.Sweeter` for the Mac app, and in Safari’s storage for the extension. The Mac app also keeps a small log of errors there. Neither is sent anywhere.
 - **Alerts, Shortcuts, and Spotlight.** Banners for new posts are made on your Mac and shown by macOS. Your column titles are offered to Shortcuts and Spotlight on your Mac.
 
 ## Usage counts (Mac app only)

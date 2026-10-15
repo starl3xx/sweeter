@@ -136,7 +136,17 @@ final class ComposeOutline: NSView {
     func hold(_ content: NSView, margins: NSSize) {
         content.translatesAutoresizingMaskIntoConstraints = false
         addSubview(content)
-        if let stack = content as? NSStackView { stack.setHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical) }
+        // Every stack in the card holds its height, the ones inside it too
+        // (a quote's name row): any one left at the default (250) takes
+        // the room when the window is taller than what it holds, and the
+        // card grows with it, the row's names floating in the middle.
+        func hug(_ v: NSView) {
+            if let stack = v as? NSStackView {
+                stack.setHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical)
+                stack.arrangedSubviews.forEach(hug)
+            }
+        }
+        hug(content)
         content.setContentHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical)
         NSLayoutConstraint.activate([
             content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margins.width),

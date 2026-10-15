@@ -25,6 +25,11 @@ test('health: a column’s refresh rhythm, without the older pages', () => {
     s.ingest({ op: 'HomeLatestTimeline', vars: {}, body: page(5) });
     eq(s.cadence('home'), 30000);
     eq(s.get('home').updated, t);
+    // Scrolling down after the last refresh moves updated, not refreshed.
+    const polled = t;
+    t += 3000;
+    s.ingest({ op: 'HomeLatestTimeline', vars: { cursor: s.get('home').cursors.bottom }, body: page(6) });
+    eq([s.get('home').updated, s.get('home').refreshed], [t, polled]);
   } finally {
     Date.now = realNow;
   }

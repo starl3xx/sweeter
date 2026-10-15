@@ -5360,19 +5360,22 @@
     const ago = (ms) => (ms < 60000 ? Math.max(1, Math.round(ms / 1000)) + ' s' : Math.round(ms / 60000) + ' min');
     function healthLine(c) {
       const s = store.get(c.key);
-      if (!s || !s.updated || c.merge || s.kind === 'placeholder' || s.kind === 'conversation') return '';
+      // An older page the reader scrolled to isn't a refresh: s.refreshed.
+      const last = s && (s.refreshed || s.updated);
+      if (!last || c.merge || s.kind === 'placeholder' || s.kind === 'conversation') return '';
       const now = Date.now();
-      const err = s.lastError && s.lastError.at > s.updated ? s.lastError.status : 0;
-      if (err) return 'X refused the last refresh (' + (err === 429 ? 'too many requests' : 'HTTP ' + err) + ') · the last good one was ' + ago(now - s.updated) + ' ago';
+      const err = s.lastError && s.lastError.at > last ? s.lastError.status : 0;
+      if (err) return 'X refused the last refresh (' + (err === 429 ? 'too many requests' : 'HTTP ' + err) + ') · the last good one was ' + ago(now - last) + ' ago';
       const every = store.cadence(c.key);
-      return 'Refreshed ' + ago(now - s.updated) + ' ago' + (every ? ' · about every ' + ago(Math.round(every / 5000) * 5000 || every) : '');
+      return 'Refreshed ' + ago(now - last) + ' ago' + (every ? ' · about every ' + ago(Math.round(every / 5000) * 5000 || every) : '');
     }
     function paintStale() {
       const now = Date.now();
       for (const c of cols.values()) {
         const s = store.get(c.key);
-        const age = s && s.updated && s.kind !== 'placeholder' && s.kind !== 'conversation' ? now - s.updated : 0;
-        const err = age && s.lastError && s.lastError.at > s.updated ? s.lastError.status : 0;
+        const last = s && (s.refreshed || s.updated);
+        const age = last && s.kind !== 'placeholder' && s.kind !== 'conversation' ? now - last : 0;
+        const err = age && s.lastError && s.lastError.at > last ? s.lastError.status : 0;
         const limit = Math.max(75000, 2.5 * (store.cadence(c.key) || 0));
         // Just back on screen: X Pro was throttled meanwhile; give it a
         // moment to refresh before calling a column stale.

@@ -74,6 +74,7 @@
           readAt: readPositions[src.key] || null,
           xUnreadAbove: null,
           updated: 0,
+          refreshed: 0, // the last answer that wasn't an older page (column health)
           order: sources.size,
         };
         sources.set(src.key, s);
@@ -417,7 +418,10 @@
       // Always: the stale clock reads it. The last few refreshes give the
       // column's rhythm (cadence).
       s.updated = Date.now();
-      if (!older) s.refreshes = (s.refreshes || []).concat(s.updated).slice(-6);
+      if (!older) {
+        s.refreshed = s.updated;
+        s.refreshes = (s.refreshes || []).concat(s.updated).slice(-6);
+      }
       if (changed) emit(s.key);
       return s.key;
     }

@@ -454,7 +454,7 @@
     ['⌘ Return', 'Send from the compose window'], ['⌘ S', 'Save the post as a draft'], ['Esc', 'Close compose (it asks to save a draft)'],
     ['⌘ B', 'Bold selected text'], ['⌘ I', 'Italic selected text'],
     ['o', 'Open media or link'], ['Return  →', 'Open the conversation here'],
-    ['⌘ Y', 'Quick Look the post’s photos (Mac app)'],
+    ['⌘ Y', 'Quick Look the post’s photos (Mac app)'], ['p', 'Picture in Picture for the post’s video'],
     ['←', 'Back from a conversation'], ['← →', 'Previous, next photo in the viewer'],
     ['Tab', 'Next column'], ['1 to 9', 'Jump to a column'],
     ['Space', 'Page down'], ['⌘ ↑  ⌘ ↓', 'Top (pins), bottom'],
@@ -699,6 +699,7 @@
       '</div></div>' +
       '<div class="lb" hidden role="dialog" aria-label="Media viewer">' +
       '<div class="lb-top"><span class="lb-count"></span><span class="grow"></span><a class="lb-orig" href="#" target="_blank" rel="noopener noreferrer">Open original</a>' +
+      '<button class="lb-pip" type="button" data-cmd="lb-pip" hidden title="Play in a window above every app (p)">Picture in Picture</button>' +
       '<button class="lb-close" type="button" data-cmd="lb-close" aria-label="Close (Esc)">' + icon('x') + '</button></div>' +
       '<div class="lb-stage"><button class="lb-nav lb-prev" type="button" data-cmd="lb-prev" aria-label="Previous (←)">‹</button><div class="lb-media"></div>' +
       '<button class="lb-nav lb-next" type="button" data-cmd="lb-next" aria-label="Next (→)">›</button></div>' +
@@ -3257,6 +3258,8 @@
         const gif = m.type === 'gif';
         lbMedia.innerHTML = '<video src="' + h(safeUrl(m.videoUrl)) + '" poster="' + h(sized(m.url, 'small')) + '" playsinline autoplay' + (gif ? ' loop muted' : ' controls') + '></video>';
       }
+      shadow.querySelector('.lb-pip').hidden = true;
+      if (m.type === 'video') lbWatch(lbMedia.querySelector('video'));
       const many = lb.items.length > 1;
       shadow.querySelector('.lb-count').textContent = many ? lb.i + 1 + ' of ' + lb.items.length : '';
       shadow.querySelector('.lb-prev').hidden = !many;
@@ -8843,6 +8846,164 @@
       m.removeAttribute('data-video');
     }
 
+    // ---------- Picture in Picture ----------
+    // The Mac’s floating video window, above every app. WebKit starts it
+    // only within a few seconds of a click or a key press, and only for a
+    // video loaded far enough to know its size. A post’s video plays from a
+    // holder outside the columns, so a redraw of the post can’t end it, and
+    // the viewer’s video moves there when it starts, so the viewer can
+    // close. The window’s close button pauses the video and ends it; its
+    // return button shows it in the viewer again, playing or paused.
+    let pip = null; // { v, post, index, closing }: the video in the window now
+    let pipStarting = false;
+    function pipHold(doc) {
+      const root = doc === document ? shadow : doc.body;
+      let el = root.querySelector('.pip-hold');
+      if (!el) {
+        el = doc.createElement('div');
+        el.className = 'pip-hold';
+        el.setAttribute('aria-hidden', 'true');
+        el.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;overflow:hidden;opacity:0;pointer-events:none';
+        root.appendChild(el);
+      }
+      return el;
+    }
+    // WebKit says once a video has loaded; before that, only whether the
+    // page may ask at all (the Mac app turns PiP on in ViewController).
+    function pipAble(v) {
+      if (!v || typeof v.requestPictureInPicture !== 'function' || v.ownerDocument.pictureInPictureEnabled === false) return false;
+      return v.readyState < 1 || typeof v.webkitSupportsPresentationMode !== 'function' || v.webkitSupportsPresentationMode('picture-in-picture');
+    }
+    // The post’s first video, else its quoted post’s: [post, index].
+    function videoAt(p) {
+      for (const q of [p, p && p.quote]) {
+        const i = q && !q.unavailable ? (q.media || []).findIndex((m) => m.type === 'video' && safeUrl(m.videoUrl || '') !== '#') : -1;
+        if (i >= 0) return [q, i];
+      }
+      return null;
+    }
+    // A post’s video, from p on the post or its menu. cell: the post on
+    // screen, whose own player (if it has started) sets where PiP starts.
+    async function pipPost(p, i, cell) {
+      const m = p && (p.media || [])[i];
+      const url = m && m.type === 'video' ? safeUrl(m.videoUrl || '') : '#';
+      if (url === '#') return toast('This post has no video.', 'info');
+      if (pipStarting) return;
+      // p again closes the window, as its close button does (paused, so
+      // the viewer doesn't open with it).
+      if (pip && pip.post.id === p.id && pip.index === i) {
+        pip.closing = true;
+        pip.v.pause();
+        pip.v.ownerDocument.exitPictureInPicture().catch(() => {});
+        return;
+      }
+      const doc = cell ? cell.ownerDocument : document;
+      const own = cell && cell.dataset.id === p.id ? cell.querySelector('.media .m[data-i="' + i + '"] video') : null;
+      const v = doc.createElement('video');
+      v.playsInline = true;
+      v.preload = 'auto';
+      v.poster = sized(m.url, 'small');
+      v.src = url;
+      if (own && own.currentTime) v.currentTime = own.currentTime;
+      pipHold(doc).appendChild(v);
+      // Started in the key press itself, when WebKit lets a video play
+      // with its sound.
+      const played = v.play();
+      if (played && played.catch) played.catch(() => {});
+      pipStarting = true;
+      try {
+        if (v.readyState < 1) {
+          await new Promise((ok, no) => {
+            v.addEventListener('loadedmetadata', ok, { once: true });
+            v.addEventListener('error', no, { once: true });
+            setTimeout(no, 4000);
+          });
+        }
+        await v.requestPictureInPicture();
+      } catch (e) {
+        pipDrop(v);
+        toast('Picture in Picture didn’t start. Open the video and try its Picture in Picture button.', 'info');
+        return;
+      } finally {
+        pipStarting = false;
+      }
+      if (own) own.pause();
+      watchPip(v, p, i);
+    }
+    function watchPip(v, post, index) {
+      const me = { v, post, index, closing: false };
+      pip = me;
+      v.removeAttribute('data-obs');
+      if (io) io.unobserve(v);
+      // WebKit’s close button pauses the video just before the window goes
+      // (its return button doesn’t), so a pause in the last moment is a
+      // close. One paused earlier, from the window’s own play button or at
+      // the end, comes back to the viewer like a playing one.
+      let pausedAt = 0;
+      const paused = () => (pausedAt = Date.now());
+      const left = () => {
+        v.removeEventListener('leavepictureinpicture', left);
+        // A moment later: the close button’s pause has arrived by then, and
+        // so has another video that took the window.
+        setTimeout(() => {
+          v.removeEventListener('pause', paused);
+          if (pip === me) pip = null;
+          if (!v.closest('.pip-hold')) return;
+          const closed = me.closing || (v.paused && Date.now() - pausedAt < 1500);
+          if (!closed && !pip && !pipStarting && v.ownerDocument === document) pipBack(v, post, index);
+          else pipDrop(v);
+        }, 300);
+      };
+      v.addEventListener('pause', paused);
+      v.addEventListener('leavepictureinpicture', left);
+    }
+    // The return button: the viewer opens on the post with this video, as
+    // it was in the window.
+    function pipBack(v, post, index) {
+      openLightbox(post, index);
+      const fresh = lb && lb.items[lb.i] === post.media[index] ? lbMedia.querySelector('video') : null;
+      if (!fresh) return pipDrop(v);
+      fresh.removeAttribute('src');
+      fresh.load();
+      fresh.replaceWith(v);
+      v.controls = true;
+      lbWatch(v);
+    }
+    function pipDrop(v) {
+      v.pause();
+      v.removeAttribute('src');
+      v.load();
+      v.remove();
+    }
+    // The viewer’s video: its button, p, or its own controls’ PiP button.
+    function lbWatch(v) {
+      const btn = shadow.querySelector('.lb-pip');
+      const m = lb && lb.items[lb.i];
+      btn.hidden = !m || m.type !== 'video' || !pipAble(v);
+      if (!btn.hidden && v.readyState < 1) {
+        v.addEventListener('loadedmetadata', () => {
+          if (lbMedia.contains(v)) btn.hidden = !pipAble(v);
+        }, { once: true });
+      }
+      if (v.__pipWatched) return;
+      v.__pipWatched = true;
+      v.addEventListener('enterpictureinpicture', () => {
+        if (!lb || !lbMedia.contains(v)) return;
+        const post = lb.post;
+        const index = (post.media || []).indexOf(lb.items[lb.i]);
+        // Moved in one step, so it plays on; then the viewer can close.
+        pipHold(document).appendChild(v);
+        closeLightbox();
+        watchPip(v, post, index);
+      });
+    }
+    function lbPip() {
+      const v = lb && lbMedia.querySelector('video');
+      if (!v || lb.items[lb.i].type !== 'video') return;
+      if (!pipAble(v)) return toast('Picture in Picture isn’t available here.', 'info');
+      v.requestPictureInPicture().catch(() => toast('Picture in Picture didn’t start. Try its button in the video’s controls.', 'info'));
+    }
+
     // ---------- clicks ----------
 
     function run(cmd, el) {
@@ -8867,6 +9028,9 @@
           break;
         case 'lb-close':
           closeLightbox();
+          break;
+        case 'lb-pip':
+          lbPip();
           break;
         case 'lb-prev':
           stepLightbox(-1);
@@ -9732,16 +9896,18 @@
       };
     }
 
-    function videoMenu(p, index, url) {
+    function videoMenu(p, index, url, cell) {
       return {
         items: [
           { id: 'play', title: 'Play Video', symbol: 'play.rectangle' },
+          p.media[index] && p.media[index].type === 'video' ? { id: 'pip', title: 'Picture in Picture', symbol: 'pip.enter' } : null,
           { separator: true },
           url && url !== '#' ? { id: 'copyUrl', title: 'Copy Video Address', symbol: 'link' } : null,
           { id: 'browser', title: 'Open Post in Browser', symbol: 'safari' },
         ],
         run: {
           play: () => openLightbox(p, index),
+          pip: () => pipPost(p, index, cell),
           copyUrl: () => copyText(url, 'Video address copied'),
           browser: () => openUrl(p.url),
         },
@@ -9762,6 +9928,7 @@
           { separator: true },
           { id: 'open', title: 'Open Conversation', symbol: 'bubble.left.and.bubble.right' },
           p.media.length ? { id: 'media', title: p.media.length > 1 ? 'View Media' : p.media[0].type === 'photo' ? 'View Image' : 'Play Video', symbol: 'photo' } : null,
+          videoAt(p) ? { id: 'pip', title: 'Picture in Picture', symbol: 'pip.enter' } : null,
           link ? { id: 'link', title: 'Open Link', symbol: 'arrow.up.right.square' } : null,
           { separator: true },
           { id: 'copyLink', title: 'Copy Link to Post', symbol: 'link' },
@@ -9784,6 +9951,10 @@
           bookmark: () => doBookmark(p.id, ref),
           open: () => openDetail(c || colOfSrc(key), p),
           media: () => openLightbox(p, 0),
+          pip: () => {
+            const at = videoAt(p);
+            if (at) pipPost(at[0], at[1], cell);
+          },
           link: () => openUrl(link.getAttribute('href')),
           copyLink: () => copyText(p.url, 'Link copied'),
           copyText: () => copyText(p.plain, 'Text copied'),
@@ -9961,7 +10132,7 @@
       if (ph && p) return imageMenu(p, Number(ph.dataset.i) || 0, ph.dataset.photo);
       if (t.closest('.quote .qm') && p && p.quote && p.quote.media.length && p.quote.media[0].type === 'photo') return imageMenu(p.quote, 0, p.quote.media[0].url + '?name=orig');
       const vd = t.closest('.media .m[data-video], .media .m[data-auto]');
-      if (vd && p) return videoMenu(p, Number(vd.dataset.i) || 0, vd.dataset.video);
+      if (vd && p) return videoMenu(p, Number(vd.dataset.i) || 0, vd.dataset.video, cell);
       const a = t.closest('a[href]');
       if (a) {
         const href = a.getAttribute('href');
@@ -11017,6 +11188,7 @@
         if (e.key === 'ArrowRight') stepLightbox(1);
         else if (e.key === 'ArrowLeft') stepLightbox(-1);
         else if (e.key === 'Escape' || e.key === ' ') closeLightbox();
+        else if (e.key === 'p') lbPip();
         else if (e.key === '=' || e.key === '+') lbZoomBy(1.5);
         else if (e.key === '-') lbZoomBy(1 / 1.5);
         else if (e.key === '0') lbFitNow(true);
@@ -11217,6 +11389,13 @@
         case 'b': {
           const sp = selectedPost();
           if (sp) doBookmark(sp.id, sp.key);
+          return true;
+        }
+        case 'p': {
+          const sp = selectedPost();
+          const at = sp && videoAt(findPost(sp.id));
+          if (at) pipPost(at[0], at[1], sp.cell);
+          else if (sp) toast('This post has no video.', 'info');
           return true;
         }
         // X Pro's own: mute (u) and block (x) the author, on X.

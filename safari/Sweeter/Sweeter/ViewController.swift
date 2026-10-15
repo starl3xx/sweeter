@@ -130,6 +130,17 @@ class ViewController: NSViewController, WKNavigationDelegate, WKUIDelegate, WKSc
             translucentSidebar = true
         }
         webView.underPageBackgroundColor = .clear
+        // Picture in Picture: WebKit leaves it off in an app's web view on
+        // the Mac (Safari turns it on for itself), so neither a video's PiP
+        // button nor requestPictureInPicture works until it is allowed.
+        // WebKit offers it only as _setAllowsPictureInPictureMediaPlayback:
+        // (checked on this SDK, off by default); key-value coding reaches it
+        // through "allowsPictureInPictureMediaPlayback". Pop-out windows get
+        // their configuration from this one, preferences and all.
+        let prefs = webView.configuration.preferences
+        if prefs.responds(to: NSSelectorFromString("_setAllowsPictureInPictureMediaPlayback:")) {
+            prefs.setValue(true, forKey: "allowsPictureInPictureMediaPlayback")
+        }
 
         // Shown at once, before the page exists, so launch never flashes blank.
         let launch = LaunchCover(settings: storage.get(["settings"])["settings"] as? [String: Any] ?? [:])

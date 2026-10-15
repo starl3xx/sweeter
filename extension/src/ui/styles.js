@@ -916,7 +916,8 @@ kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;border:1px solid var
 .lb-prev{left:12px}.lb-next{right:12px}
 .lb-top{position:absolute;top:10px;left:16px;right:10px;display:flex;align-items:center;gap:12px;z-index:1;font-size:13px;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.75)}
 .lb-top .grow{flex:1}
-.lb-top a{color:rgba(255,255,255,.85);text-decoration:none;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:3px 9px;font-size:12px}
+.lb-top a,.lb-top .lb-pip{color:rgba(255,255,255,.85);text-decoration:none;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:3px 9px;font-size:12px}
+.lb-top .lb-pip{background:none;font:inherit;font-size:12px;cursor:pointer}
 .lb-close{width:32px;height:32px;border-radius:50%;border:0;background:rgba(255,255,255,.12);color:#fff;display:grid;place-items:center;cursor:pointer}
 .lb-close svg{width:16px;height:16px}
 .lb-cap{flex:0 0 auto;padding:10px 20px 18px;max-width:760px;margin:0 auto;text-align:center;font-size:13px;line-height:1.4;color:rgba(255,255,255,.85)}
@@ -1247,7 +1248,7 @@ button:active:not([disabled]){scale:.97}
 .gif-cols button:hover{box-shadow:0 0 0 2px var(--accent-solid)}
 .dback:hover{background:var(--tint)}
 .lb-nav:hover{background:rgba(255,255,255,.24)}
-.lb-top a:hover{background:rgba(255,255,255,.12)}
+.lb-top a:hover,.lb-top .lb-pip:hover{background:rgba(255,255,255,.12)}
 }
 `;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

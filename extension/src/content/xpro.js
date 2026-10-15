@@ -414,6 +414,35 @@
     return { ok: !!done };
   }
 
+  // A vote in the post's poll (X Pro's card, module 153256, read
+  // 2026-10-14): until the reader votes, or the poll ends, or on their own
+  // post, cardPoll holds a radiogroup with a radio button per choice, in
+  // order, each labelled with its choice. A press votes at once, and the
+  // card turns to its results (a list).
+  async function votePoll(id, mapping, index, label, hint) {
+    const r = await reveal(id, mapping, hint);
+    if (!r) return { ok: false, reason: 'notfound' };
+    try {
+      const art = r.art;
+      const poll = art.querySelector('[data-testid="cardPoll"]');
+      if (!poll) return { ok: false, reason: 'nopoll' };
+      const group = poll.querySelector('[role="radiogroup"]');
+      if (!group) return { ok: false, reason: 'closed' };
+      const btn = Array.from(group.querySelectorAll('[role="radio"]'))[index - 1];
+      if (!btn || norm(btn.textContent) !== norm(label)) return { ok: false, reason: 'nochoice' };
+      if (btn.getAttribute('aria-disabled') === 'true' || btn.disabled) return { ok: false, reason: 'closed' };
+      btn.click();
+      const done = await waitFor(() => {
+        const a = current(art, id);
+        const p = a && a.querySelector('[data-testid="cardPoll"]');
+        return p && !p.querySelector('[role="radiogroup"]') && p.querySelector('[role="list"]') ? true : null;
+      }, 4000);
+      return { ok: !!done };
+    } finally {
+      r.restore();
+    }
+  }
+
   async function setReposted(id, mapping, want, hint) {
     const r = await reveal(id, mapping, hint);
     if (!r) return { ok: false, reason: 'notfound' };
@@ -2661,5 +2690,5 @@
   }
   const lifted = (fn, linger) => (...args) => awake(() => fn(...args), linger);
 
-  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts), saveXDraft: lifted(saveXDraft), saveDeck: lifted(saveDeck), deleteDeck: lifted(deleteDeck), manageDeck: lifted(manageDeck, 300), openListCreate };
+  Sweeter.xpro = { makeCopy, convertToSearch, changeBack, moveToDeck, openReportList, addBookmarks, canClear, moveColumn: lifted(moveColumn, 300), stackToColumn, conversationToColumn, profileToColumn, renameColumn: lifted(renameColumn), clearInXPro, showLatestInXPro, openSearchEditor, editSearch: lifted(editSearch), drawerOpen: (id) => drawerOpen(id), closeDrawer, switchDeck, newDeck: () => deckLink('New Deck'), editDeck: () => deckLink('Edit Deck'), manageDecks: () => deckLink('Manage Decks'), deckDialogOpen, addColumn, openListPicker, chooseList, removePicker, addSearch: lifted(addSearch), addFromTab, removeColumn, undoRemove, popStack, wrappers, columnWrap, delegated: (mapping) => scopeOf(mapping) === false, viewerHandle, openProfile, closeProfile, setFollowing, readProfileMenu, profileAction, readPostMenu, postAction, profileTab, dialogOpen, openDetail, closeDetail, loadArticle, editorPoint, order, loadOlder, viewer, domColumns, findArticle, setLiked, setReposted, setBookmarked, votePoll, openComposer: lifted(openComposer), composerOpen, gifSearchOnce, gifClose, fillAndPost: lifted(fillAndPost), answerAltPrompt: lifted(answerAltPrompt), prefill: lifted(prefill), clearEditor: lifted(clearEditor), closePanel, openXDraft: lifted(openXDraft), deleteXDrafts: lifted(deleteXDrafts), saveXDraft: lifted(saveXDraft), saveDeck: lifted(saveDeck), deleteDeck: lifted(deleteDeck), manageDeck: lifted(manageDeck, 300), openListCreate };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

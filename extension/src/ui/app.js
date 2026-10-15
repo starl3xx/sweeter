@@ -6134,6 +6134,34 @@
       delegated: 'That column acts as another account in X Pro, so nothing changed.',
     };
 
+    // A vote in a post's poll, pressed in X Pro's own card. It shows at
+    // once, as X Pro's does, and goes back if X Pro doesn't take it.
+    const VOTE_FAIL = {
+      nopoll: 'X Pro doesn’t show this poll, so nothing was voted.',
+      closed: 'X Pro shows this poll’s results: it has ended, or you voted elsewhere.',
+      nochoice: 'X Pro’s poll doesn’t match this one any more, so nothing was voted.',
+    };
+    async function doVote(id, key, i) {
+      if (refuseDelegated(key)) return;
+      const p = findPost(id);
+      const c = p && !p.unavailable && p.card;
+      if (!c || c.kind !== 'poll' || c.selected || !c.choices[i - 1]) return;
+      const label = c.choices[i - 1].label;
+      const base = c.choices[i - 1].count;
+      // Absolute, so a post that shares its card with a copy counts once.
+      const set = (on) => (q) => {
+        if (!q.card || q.card.kind !== 'poll' || !q.card.choices[i - 1]) return;
+        q.card.selected = on ? i : null;
+        q.card.choices[i - 1].count = base + (on ? 1 : 0);
+      };
+      updatePost(id, set(true));
+      const r = await xpro.votePoll(id, target(key).m, i, label, hintFor(id, key));
+      if (!r.ok) {
+        updatePost(id, set(false));
+        toast(VOTE_FAIL[r.reason] || FAIL[r.reason] || 'X Pro didn’t take that vote. Try again.', 'warn');
+      }
+    }
+
     async function doLike(id, key) {
       if (refuseDelegated(key)) return;
       const p = findPost(id);
@@ -9533,6 +9561,9 @@
             case 'xmenu':
               showPostXMenu(cell.dataset.id, key, act);
               break;
+            case 'vote':
+              doVote(cell.dataset.id, key, Number(act.dataset.i));
+              break;
             case 'more-text': {
               const id = cell.dataset.id;
               const open = !expanded.has(id);
@@ -10303,6 +10334,7 @@
           return openCompose('reply', id, ref);
         }
         if (a === 'copy') return copyText(cell.dataset.url, 'Link copied');
+        if (a === 'vote') return doVote(id, ref, Number(act.dataset.i));
         if (a === 'more-text') {
           if (expanded.has(id)) expanded.delete(id);
           else expanded.add(id);

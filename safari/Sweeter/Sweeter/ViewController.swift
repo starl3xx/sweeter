@@ -1636,6 +1636,8 @@ final class LiveVideoWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, W
         window.isReleasedWhenClosed = false
         window.title = "Live Video"
         window.tabbingMode = .disallowed
+        // Beside Sweeter in full screen too, as the compose window is.
+        window.collectionBehavior = [.fullScreenAuxiliary]
         window.contentView = web
         window.delegate = self
         window.minSize = NSSize(width: 480, height: 320)
@@ -1698,8 +1700,13 @@ final class LiveVideoWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, W
         const all = Array.from(document.querySelectorAll('video'));
         return all.find((v) => !v.paused) || all.find((v) => v.readyState > 0) || all[0] || null;
       };
+      // In the window by either API: the standard one, or WebKit's own
+      // presentation mode (which pictureInPictureElement doesn't report).
+      const inWindow = () => Array.from(document.querySelectorAll('video')).find((v) => v.webkitPresentationMode === 'picture-in-picture');
       const toggle = () => {
         if (document.pictureInPictureElement) return void document.exitPictureInPicture().catch(() => {});
+        const shown = inWindow();
+        if (shown) return void shown.webkitSetPresentationMode('inline');
         const v = video();
         if (!v) return;
         const fallback = () => { if (v.webkitSetPresentationMode) v.webkitSetPresentationMode('picture-in-picture'); };

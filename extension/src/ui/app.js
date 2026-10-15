@@ -10249,6 +10249,12 @@
         showMain();
         return run(sc.dataset.cmd, sc);
       }
+      // Its photo opens as it does in the main column (no post to show it in).
+      const sph = t.closest('.cell.sched [data-photo]');
+      if (sph) {
+        e.preventDefault();
+        return openUrl(sph.dataset.photo);
+      }
       const cell = t.closest('.cell[data-id]');
       const act = t.closest('[data-act]');
       if (act && cell) {

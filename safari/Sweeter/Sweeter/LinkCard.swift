@@ -54,6 +54,9 @@ enum LinkCard {
             "title": String(title.prefix(300)),
             "site": String((tags["og:site_name"] ?? "").prefix(100)),
             "image": image,
+            // X draws a page that asks for summary_large_image as a big
+            // card, the picture across the post; anything else, small.
+            "large": (tags["twitter:card"] ?? "").lowercased() == "summary_large_image" ? "1" : "",
         ]
     }
 

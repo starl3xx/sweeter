@@ -93,6 +93,8 @@ enum SweeterColor {
     static var text: NSColor { pick({ $0.t1 }, hex(0x00_0000), hex(0xFF_FFFF)) }
     static var secondary: NSColor { pick({ $0.t3 }, hex(0x6E_6E73), hex(0x98_989D)) }
     static var line: NSColor { pick({ $0.line }, NSColor.black.withAlphaComponent(0.14), NSColor.white.withAlphaComponent(0.16)) }
+    /// A card on the paper (a quoted post): the text color, faintly.
+    static var card: NSColor { pick({ $0.t1.withAlphaComponent($0.dark ? 0.05 : 0.035) }, NSColor.black.withAlphaComponent(0.035), NSColor.white.withAlphaComponent(0.05)) }
     static var link: NSColor { pick({ $0.accent }, hex(0x0A_66D8), hex(0x4D_A3FF)) }
     /// The solid accent (the bird's pink in Sweeter's theme): Post and a
     /// chosen chip, the text on it, the ring.
@@ -117,14 +119,25 @@ final class ComposeFlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
-/// A rounded outline around what it holds (the quoted post, a link's
-/// card), as tall as that plus its margins. An NSBox can't be: it sizes its
+/// A rounded card around what it holds (the quoted post, a link's card),
+/// as tall as that plus its margins. An NSBox can't be: it sizes its
 /// content view, never the other way round, so a box that holds its height
-/// shrank to nothing and its text spilled over the label above it.
+/// shrank to nothing and its text spilled over the label above it. The
+/// content holds its own height too (a stack view hugs loosely, so the card
+/// took a tall window's spare room); filled, it is a soft tint on the paper.
 final class ComposeOutline: NSView {
+    var filled = false {
+        didSet { needsDisplay = true }
+    }
+    var radius: CGFloat = 8 {
+        didSet { needsDisplay = true }
+    }
+
     func hold(_ content: NSView, margins: NSSize) {
         content.translatesAutoresizingMaskIntoConstraints = false
         addSubview(content)
+        if let stack = content as? NSStackView { stack.setHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical) }
+        content.setContentHuggingPriority(NSLayoutConstraint.Priority(506), for: .vertical)
         NSLayoutConstraint.activate([
             content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margins.width),
             content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.width),
@@ -134,10 +147,98 @@ final class ComposeOutline: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 8, yRadius: 8)
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
+        if filled {
+            SweeterColor.card.setFill()
+            path.fill()
+        }
         path.lineWidth = 1
-        NSColor.separatorColor.setStroke()
+        (filled ? SweeterColor.line : NSColor.separatorColor).setStroke()
         path.stroke()
+    }
+}
+
+/// A small round picture (a quoted post's author), or its letter.
+final class ComposeMiniAvatar: NSView {
+    private let picture = CALayer()
+    private let letter = NSTextField(labelWithString: "")
+
+    init(size: CGFloat) {
+        super.init(frame: NSRect(x: 0, y: 0, width: size, height: size))
+        wantsLayer = true
+        picture.contentsGravity = .resizeAspectFill
+        picture.masksToBounds = true
+        layer?.addSublayer(picture)
+        letter.font = .systemFont(ofSize: size * 0.5, weight: .semibold)
+        letter.alignment = .center
+        letter.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(letter)
+        translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: size),
+            heightAnchor.constraint(equalToConstant: size),
+            letter.centerXAnchor.constraint(equalTo: centerXAnchor),
+            letter.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        setAccessibilityElement(false)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    /// A data: URL of the picture, or "" for the handle's letter.
+    func show(dataURL: String, handle: String) {
+        letter.stringValue = String(handle.drop { $0 == "@" }.prefix(1)).uppercased()
+        var image: NSImage?
+        if let comma = dataURL.firstIndex(of: ","), dataURL.hasPrefix("data:image/"), let data = Data(base64Encoded: String(dataURL[dataURL.index(after: comma)...])) {
+            image = NSImage(data: data)
+        }
+        picture.contents = image?.layerContents(forContentsScale: window?.backingScaleFactor ?? 2)
+        letter.isHidden = image != nil
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.frame = bounds
+        picture.cornerRadius = bounds.width / 2
+        layer?.cornerRadius = bounds.width / 2
+        CATransaction.commit()
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        layer?.backgroundColor = SweeterColor.discSky.cgColor
+        letter.textColor = SweeterColor.discSkyText
+    }
+}
+
+/// A picture that fills its frame, cropped to it, with rounded corners (a
+/// link's big card).
+final class ComposeFillImage: NSView {
+    var image: NSImage? {
+        didSet { layer?.contents = image?.layerContents(forContentsScale: window?.backingScaleFactor ?? 2) }
+    }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.contentsGravity = .resizeAspectFill
+        layer?.masksToBounds = true
+        layer?.cornerRadius = 12
+        translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        layer?.backgroundColor = SweeterColor.card.cgColor
+        layer?.borderColor = SweeterColor.line.cgColor
+        layer?.borderWidth = 1
     }
 }
 

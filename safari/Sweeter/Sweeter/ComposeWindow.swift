@@ -761,7 +761,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
 
         // The floating bar: the tools in three groups, X Pro's, the count and Post.
         dock.radius = 27
-        dock.lift = (0.12, 18, 7)
+        dock.lift = (0.16, 18, 8)
         dock.translatesAutoresizingMaskIntoConstraints = false
         let bar = NSStackView()
         bar.spacing = 2
@@ -793,7 +793,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         let groove = ComposeGroove()
         for v in [moreButton, groove, count, postButton] as [NSView] { bar.addArrangedSubview(v) }
         bar.setCustomSpacing(8, after: moreButton)
-        bar.setCustomSpacing(12, after: groove)
+        bar.setCustomSpacing(10, after: groove)
         bar.setCustomSpacing(12, after: count)
         dock.addSubview(bar)
         content.addSubview(dock)

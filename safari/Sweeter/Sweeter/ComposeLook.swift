@@ -968,10 +968,16 @@ final class ComposeCountRing: NSView {
         arc.stroke()
     }
 
-    /// The page's count (“116 / 280”, “1,204 · long post”) as a share of 280.
+    /// The number in the page's count (“116 / 280”, “1,204 · long post”),
+    /// as the page wrote it: some locales group thousands with a space.
+    static func number(_ count: String) -> String {
+        let end = count.range(of: " / ")?.lowerBound ?? count.range(of: " · ")?.lowerBound ?? count.endIndex
+        return String(count[..<end])
+    }
+
+    /// The page's count as a share of 280.
     func show(_ count: String, level: String) {
-        let digits = count.prefix { $0.isNumber || $0 == "," || $0 == "." }
-        let n = Double(digits.filter(\.isNumber)) ?? 0
+        let n = Double(Self.number(count).filter(\.isNumber)) ?? 0
         used = CGFloat(n / 280)
         self.level = level
         isHidden = count.isEmpty
@@ -1034,7 +1040,7 @@ final class ComposeCount: NSView {
     /// The page's count (“116 / 280”, “1,204 · long post”) and its level.
     func show(_ count: String, level: String) {
         ring.show(count, level: level)
-        number.stringValue = count.split(separator: " ").first.map(String.init) ?? ""
+        number.stringValue = ComposeCountRing.number(count)
         let warn: NSColor? = level == "over" ? .systemRed : level == "long" ? .systemOrange : nil
         number.textColor = warn ?? SweeterColor.text
         caption.attributedStringValue = Self.captionText(level == "over" ? "TOO LONG" : level == "long" ? "LONG POST" : "OF 280", warn ?? SweeterColor.secondary)

@@ -68,6 +68,7 @@ final class ComposeGifCell: NSCollectionViewItem {
         let v = NSView()
         v.wantsLayer = true
         v.layer?.cornerRadius = 6
+        v.layer?.cornerCurve = .continuous
         v.layer?.masksToBounds = true
         v.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
         picture.contentsGravity = .resizeAspectFill

@@ -4,11 +4,24 @@
 //
 //  Sweeter's own look inside the Mac compose window: the window and its
 //  toolbar stay the Mac's, and what sits in the box takes the theme's
-//  colors (in Sweeter's theme, the icon's sky and the bird's pink) and
-//  rounder shapes: pills, chips, lettered circles and a counter ring.
+//  colors (in Sweeter's theme, the icon's sky and the bird's pink).
+//
+//  The shapes are sculpted, as the icon is: soft forms with sharp edges.
+//  - Light comes from above. A raised part (the floating bar, Post, a
+//    chip) has a glint along its top edge, a crisp line along its foot,
+//    and a soft shadow under it in the theme's ink, never plain grey.
+//  - Raised parts act; carved parts hold. A tool under the pointer, a tool
+//    that is on, and Add Another Post sit in wells pressed into the paper.
+//  - Corners are continuous (the icon's squircle), never circular arcs. A
+//    part inside another keeps the same margin all round, so its curve
+//    follows the outer one: the bar's curve is 27 points, its tools and
+//    Post sit 9 points in, so theirs are 18.
+//  - Edges are hairlines, numbers are tabular, and nothing moves when a
+//    number changes.
 //
 
 import Cocoa
+import SwiftUI
 
 /// The theme as the page shows it (app.js macLook): Light or Dark, and
 /// its colors as CSS computes them (rgb(), rgba() or color(srgb …)).
@@ -114,6 +127,96 @@ enum SweeterColor {
     static var discPinkText: NSColor { pick({ toward($0.solid, 0.45, $0) }, hex(0x8A_1F4B), hex(0xFF_D0E0)) }
 }
 
+/// Sweeter's shapes and the light on them (see the top of this file).
+enum ComposeShape {
+    /// A rectangle with continuous corners (a capsule when the radius is
+    /// half its height), as Apple draws them.
+    static func path(_ rect: NSRect, radius: CGFloat) -> CGPath {
+        let r = max(0, min(radius, rect.width / 2, rect.height / 2))
+        if r >= min(rect.width, rect.height) / 2 { return Capsule(style: .continuous).path(in: rect).cgPath }
+        return RoundedRectangle(cornerRadius: r, style: .continuous).path(in: rect).cgPath
+    }
+
+    static func bezier(_ rect: NSRect, radius: CGFloat) -> NSBezierPath {
+        NSBezierPath(cgPath: path(rect, radius: radius))
+    }
+
+    /// Dark paper: the theme's, or the Mac's appearance until the page sends one.
+    static func dark(_ view: NSView) -> Bool {
+        SweeterColor.theme?.dark ?? (view.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+    }
+
+    /// The color of a shadow: a deep violet ink, never plain grey.
+    static func ink(_ alpha: CGFloat) -> NSColor {
+        NSColor(srgbRed: 0.12, green: 0.08, blue: 0.24, alpha: alpha)
+    }
+
+    /// The edge of a raised part: a glint along the top that fades down its
+    /// sides, and a crisp line along its foot.
+    static func edge(_ rect: NSRect, radius: CGFloat, glint: NSColor, foot: NSColor, flipped: Bool, width: CGFloat = 1) {
+        let ring = bezier(rect, radius: radius)
+        ring.append(bezier(rect.insetBy(dx: width, dy: width), radius: radius - width))
+        ring.windingRule = .evenOdd
+        NSGraphicsContext.saveGraphicsState()
+        ring.addClip()
+        let fade = NSGradient(colors: [glint, glint.withAlphaComponent(0), foot.withAlphaComponent(0), foot], atLocations: [0, 0.5, 0.6, 1], colorSpace: .sRGB)
+        fade?.draw(in: rect, angle: flipped ? 90 : -90)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// A well pressed into the paper: its fill, and a shadow inside its top
+    /// edge. (A shadow's offset is in the screen's terms, so down is down
+    /// in a flipped view too.)
+    static func carve(_ path: NSBezierPath, fill: NSColor, shade: NSColor, depth: CGFloat) {
+        fill.setFill()
+        path.fill()
+        NSGraphicsContext.saveGraphicsState()
+        path.addClip()
+        let s = NSShadow()
+        s.shadowColor = shade
+        s.shadowBlurRadius = depth * 2
+        s.shadowOffset = NSSize(width: 0, height: -depth)
+        s.set()
+        let around = NSBezierPath(rect: path.bounds.insetBy(dx: -24, dy: -24))
+        around.append(path)
+        around.windingRule = .evenOdd
+        NSColor.black.setFill()
+        around.fill()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// An SF Symbol in one color. Its shape is drawn as in Light mode: in
+    /// Dark mode macOS fills face.smiling's face, so the bar's Emoji tool
+    /// was a solid disc.
+    static func symbol(_ name: String, size: CGFloat, weight: NSFont.Weight, color: NSColor) -> NSImage? {
+        guard let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: size, weight: weight)) else { return nil }
+        // Resolved now, in the drawing's appearance: the image draws later.
+        let cg = color.cgColor
+        let solid = cg.copy(alpha: 1) ?? cg
+        return NSImage(size: img.size, flipped: false) { r in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            ctx.setAlpha(cg.alpha)
+            ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+            NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance { img.draw(in: r) }
+            ctx.setFillColor(solid)
+            ctx.setBlendMode(.sourceAtop)
+            ctx.fill(r)
+            ctx.endTransparencyLayer()
+            return true
+        }
+    }
+
+    /// The solid accent as a raised gem (Post, a chosen chip): lit at the
+    /// top, deeper at the foot, and darker while pressed.
+    static func gem(_ rect: NSRect, radius: CGFloat, pressed: Bool, flipped: Bool) {
+        let base = SweeterColor.pinkFill.usingColorSpace(.sRGB) ?? SweeterColor.pinkFill
+        let top = base.blended(withFraction: pressed ? 0.02 : 0.16, of: .white) ?? base
+        let foot = base.blended(withFraction: pressed ? 0.2 : 0.1, of: .black) ?? base
+        NSGradient(starting: top, ending: foot)?.draw(in: bezier(rect, radius: radius), angle: flipped ? 90 : -90)
+        edge(rect, radius: radius, glint: NSColor.white.withAlphaComponent(pressed ? 0.12 : 0.4), foot: NSColor.black.withAlphaComponent(0.18), flipped: flipped)
+    }
+}
+
 /// A view whose content starts at the top (a scroll view's page).
 final class ComposeFlippedView: NSView {
     override var isFlipped: Bool { true }
@@ -157,7 +260,7 @@ final class ComposeOutline: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
+        let path = ComposeShape.bezier(bounds.insetBy(dx: 0.5, dy: 0.5), radius: radius)
         if filled {
             SweeterColor.card.setFill()
             path.fill()
@@ -238,6 +341,7 @@ final class ComposeFillImage: NSView {
         layer?.contentsGravity = .resizeAspectFill
         layer?.masksToBounds = true
         layer?.cornerRadius = 12
+        layer?.cornerCurve = .continuous
         translatesAutoresizingMaskIntoConstraints = false
     }
 
@@ -273,8 +377,8 @@ final class ComposeBackdrop: NSView {
     }
 }
 
-/// A capsule button: a pill (who can reply, a send time), a chip (a poll
-/// length), or a small dark tag (ALT).
+/// A capsule button: a soft pill lying on the paper (who can reply, a send
+/// time), a chip standing on it (a poll length), or a small dark tag (ALT).
 final class ComposePill: NSButton {
     enum Tone {
         case sky, pink, chip, chipOn, danger, dark
@@ -314,6 +418,8 @@ final class ComposePill: NSButton {
         self.symbol = symbol
         self.target = target
         self.action = action
+        // Its layer carries a chip's shadow.
+        wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
         setContentHuggingPriority(.required, for: .horizontal)
         // Never taller than its capsule: a button hugs its height loosely (below
@@ -340,36 +446,65 @@ final class ComposePill: NSButton {
         NSSize(width: innerWidth + pillHeight * 0.85, height: pillHeight)
     }
 
-    private func colors() -> (bg: NSColor, fg: NSColor, line: NSColor?) {
+    private func colors() -> (bg: NSColor, fg: NSColor) {
         switch tone {
-        case .sky: return (SweeterColor.skyTint, SweeterColor.skyText, nil)
-        case .pink: return (SweeterColor.pinkTint, SweeterColor.pinkText, nil)
-        case .chip: return (SweeterColor.paper, SweeterColor.text, SweeterColor.line)
-        case .chipOn: return (SweeterColor.pinkFill, SweeterColor.onPink, nil)
-        case .danger: return (NSColor.systemRed.withAlphaComponent(0.10), .systemRed, nil)
-        case .dark: return (NSColor.black.withAlphaComponent(0.72), .white, nil)
+        case .sky: return (SweeterColor.skyTint, SweeterColor.skyText)
+        case .pink: return (SweeterColor.pinkTint, SweeterColor.pinkText)
+        case .chip: return (SweeterColor.paper, SweeterColor.text)
+        case .chipOn: return (SweeterColor.pinkFill, SweeterColor.onPink)
+        case .danger: return (NSColor.systemRed.withAlphaComponent(0.10), .systemRed)
+        case .dark: return (NSColor.black.withAlphaComponent(0.72), .white)
         }
     }
 
+    override func layout() {
+        super.layout()
+        layer?.shadowPath = ComposeShape.path(bounds.insetBy(dx: 0.5, dy: 0.5), radius: bounds.height / 2)
+    }
+
+    /// A chip stands on the paper (a chosen one in the accent's glow); a
+    /// soft pill lies on it.
+    private func lift(dark: Bool, down: Bool) {
+        let raised = tone == .chip || tone == .chipOn
+        guard let layer else { return }
+        layer.shadowOpacity = raised ? 1 : 0
+        guard raised else { return }
+        layer.shadowColor = (tone == .chipOn ? SweeterColor.pinkFill.withAlphaComponent(0.32) : ComposeShape.ink(dark ? 0.5 : 0.1)).cgColor
+        layer.shadowRadius = down ? 1 : 3
+        layer.shadowOffset = NSSize(width: 0, height: down ? -0.5 : -1.5)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        let (bg, fg, line) = colors()
+        let (bg, fg) = colors()
         let r = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let path = NSBezierPath(roundedRect: r, xRadius: r.height / 2, yRadius: r.height / 2)
-        var fill = bg
-        if isHighlighted { fill = bg.blended(withFraction: 0.15, of: tone == .dark || tone == .chipOn ? .black : .labelColor) ?? bg }
-        fill.setFill()
-        path.fill()
-        if let line {
-            line.setStroke()
-            path.lineWidth = 1
+        let radius = r.height / 2
+        let path = ComposeShape.bezier(r, radius: radius)
+        let dark = ComposeShape.dark(self)
+        let down = isHighlighted && isEnabled
+        lift(dark: dark, down: down)
+        switch tone {
+        case .chip:
+            (down ? bg.blended(withFraction: 0.06, of: SweeterColor.text) ?? bg : bg).setFill()
+            path.fill()
+            ComposeShape.edge(r, radius: radius, glint: NSColor.white.withAlphaComponent(dark ? 0.1 : 0.9), foot: ComposeShape.ink(dark ? 0.6 : 0.12), flipped: isFlipped)
+            SweeterColor.line.setStroke()
+            path.lineWidth = 0.5
             path.stroke()
+        case .chipOn:
+            ComposeShape.gem(r, radius: radius, pressed: down, flipped: isFlipped)
+        case .dark:
+            (down ? bg.blended(withFraction: 0.15, of: .black) ?? bg : bg).setFill()
+            path.fill()
+        case .sky, .pink, .danger:
+            (down ? bg.blended(withFraction: 0.15, of: .labelColor) ?? bg : bg).setFill()
+            path.fill()
+            ComposeShape.edge(r, radius: radius, glint: NSColor.white.withAlphaComponent(dark ? 0.08 : 0.55), foot: fg.withAlphaComponent(dark ? 0.2 : 0.16), flipped: isFlipped, width: 0.75)
         }
         let alpha: CGFloat = isEnabled ? 1 : 0.45
         var x = (bounds.width - innerWidth) / 2
         let side = symbolSide
         func drawSymbol(_ name: String, side: CGFloat) {
-            let config = NSImage.SymbolConfiguration(pointSize: side, weight: .semibold).applying(.init(paletteColors: [fg.withAlphaComponent(alpha)]))
-            guard let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config) else { return }
+            guard let img = ComposeShape.symbol(name, size: side, weight: .semibold, color: fg.withAlphaComponent(alpha)) else { return }
             let s = img.size
             let rect = NSRect(x: x, y: (bounds.height - s.height) / 2, width: s.width, height: s.height)
             img.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
@@ -402,12 +537,13 @@ final class ComposePill: NSButton {
 
     override func drawFocusRingMask() {
         let r = bounds.insetBy(dx: 0.5, dy: 0.5)
-        NSBezierPath(roundedRect: r, xRadius: r.height / 2, yRadius: r.height / 2).fill()
+        ComposeShape.bezier(r, radius: r.height / 2).fill()
     }
 }
 
-/// “Add Another Post” under the post: a dashed row where the thread
-/// grows, in the theme's quiet text color, and its accent while pointed at.
+/// “Add Another Post” under the post: a well pressed into the paper where
+/// the thread grows, in the theme's quiet text color, and its accent while
+/// pointed at.
 final class ComposeAddRow: NSButton {
     private var hovering = false {
         didSet { needsDisplay = true }
@@ -433,21 +569,17 @@ final class ComposeAddRow: NSButton {
 
     override func draw(_ dirtyRect: NSRect) {
         let lit = (hovering || isHighlighted) && isEnabled
-        let r = bounds.insetBy(dx: 0.75, dy: 0.75)
-        let path = NSBezierPath(roundedRect: r, xRadius: 12, yRadius: 12)
+        let dark = ComposeShape.dark(self)
+        let path = ComposeShape.bezier(bounds.insetBy(dx: 0.5, dy: 0.5), radius: 12)
         if lit {
-            SweeterColor.pinkTint.setFill()
-            path.fill()
+            ComposeShape.carve(path, fill: SweeterColor.pinkTint, shade: SweeterColor.pinkFill.withAlphaComponent(isHighlighted ? 0.45 : 0.3), depth: isHighlighted ? 2 : 1.25)
+        } else {
+            ComposeShape.carve(path, fill: SweeterColor.text.withAlphaComponent(dark ? 0.05 : 0.03), shade: ComposeShape.ink(dark ? 0.7 : 0.16), depth: 1.25)
         }
         let color = lit ? SweeterColor.pinkText : SweeterColor.secondary
-        path.lineWidth = 1.5
-        path.setLineDash([5, 4], count: 2, phase: 0)
-        (lit ? color : color.withAlphaComponent(0.45)).setStroke()
-        path.stroke()
         let alpha: CGFloat = isEnabled ? 1 : 0.45
         var x: CGFloat = 14
-        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold).applying(.init(paletteColors: [color.withAlphaComponent(alpha)]))
-        if let img = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)?.withSymbolConfiguration(config) {
+        if let img = ComposeShape.symbol("plus", size: 12, weight: .semibold, color: color.withAlphaComponent(alpha)) {
             img.draw(in: NSRect(x: x, y: (bounds.height - img.size.height) / 2, width: img.size.width, height: img.size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
             x += img.size.width + 8
         }
@@ -459,7 +591,7 @@ final class ComposeAddRow: NSButton {
     override var focusRingMaskBounds: NSRect { bounds }
 
     override func drawFocusRingMask() {
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 0.75, dy: 0.75), xRadius: 12, yRadius: 12).fill()
+        ComposeShape.bezier(bounds.insetBy(dx: 0.5, dy: 0.5), radius: 12).fill()
     }
 }
 
@@ -525,15 +657,18 @@ final class ComposeAvatar: NSView {
     override func updateLayer() {
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         layer?.backgroundColor = SweeterColor.paper.cgColor
+        // A hairline round the white ring, so it has an edge on white paper.
+        layer?.borderWidth = 0.5
+        layer?.borderColor = SweeterColor.line.cgColor
         layer?.shadowColor = SweeterColor.pink.withAlphaComponent(dark ? 0.35 : 0.28).cgColor
         picture.backgroundColor = SweeterColor.discSky.cgColor
         letter.textColor = SweeterColor.discSkyText
     }
 }
 
-/// A round tool in the floating bar: its symbol in the text color, a soft
-/// circle while pointed at, and the solid accent's tint while on (a poll,
-/// a send time).
+/// A round tool in the floating bar: its symbol in the text color, in a
+/// well while pointed at, and in a well of the solid accent's tint while
+/// on (a poll, a send time).
 final class ComposeDockButton: NSButton {
     var on = false {
         didSet { needsDisplay = true }
@@ -572,18 +707,18 @@ final class ComposeDockButton: NSButton {
     override func mouseExited(with event: NSEvent) { hovering = false }
 
     override func draw(_ dirtyRect: NSRect) {
-        let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1))
+        let well = NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1))
+        let dark = ComposeShape.dark(self)
+        let down = isHighlighted && isEnabled
+        // A tool that is on, or under the pointer, sits in a well.
         if on {
-            SweeterColor.pinkTint.setFill()
-            circle.fill()
+            ComposeShape.carve(well, fill: SweeterColor.pinkTint, shade: SweeterColor.pinkFill.withAlphaComponent(down ? 0.5 : 0.34), depth: down ? 2 : 1.5)
         } else if (hovering || isHighlighted) && isEnabled {
-            SweeterColor.text.withAlphaComponent(0.07).setFill()
-            circle.fill()
+            ComposeShape.carve(well, fill: SweeterColor.text.withAlphaComponent(dark ? 0.06 : 0.04), shade: ComposeShape.ink(dark ? 0.8 : (down ? 0.28 : 0.18)), depth: down ? 2 : 1.25)
         }
         // Idle tools at 72% of the text color, on ones in full; a third while disabled.
         let color = (on ? SweeterColor.pinkText : SweeterColor.text).withAlphaComponent((on ? 1 : 0.72) * (isEnabled ? 1 : 0.35))
-        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium).applying(.init(paletteColors: [color]))
-        guard let img = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?.withSymbolConfiguration(config) else { return }
+        guard let img = ComposeShape.symbol(symbolName, size: pointSize, weight: .medium, color: color) else { return }
         let r = NSRect(x: (bounds.width - img.size.width) / 2, y: (bounds.height - img.size.height) / 2, width: img.size.width, height: img.size.height)
         img.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
     }
@@ -595,38 +730,82 @@ final class ComposeDockButton: NSButton {
     }
 }
 
-/// A push button on the theme's solid accent (Post, Set): its title in
-/// the color the theme puts on that accent (dark on Catppuccin's and
-/// Dracula's light ones), dimmed while disabled.
+/// A raised button on the theme's solid accent (Post, Set): a gem, with
+/// its title in the color the theme puts on that accent (dark on
+/// Catppuccin's and Dracula's light ones). It sinks while held and dims
+/// while disabled.
 final class ComposeAccentButton: NSButton {
-    private var painting = false
+    /// How tall: Post in the bar is 36, so its curve follows the bar's.
+    var pillHeight: CGFloat = 28 {
+        didSet { invalidateIntrinsicContentSize() }
+    }
+
+    var pillFont = NSFont.systemFont(ofSize: 13, weight: .semibold) {
+        didSet { invalidateIntrinsicContentSize(); needsDisplay = true }
+    }
+
+    convenience init(_ title: String) {
+        self.init(frame: .zero)
+        isBordered = false
+        setButtonType(.momentaryPushIn)
+        self.title = title
+        wantsLayer = true
+        layer?.shadowOpacity = 1
+        translatesAutoresizingMaskIntoConstraints = false
+        setContentHuggingPriority(.required, for: .vertical)
+    }
 
     override var title: String {
-        didSet { repaint() }
+        didSet { invalidateIntrinsicContentSize(); needsDisplay = true }
     }
 
     override var isEnabled: Bool {
-        didSet { repaint() }
+        didSet { needsDisplay = true }
     }
 
+    override var isHighlighted: Bool {
+        didSet { needsDisplay = true }
+    }
+
+    /// Draws again in the theme's colors.
     func repaint() {
-        guard !painting else { return }
-        painting = true
-        defer { painting = false }
-        bezelColor = SweeterColor.pinkFill
+        needsDisplay = true
+    }
+
+    override var intrinsicContentSize: NSSize {
+        let w = ceil((title as NSString).size(withAttributes: [.font: pillFont]).width)
+        return NSSize(width: max(pillHeight * 1.8, w + pillHeight * 0.9), height: pillHeight)
+    }
+
+    override func layout() {
+        super.layout()
+        layer?.shadowPath = ComposeShape.path(bounds, radius: bounds.height / 2)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let down = isHighlighted && isEnabled
+        layer?.shadowColor = SweeterColor.pinkFill.withAlphaComponent(isEnabled ? (down ? 0.25 : 0.4) : 0.12).cgColor
+        layer?.shadowRadius = down ? 1.5 : 5
+        layer?.shadowOffset = NSSize(width: 0, height: down ? -1 : -2.5)
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        ctx.saveGState()
+        if !isEnabled { ctx.setAlpha(0.55) }
+        ComposeShape.gem(bounds, radius: bounds.height / 2, pressed: down, flipped: isFlipped)
         let p = NSMutableParagraphStyle()
         p.alignment = .center
         p.lineBreakMode = .byTruncatingTail
-        attributedTitle = NSAttributedString(string: title, attributes: [
-            .font: font ?? .systemFont(ofSize: NSFont.systemFontSize),
-            .foregroundColor: SweeterColor.onPink.withAlphaComponent(isEnabled ? 1 : 0.55),
-            .paragraphStyle: p,
-        ])
+        let attrs: [NSAttributedString.Key: Any] = [.font: pillFont, .foregroundColor: SweeterColor.onPink, .paragraphStyle: p]
+        let line = ceil((title as NSString).size(withAttributes: attrs).height)
+        let inset = pillHeight * 0.4
+        let rect = NSRect(x: inset, y: ((bounds.height - line) / 2).rounded(), width: max(0, bounds.width - inset * 2), height: line)
+        (title as NSString).draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attrs)
+        ctx.restoreGState()
     }
 
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        repaint()
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func drawFocusRingMask() {
+        ComposeShape.bezier(bounds, radius: bounds.height / 2).fill()
     }
 }
 
@@ -667,10 +846,14 @@ final class ComposeDisc: NSView {
     }
 }
 
-/// A rounded row on the paper: a poll choice, or another post of a thread.
+/// A raised part on the paper: the floating bar, a poll choice, another
+/// post of a thread. Lit from above: brighter at the top, a glint along
+/// its top edge, a crisp line along its foot, and a soft shadow in ink.
+/// Its layer is the shape itself, so the paper, the hairline, and the
+/// shadow all follow one continuous curve.
 class ComposeCapsule: NSView {
     var radius: CGFloat = 18 {
-        didSet { needsDisplay = true }
+        didSet { needsDisplay = true; needsLayout = true }
     }
 
     /// Its field is being edited: the hairline turns pink.
@@ -683,26 +866,73 @@ class ComposeCapsule: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// The light across it, and its edge (a ring: the glint and the foot).
+    private let sheen = CAGradientLayer()
+    private let sheenShape = CAShapeLayer()
+    private let rim = CAGradientLayer()
+    private let rimShape = CAShapeLayer()
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.shadowOpacity = 1
+        sheen.mask = sheenShape
+        rimShape.fillRule = .evenOdd
+        rim.mask = rimShape
+        // Top to bottom: a layer's y runs up unless its view is flipped.
+        for g in [sheen, rim] {
+            g.startPoint = CGPoint(x: 0.5, y: 1)
+            g.endPoint = CGPoint(x: 0.5, y: 0)
+        }
+        rim.locations = [0, 0.5, 0.6, 1]
+        layer?.addSublayer(sheen)
+        layer?.addSublayer(rim)
     }
 
     required init?(coder: NSCoder) { nil }
 
+    override func makeBackingLayer() -> CALayer {
+        CAShapeLayer()
+    }
+
+    private var shape: CAShapeLayer? { layer as? CAShapeLayer }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let outline = ComposeShape.path(bounds, radius: radius)
+        layer?.shadowPath = outline
+        for l in [sheen, sheenShape, rim, rimShape] { l.frame = bounds }
+        sheenShape.path = outline
+        // The glint runs just inside the hairline, so it never hides it.
+        let ring = CGMutablePath()
+        ring.addPath(ComposeShape.path(bounds.insetBy(dx: 0.5, dy: 0.5), radius: radius - 0.5))
+        ring.addPath(ComposeShape.path(bounds.insetBy(dx: 1.5, dy: 1.5), radius: radius - 1.5))
+        rimShape.path = ring
+        CATransaction.commit()
+        needsDisplay = true
+    }
+
     override var wantsUpdateLayer: Bool { true }
 
     override func updateLayer() {
-        guard let layer else { return }
-        layer.cornerRadius = radius
-        layer.backgroundColor = SweeterColor.paper.cgColor
-        layer.borderColor = (focused ? SweeterColor.pinkText : SweeterColor.line).cgColor
-        layer.borderWidth = focused ? 1.5 : 1
-        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        layer.shadowColor = NSColor(srgbRed: 0.12, green: 0.08, blue: 0.24, alpha: dark ? lift.alpha * 2.5 : lift.alpha).cgColor
-        layer.shadowRadius = lift.blur
-        layer.shadowOffset = NSSize(width: 0, height: -lift.drop)
+        guard let shape else { return }
+        let dark = ComposeShape.dark(self)
+        let line: CGFloat = focused ? 1.5 : 0.5
+        // The hairline is stroked on the path, so the path runs half of it in.
+        shape.path = ComposeShape.path(bounds.insetBy(dx: line / 2, dy: line / 2), radius: radius - line / 2)
+        shape.fillColor = SweeterColor.paper.cgColor
+        shape.strokeColor = (focused ? SweeterColor.pinkText : SweeterColor.line).cgColor
+        shape.lineWidth = line
+        shape.shadowOpacity = 1
+        shape.shadowColor = ComposeShape.ink(dark ? min(0.9, lift.alpha * 3) : lift.alpha).cgColor
+        shape.shadowRadius = lift.blur
+        shape.shadowOffset = NSSize(width: 0, height: -lift.drop)
+        let white = NSColor.white
+        sheen.colors = dark ? [white.withAlphaComponent(0.05).cgColor, white.withAlphaComponent(0).cgColor] : [white.withAlphaComponent(0).cgColor, ComposeShape.ink(0.035).cgColor]
+        let glint = white.withAlphaComponent(dark ? 0.14 : 0.9)
+        let foot = dark ? NSColor.black.withAlphaComponent(0.5) : ComposeShape.ink(0.12)
+        rim.colors = [glint.cgColor, glint.withAlphaComponent(0).cgColor, foot.withAlphaComponent(0).cgColor, foot.cgColor]
     }
 }
 
@@ -738,12 +968,98 @@ final class ComposeCountRing: NSView {
         arc.stroke()
     }
 
-    /// The page's count (“116 / 280”, “1,204 · long post”) as a share of 280.
+    /// The number in the page's count (“116 / 280”, “1,204 · long post”),
+    /// as the page wrote it: some locales group thousands with a space.
+    static func number(_ count: String) -> String {
+        let end = count.range(of: " / ")?.lowerBound ?? count.range(of: " · ")?.lowerBound ?? count.endIndex
+        return String(count[..<end])
+    }
+
+    /// The page's count as a share of 280.
     func show(_ count: String, level: String) {
-        let digits = count.prefix { $0.isNumber || $0 == "," || $0 == "." }
-        let n = Double(digits.filter(\.isNumber)) ?? 0
+        let n = Double(Self.number(count).filter(\.isNumber)) ?? 0
         used = CGFloat(n / 280)
         self.level = level
         isHidden = count.isEmpty
+    }
+}
+
+/// The count beside Post: the ring, then the number over what it is out of
+/// (OF 280, LONG POST, TOO LONG), in a slot as wide as its widest, so the
+/// bar keeps its size while you type.
+final class ComposeCount: NSView {
+    private let ring = ComposeCountRing()
+    private let number = NSTextField(labelWithString: "0")
+    private let caption = NSTextField(labelWithString: "")
+    private static let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+    private static let captionFont = NSFont.systemFont(ofSize: 9, weight: .semibold)
+    private static let captions = ["OF 280", "LONG POST", "TOO LONG"]
+
+    private static func captionText(_ s: String, _ color: NSColor) -> NSAttributedString {
+        NSAttributedString(string: s, attributes: [.font: captionFont, .kern: 0.6, .foregroundColor: color])
+    }
+
+    /// The widest the number (X takes 25,000 characters) or a caption gets.
+    private static let slot: CGFloat = {
+        let n = ("25,000" as NSString).size(withAttributes: [.font: numberFont]).width
+        let c = captions.map { captionText($0, .black).size().width }.max() ?? 0
+        return ceil(max(n, c)) + 2
+    }()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        number.font = Self.numberFont
+        // The view speaks for both (the page's whole count).
+        number.setAccessibilityElement(false)
+        caption.setAccessibilityElement(false)
+        let text = NSStackView(views: [number, caption])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 0
+        text.widthAnchor.constraint(equalToConstant: Self.slot).isActive = true
+        let row = NSStackView(views: [ring, text])
+        row.spacing = 7
+        row.alignment = .centerY
+        row.translatesAutoresizingMaskIntoConstraints = false
+        ring.setContentHuggingPriority(.required, for: .horizontal)
+        addSubview(row)
+        translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: trailingAnchor),
+            row.topAnchor.constraint(equalTo: topAnchor),
+            row.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        show("0 / 280", level: "")
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    /// The page's count (“116 / 280”, “1,204 · long post”) and its level.
+    func show(_ count: String, level: String) {
+        ring.show(count, level: level)
+        number.stringValue = ComposeCountRing.number(count)
+        let warn: NSColor? = level == "over" ? .systemRed : level == "long" ? .systemOrange : nil
+        number.textColor = warn ?? SweeterColor.text
+        caption.attributedStringValue = Self.captionText(level == "over" ? "TOO LONG" : level == "long" ? "LONG POST" : "OF 280", warn ?? SweeterColor.secondary)
+        isHidden = count.isEmpty
+        toolTip = count
+        setAccessibilityLabel(count)
+    }
+}
+
+/// An engraved line in the bar, between the tools and the count: a line of
+/// shadow and a lit one beside it, fading out at both ends.
+final class ComposeGroove: NSView {
+    override var intrinsicContentSize: NSSize { NSSize(width: 2, height: 24) }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let dark = ComposeShape.dark(self)
+        for (x, color) in [(0, ComposeShape.ink(dark ? 0.9 : 0.16)), (1, NSColor.white.withAlphaComponent(dark ? 0.08 : 1))] as [(CGFloat, NSColor)] {
+            let fade = NSGradient(colors: [color.withAlphaComponent(0), color, color.withAlphaComponent(0)], atLocations: [0, 0.5, 1], colorSpace: .sRGB)
+            fade?.draw(in: NSRect(x: x, y: 0, width: 1, height: bounds.height), angle: 90)
+        }
     }
 }

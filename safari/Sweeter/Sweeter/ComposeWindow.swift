@@ -456,9 +456,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private let replyRow = NSStackView()
     private let spinner = NSProgressIndicator()
     private let statusLabel = NSTextField(labelWithString: "")
-    private let countRing = ComposeCountRing()
-    private let countLabel = NSTextField(labelWithString: "")
-    private let postButton = ComposeAccentButton(title: "Post", target: nil, action: nil)
+    private let count = ComposeCount()
+    private let postButton = ComposeAccentButton("Post")
     /// Where a thread grows: right under the post being written.
     private let addRow = ComposeAddRow("Add Another Post")
     /// Who is posting: the picture, the name and the handle.
@@ -592,6 +591,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         cardImage.imageScaling = .scaleProportionallyUpOrDown
         cardImage.wantsLayer = true
         cardImage.layer?.cornerRadius = 4
+        cardImage.layer?.cornerCurve = .continuous
         cardImage.layer?.masksToBounds = true
         cardHost.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         cardHost.textColor = SweeterColor.secondary
@@ -615,6 +615,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         cardBigPill.wantsLayer = true
         cardBigPill.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.62).cgColor
         cardBigPill.layer?.cornerRadius = 4
+        cardBigPill.layer?.cornerCurve = .continuous
         cardBigPill.translatesAutoresizingMaskIntoConstraints = false
         cardBigPill.addSubview(cardBigTitle)
         cardBigImage.addSubview(cardBigPill)
@@ -656,13 +657,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         statusLabel.allowsExpansionToolTips = true
         for v in [spinner, statusLabel] as [NSView] { statusRow.addArrangedSubview(v) }
         statusRow.spacing = 6
-        countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
-        countLabel.textColor = SweeterColor.secondary
-        countLabel.setContentHuggingPriority(.required, for: .horizontal)
-        countLabel.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
         // A long “Schedule for …” shortens (…) before the bar outgrows the window.
         postButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        countRing.setContentHuggingPriority(.required, for: .horizontal)
 
         pollView.onChange = { [weak self] p in
             guard let self else { return }
@@ -765,7 +761,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
 
         // The floating bar: the tools in three groups, X Pro's, the count and Post.
         dock.radius = 27
-        dock.lift = (0.14, 15, 6)
+        dock.lift = (0.12, 18, 7)
         dock.translatesAutoresizingMaskIntoConstraints = false
         let bar = NSStackView()
         bar.spacing = 2
@@ -794,16 +790,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         }
         moreButton.target = self
         moreButton.action = #selector(morePressed)
-        let divider = NSBox()
-        divider.boxType = .separator
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        divider.heightAnchor.constraint(equalToConstant: 24).isActive = true
-        divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
-        for v in [moreButton, divider, countRing, countLabel, postButton] as [NSView] { bar.addArrangedSubview(v) }
+        let groove = ComposeGroove()
+        for v in [moreButton, groove, count, postButton] as [NSView] { bar.addArrangedSubview(v) }
         bar.setCustomSpacing(8, after: moreButton)
-        bar.setCustomSpacing(10, after: divider)
-        bar.setCustomSpacing(6, after: countRing)
-        bar.setCustomSpacing(12, after: countLabel)
+        bar.setCustomSpacing(12, after: groove)
+        bar.setCustomSpacing(12, after: count)
         dock.addSubview(bar)
         content.addSubview(dock)
 
@@ -815,7 +806,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             column.topAnchor.constraint(equalTo: content.topAnchor, constant: 40),
             column.bottomAnchor.constraint(equalTo: dock.topAnchor, constant: -12),
             nameRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 26),
-            bar.leadingAnchor.constraint(equalTo: dock.leadingAnchor, constant: 8),
+            // The tools and Post sit 9 in, all round, so their curves follow the bar's.
+            bar.leadingAnchor.constraint(equalTo: dock.leadingAnchor, constant: 9),
             bar.trailingAnchor.constraint(equalTo: dock.trailingAnchor, constant: -9),
             bar.centerYAnchor.constraint(equalTo: dock.centerYAnchor),
             dock.heightAnchor.constraint(equalToConstant: 54),
@@ -826,10 +818,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         ])
         window?.contentView = content
 
-        postButton.bezelStyle = .push
-        postButton.controlSize = .large
-        postButton.font = .systemFont(ofSize: NSFont.systemFontSize(for: .large), weight: .semibold)
-        postButton.repaint()
+        postButton.pillHeight = 36
+        postButton.pillFont = .systemFont(ofSize: 14, weight: .semibold)
         postButton.keyEquivalent = "\r"
         postButton.keyEquivalentModifierMask = [.command]
         postButton.target = self
@@ -992,9 +982,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         replyPill.isEnabled = !busy
         addRow.isEnabled = !busy
         whenRow.arrangedSubviews.forEach { ($0 as? NSControl)?.isEnabled = !busy }
-        countLabel.stringValue = s.count
-        countRing.show(s.count, level: s.level)
-        countLabel.textColor = s.level == "over" ? .systemRed : s.level == "long" ? .systemOrange : SweeterColor.secondary
+        count.show(s.count, level: s.level)
         underline(s.links)
         showCard(s.card)
         if s.ask != asked {

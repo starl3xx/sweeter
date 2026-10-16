@@ -387,6 +387,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     static let shared = ComposeWindowController()
     static let baseFont = NSFont.systemFont(ofSize: 16)
     static let minWidth: CGFloat = 620
+    /// The count's slot in the bar: as wide as “280 / 280”.
+    static let countSlot = ceil(("280 / 280" as NSString).size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)]).width) + 2
     /// The window exists (a page reload or report may need to reach it).
     private(set) static var made = false
 
@@ -456,8 +458,9 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
     private let replyRow = NSStackView()
     private let spinner = NSProgressIndicator()
     private let statusLabel = NSTextField(labelWithString: "")
-    private let count = ComposeCount()
-    private let postButton = ComposeAccentButton("Post")
+    private let countRing = ComposeCountRing()
+    private let countLabel = NSTextField(labelWithString: "")
+    private let postButton = ComposeAccentButton(title: "Post", target: nil, action: nil)
     /// Where a thread grows: right under the post being written.
     private let addRow = ComposeAddRow("Add Another Post")
     /// Who is posting: the picture, the name and the handle.
@@ -551,6 +554,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         textView.isContinuousSpellCheckingEnabled = true
         textView.drawsBackground = false
         textView.textContainerInset = NSSize(width: 0, height: 4)
+        // The text starts at the column's edge, under the name and the reply pill.
+        textView.textContainer?.lineFragmentPadding = 0
         // As tall as its text (ComposeTextView.intrinsicContentSize); the
         // body around it scrolls.
         textView.isVerticallyResizable = false
@@ -591,7 +596,6 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         cardImage.imageScaling = .scaleProportionallyUpOrDown
         cardImage.wantsLayer = true
         cardImage.layer?.cornerRadius = 4
-        cardImage.layer?.cornerCurve = .continuous
         cardImage.layer?.masksToBounds = true
         cardHost.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         cardHost.textColor = SweeterColor.secondary
@@ -615,7 +619,6 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         cardBigPill.wantsLayer = true
         cardBigPill.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.62).cgColor
         cardBigPill.layer?.cornerRadius = 4
-        cardBigPill.layer?.cornerCurve = .continuous
         cardBigPill.translatesAutoresizingMaskIntoConstraints = false
         cardBigPill.addSubview(cardBigTitle)
         cardBigImage.addSubview(cardBigPill)
@@ -657,8 +660,13 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         statusLabel.allowsExpansionToolTips = true
         for v in [spinner, statusLabel] as [NSView] { statusRow.addArrangedSubview(v) }
         statusRow.spacing = 6
+        countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        countLabel.textColor = SweeterColor.secondary
+        // As wide as “280 / 280”, so the count never moves the ring or the divider.
+        countLabel.widthAnchor.constraint(equalToConstant: Self.countSlot).isActive = true
         // A long “Schedule for …” shortens (…) before the bar outgrows the window.
         postButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        countRing.setContentHuggingPriority(.required, for: .horizontal)
 
         pollView.onChange = { [weak self] p in
             guard let self else { return }
@@ -761,7 +769,7 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
 
         // The floating bar: the tools in three groups, X Pro's, the count and Post.
         dock.radius = 27
-        dock.lift = (0.16, 18, 8)
+        dock.lift = (0.14, 15, 6)
         dock.translatesAutoresizingMaskIntoConstraints = false
         let bar = NSStackView()
         bar.spacing = 2
@@ -790,13 +798,33 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         }
         moreButton.target = self
         moreButton.action = #selector(morePressed)
-        let groove = ComposeGroove()
-        for v in [moreButton, groove, count, postButton] as [NSView] { bar.addArrangedSubview(v) }
+        let divider = NSBox()
+        divider.boxType = .separator
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        divider.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        // The bar spans the column, its edges under Add Another Post's: the
+        // tools at the left, the count and Post at the right, room between.
+        let room = NSView()
+        room.translatesAutoresizingMaskIntoConstraints = false
+        room.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+        room.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+        for v in [moreButton, room, divider, countRing, countLabel, postButton] as [NSView] { bar.addArrangedSubview(v) }
+        bar.distribution = .fill
+        bar.setHuggingPriority(NSLayoutConstraint.Priority(200), for: .horizontal)
         bar.setCustomSpacing(8, after: moreButton)
-        bar.setCustomSpacing(10, after: groove)
-        bar.setCustomSpacing(12, after: count)
+        bar.setCustomSpacing(0, after: room)
+        bar.setCustomSpacing(10, after: divider)
+        bar.setCustomSpacing(6, after: countRing)
+        bar.setCustomSpacing(12, after: countLabel)
         dock.addSubview(bar)
         content.addSubview(dock)
+        // Post sits as far in from the bar's end as from its top and bottom,
+        // so its curve follows the bar's (the tools' circles sit 9 in, all round).
+        let end = NSLayoutGuide()
+        let over = NSLayoutGuide()
+        dock.addLayoutGuide(end)
+        dock.addLayoutGuide(over)
 
         NSLayoutConstraint.activate([
             avatarView.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
@@ -806,20 +834,36 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
             column.topAnchor.constraint(equalTo: content.topAnchor, constant: 40),
             column.bottomAnchor.constraint(equalTo: dock.topAnchor, constant: -12),
             nameRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 26),
-            // The tools and Post sit 9 in, all round, so their curves follow the bar's.
             bar.leadingAnchor.constraint(equalTo: dock.leadingAnchor, constant: 9),
-            bar.trailingAnchor.constraint(equalTo: dock.trailingAnchor, constant: -9),
             bar.centerYAnchor.constraint(equalTo: dock.centerYAnchor),
+            end.leadingAnchor.constraint(equalTo: bar.trailingAnchor),
+            end.trailingAnchor.constraint(equalTo: dock.trailingAnchor),
+            end.topAnchor.constraint(equalTo: dock.topAnchor),
+            end.bottomAnchor.constraint(equalTo: dock.bottomAnchor),
+            over.leadingAnchor.constraint(equalTo: dock.leadingAnchor),
+            over.trailingAnchor.constraint(equalTo: dock.trailingAnchor),
+            over.topAnchor.constraint(equalTo: dock.topAnchor),
+            over.bottomAnchor.constraint(equalTo: postButton.topAnchor),
+            end.widthAnchor.constraint(equalTo: over.heightAnchor),
             dock.heightAnchor.constraint(equalToConstant: 54),
-            dock.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            dock.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+            // Below Post holding its title (250): a long “Schedule for …”
+            // grows the bar leftward, past the column, before Post shortens.
+            {
+                let c = dock.leadingAnchor.constraint(equalTo: column.leadingAnchor)
+                c.priority = NSLayoutConstraint.Priority(240)
+                return c
+            }(),
             dock.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
             dock.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: 12),
             dock.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
         ])
         window?.contentView = content
 
-        postButton.pillHeight = 36
-        postButton.pillFont = .systemFont(ofSize: 14, weight: .semibold)
+        postButton.bezelStyle = .push
+        postButton.controlSize = .large
+        postButton.font = .systemFont(ofSize: NSFont.systemFontSize(for: .large), weight: .semibold)
+        postButton.repaint()
         postButton.keyEquivalent = "\r"
         postButton.keyEquivalentModifierMask = [.command]
         postButton.target = self
@@ -982,7 +1026,11 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         replyPill.isEnabled = !busy
         addRow.isEnabled = !busy
         whenRow.arrangedSubviews.forEach { ($0 as? NSControl)?.isEnabled = !busy }
-        count.show(s.count, level: s.level)
+        // Past 280 the slot shows the length alone; the tooltip has it all.
+        countLabel.stringValue = s.level.isEmpty ? s.count : ComposeCountRing.number(s.count)
+        countLabel.toolTip = s.count
+        countRing.show(s.count, level: s.level)
+        countLabel.textColor = s.level == "over" ? .systemRed : s.level == "long" ? .systemOrange : SweeterColor.secondary
         underline(s.links)
         showCard(s.card)
         if s.ask != asked {

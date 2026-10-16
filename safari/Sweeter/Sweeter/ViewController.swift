@@ -1578,8 +1578,10 @@ final class SweeterWindow: NSWindow {
 /// What an address is (a wallet, a token, an NFT, another contract), asked
 /// of the chain itself through PublicNode's public RPC. The only requests
 /// it makes: eth_getCode ("code"); eth_getCode and seven fixed eth_calls
-/// ("evm", in lib/chain.js's order, ids 8 per address); Solana's
-/// getAccountInfo ("solana"). Ten valid addresses at most; no cookies.
+/// ("evm", in lib/chain.js's order, ids 8 per address);
+/// eth_getTransactionCount and eth_getBalance ("account", ids 2 per
+/// address); Solana's getAccountInfo ("solana"). Ten valid addresses at
+/// most; no cookies.
 enum ChainProbe {
     static let endpoints: [String: String] = [
         "base": "https://base-rpc.publicnode.com",
@@ -1588,6 +1590,7 @@ enum ChainProbe {
         "optimism": "https://optimism-rpc.publicnode.com",
         "polygon": "https://polygon-bor-rpc.publicnode.com",
         "bsc": "https://bsc-rpc.publicnode.com",
+        "robinhood": "https://robinhood-rpc.publicnode.com",
         "solana": "https://solana-rpc.publicnode.com",
     ]
     /// supportsInterface(ERC-721), supportsInterface(ERC-1155), entryPoint(),
@@ -1607,10 +1610,15 @@ enum ChainProbe {
         var batch: [[String: Any]] = []
         if op == "solana", chain == "solana", valid("^[1-9A-HJ-NP-Za-km-z]{32,44}$") {
             for (i, a) in list.enumerated() { batch.append(rpc(i, "getAccountInfo", [a, ["encoding": "jsonParsed"]])) }
-        } else if op == "code" || op == "evm", chain != "solana", valid("^0x[0-9a-fA-F]{40}$") {
+        } else if op == "code" || op == "evm" || op == "account", chain != "solana", valid("^0x[0-9a-fA-F]{40}$") {
             for (i, a) in list.enumerated() {
                 if op == "code" {
                     batch.append(rpc(i, "eth_getCode", [a, "latest"]))
+                    continue
+                }
+                if op == "account" {
+                    batch.append(rpc(i * 2, "eth_getTransactionCount", [a, "latest"]))
+                    batch.append(rpc(i * 2 + 1, "eth_getBalance", [a, "latest"]))
                     continue
                 }
                 batch.append(rpc(i * 8, "eth_getCode", [a, "latest"]))

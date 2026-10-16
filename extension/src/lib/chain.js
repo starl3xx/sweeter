@@ -2,7 +2,9 @@
 // contract), from the chain's own answers. Sweeter asks PublicNode's public
 // RPC (the Mac app's "chain" message, or the Safari background script),
 // which sends only these calls: eth_getCode, then for a contract the seven
-// eth_calls below, in this order; on Solana, getAccountInfo (jsonParsed).
+// eth_calls below, in this order, and for an address with no contract
+// eth_getTransactionCount and eth_getBalance; on Solana, getAccountInfo
+// (jsonParsed).
 // The selectors were checked with Foundry's cast, and the rules on real
 // addresses (USDC, BAYC, BasePaint, vitalik.eth, Safes and ERC-4337
 // accounts on Base, a Solana mint and wallet), 2026-10-15.
@@ -11,7 +13,7 @@
   const Sweeter = root.Sweeter || (root.Sweeter = {});
 
   // The EVM chains an untagged 0x address is checked on, in this order.
-  const EVM = ['base', 'ethereum', 'arbitrum', 'optimism', 'polygon', 'bsc'];
+  const EVM = ['base', 'ethereum', 'arbitrum', 'optimism', 'polygon', 'bsc', 'robinhood'];
   // Answers to a contract probe: [code, erc721, erc1155, entryPoint,
   // threshold, decimals, symbol, name], each a hex string, or undefined
   // when the call failed (a revert).
@@ -63,16 +65,30 @@
     return { kind: 'contract', name };
   }
 
-  // An address across the chains asked: [{ chain, code, info }], code
-  // undefined when that chain didn't answer, info from evmKind. A wallet
-  // only when every chain answered and none has a contract there; else the
-  // most telling contract (a token, an NFT, a smart wallet, then any).
+  // Whether an address has been used on a chain: [nonce, balance] (an
+  // account's answers), true when it has sent a transaction or holds the
+  // chain's coin, undefined when neither call answered.
+  function used(res) {
+    const n = (r) => (typeof r === 'string' && /^0x[0-9a-fA-F]+$/.test(r) ? BigInt(r) > 0n : undefined);
+    const [sent, holds] = [n(res && res[0]), n(res && res[1])];
+    return sent === undefined && holds === undefined ? undefined : !!(sent || holds);
+  }
+
+  // An address across the chains asked: [{ chain, code, info, used }],
+  // code undefined when that chain didn't answer, info from evmKind, used
+  // from used(). A wallet only when every chain answered, none has a
+  // contract there, and it has been used on one (or delegates, EIP-7702):
+  // an unused address with no contract may be a contract on a chain not
+  // asked (a token on a new chain), so it stays unknown. Else the most
+  // telling contract (a token, an NFT, a smart wallet, then any).
   function decide(per) {
     if (!per.length) return null;
     const contracts = per.filter((p) => isContractCode(p.code));
     if (!contracts.length) {
       if (per.some((p) => typeof p.code !== 'string')) return null;
-      return { kind: 'wallet', chains: per.map((p) => p.chain), delegated: per.some((p) => isDelegation(p.code)) };
+      const delegated = per.some((p) => isDelegation(p.code));
+      if (!delegated && !per.some((p) => p.used === true)) return null;
+      return { kind: 'wallet', chains: per.map((p) => p.chain), delegated };
     }
     const rank = { token: 0, nft: 1, wallet: 2, contract: 3 };
     const known = contracts.filter((p) => p.info).sort((x, y) => rank[x.info.kind] - rank[y.info.kind]);
@@ -96,5 +112,5 @@
     return { kind: 'contract', chain: 'solana' };
   }
 
-  Sweeter.chain = { EVM, PROBE, abiString, evmKind, decide, solanaKind, isDelegation, isContractCode };
+  Sweeter.chain = { EVM, PROBE, abiString, evmKind, used, decide, solanaKind, isDelegation, isContractCode };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

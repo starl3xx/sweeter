@@ -1108,9 +1108,10 @@
     // A wallet, a token, an NFT collection, or another contract, asked of
     // the chain itself (lib/chain.js, through PublicNode's public RPC) once
     // an address is on screen or clicked, with Contract addresses on. X's
-    // tag names the chain; an untagged 0x address is checked on six chains
-    // and is a wallet only if no chain has a contract there. Kept for the
-    // session: null when it can't be told (no answer, or no such account).
+    // tag names the chain; an untagged 0x address is checked on seven
+    // chains and is a wallet only if no chain has a contract there and it
+    // has been used on one. Kept for the session: null when it can't be
+    // told (no answer, no such account, or an unused address).
     const kindCache = new Map();
     const kindWant = new Map(); // address -> X's chain ('' when untagged)
     const kindBusy = new Set();
@@ -1143,7 +1144,11 @@
       await Promise.all([...group(() => true)].flatMap(([ch, list]) => tens(list).map((part) => chainAsk(ch, 'code', part).then((by) => part.forEach((a, i) => codes.set(ch + ' ' + a, by.get(i))), () => {}))));
       const infos = new Map();
       await Promise.all([...group((ch, a) => C.isContractCode(codes.get(ch + ' ' + a)))].flatMap(([ch, list]) => tens(list).map((part) => chainAsk(ch, 'evm', part).then((by) => part.forEach((a, i) => infos.set(ch + ' ' + a, C.evmKind(C.PROBE.map((_, j) => by.get(i * 8 + j))))), () => {}))));
-      for (const [a, c] of evm) kindCache.set(a, C.decide(chainsOf(c).map((ch) => ({ chain: ch, code: codes.get(ch + ' ' + a), info: infos.get(ch + ' ' + a) }))));
+      // No contract on any chain: has the address been used (a wallet)?
+      const bare = new Set(evm.filter(([a, c]) => chainsOf(c).every((ch) => typeof codes.get(ch + ' ' + a) === 'string' && !C.isContractCode(codes.get(ch + ' ' + a)))).map(([a]) => a));
+      const uses = new Map();
+      await Promise.all([...group((ch, a) => bare.has(a))].flatMap(([ch, list]) => tens(list).map((part) => chainAsk(ch, 'account', part).then((by) => part.forEach((a, i) => uses.set(ch + ' ' + a, C.used([by.get(i * 2), by.get(i * 2 + 1)]))), () => {}))));
+      for (const [a, c] of evm) kindCache.set(a, C.decide(chainsOf(c).map((ch) => ({ chain: ch, code: codes.get(ch + ' ' + a), info: infos.get(ch + ' ' + a), used: uses.get(ch + ' ' + a) }))));
       // Solana (base58, untagged or tagged solana).
       const sol = entries.filter(([a, c]) => !a.startsWith('0x') && (!c || c === 'solana')).map(([a]) => a);
       await Promise.all(tens(sol).map((part) => chainAsk('solana', 'solana', part).then((by) => part.forEach((a, i) => {

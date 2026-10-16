@@ -69,8 +69,9 @@
   // What an address is (lib/chain.js), asked of the chain itself through
   // PublicNode's public RPC. The only requests: eth_getCode ('code');
   // eth_getCode and seven fixed eth_calls ('evm', in lib/chain.js's order,
-  // ids 8 per address); Solana's getAccountInfo ('solana'). Ten valid
-  // addresses at most. The Mac app's ChainProbe sends the same.
+  // ids 8 per address); eth_getTransactionCount and eth_getBalance
+  // ('account', ids 2 per address); Solana's getAccountInfo ('solana').
+  // Ten valid addresses at most. The Mac app's ChainProbe sends the same.
   const RPC = {
     base: 'https://base-rpc.publicnode.com',
     ethereum: 'https://ethereum-rpc.publicnode.com',
@@ -78,6 +79,7 @@
     optimism: 'https://optimism-rpc.publicnode.com',
     polygon: 'https://polygon-bor-rpc.publicnode.com',
     bsc: 'https://bsc-rpc.publicnode.com',
+    robinhood: 'https://robinhood-rpc.publicnode.com',
     solana: 'https://solana-rpc.publicnode.com',
   };
   // supportsInterface(ERC-721), supportsInterface(ERC-1155), entryPoint(),
@@ -90,10 +92,12 @@
     let batch;
     if (op === 'solana' && chain === 'solana' && list.every((a) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a))) {
       batch = list.map((a, i) => rpc(i, 'getAccountInfo', [a, { encoding: 'jsonParsed' }]));
-    } else if ((op === 'code' || op === 'evm') && chain !== 'solana' && list.every((a) => /^0x[0-9a-fA-F]{40}$/.test(a))) {
+    } else if ((op === 'code' || op === 'evm' || op === 'account') && chain !== 'solana' && list.every((a) => /^0x[0-9a-fA-F]{40}$/.test(a))) {
       batch = op === 'code'
         ? list.map((a, i) => rpc(i, 'eth_getCode', [a, 'latest']))
-        : list.flatMap((a, i) => [rpc(i * 8, 'eth_getCode', [a, 'latest'])].concat(CALLS.map((data, j) => rpc(i * 8 + j + 1, 'eth_call', [{ to: a, data }, 'latest']))));
+        : op === 'account'
+          ? list.flatMap((a, i) => [rpc(i * 2, 'eth_getTransactionCount', [a, 'latest']), rpc(i * 2 + 1, 'eth_getBalance', [a, 'latest'])])
+          : list.flatMap((a, i) => [rpc(i * 8, 'eth_getCode', [a, 'latest'])].concat(CALLS.map((data, j) => rpc(i * 8 + j + 1, 'eth_call', [{ to: a, data }, 'latest']))));
     } else {
       return false;
     }

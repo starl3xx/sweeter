@@ -418,6 +418,8 @@ final class ComposePill: NSButton {
         self.symbol = symbol
         self.target = target
         self.action = action
+        // Its layer carries a chip's shadow.
+        wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
         setContentHuggingPriority(.required, for: .horizontal)
         // Never taller than its capsule: a button hugs its height loosely (below
@@ -464,7 +466,6 @@ final class ComposePill: NSButton {
     /// soft pill lies on it.
     private func lift(dark: Bool, down: Bool) {
         let raised = tone == .chip || tone == .chipOn
-        if raised, layer == nil { wantsLayer = true }
         guard let layer else { return }
         layer.shadowOpacity = raised ? 1 : 0
         guard raised else { return }
@@ -1002,6 +1003,9 @@ final class ComposeCount: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         number.font = Self.numberFont
+        // The view speaks for both (the page's whole count).
+        number.setAccessibilityElement(false)
+        caption.setAccessibilityElement(false)
         let text = NSStackView(views: [number, caption])
         text.orientation = .vertical
         text.alignment = .leading

@@ -122,7 +122,6 @@ final class ComposeMediaTile: NSView {
         layer?.shadowRadius = 8
         layer?.shadowOffset = NSSize(width: 0, height: -3)
         frameLayer.cornerRadius = 14
-        frameLayer.cornerCurve = .continuous
         frameLayer.masksToBounds = true
         frameLayer.borderWidth = 0.5
         picture.contentsGravity = .resizeAspectFill
@@ -153,7 +152,6 @@ final class ComposeMediaTile: NSView {
         badge.backgroundColor = NSColor.black.withAlphaComponent(0.72)
         badge.wantsLayer = true
         badge.layer?.cornerRadius = 4
-        badge.layer?.cornerCurve = .continuous
         badge.layer?.masksToBounds = true
         badge.stringValue = text.map { " \($0) " } ?? ""
         badge.isHidden = text == nil
@@ -198,7 +196,7 @@ final class ComposeMediaTile: NSView {
         CATransaction.setDisableActions(true)
         frameLayer.frame = bounds
         picture.frame = frameLayer.bounds
-        layer?.shadowPath = ComposeShape.path(bounds, radius: 14)
+        layer?.shadowPath = CGPath(roundedRect: bounds, cornerWidth: 14, cornerHeight: 14, transform: nil)
         CATransaction.commit()
     }
 

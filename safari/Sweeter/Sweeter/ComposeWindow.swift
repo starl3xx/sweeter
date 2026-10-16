@@ -1029,6 +1029,8 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate, NSTex
         // Past 280 the slot shows the length alone; the tooltip has it all.
         countLabel.stringValue = s.level.isEmpty ? s.count : ComposeCountRing.number(s.count)
         countLabel.toolTip = s.count
+        // VoiceOver reads the page's whole count (“1,204 · long post”), as before.
+        countLabel.setAccessibilityValue(s.count)
         countRing.show(s.count, level: s.level)
         countLabel.textColor = s.level == "over" ? .systemRed : s.level == "long" ? .systemOrange : SweeterColor.secondary
         underline(s.links)

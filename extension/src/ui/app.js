@@ -11489,7 +11489,9 @@
       app.focus({ preventScroll: true });
     }
 
-    function setOne(key, val) {
+    // from: what changed it, for the log (text size only).
+    function setOne(key, val, from) {
+      if (key === 'fontSize' && val !== settings.fontSize && native && native.log) native.log('text size ' + settings.fontSize + ' to ' + val + ' (' + (from || 'Settings') + ')');
       if (key === 'skin' || key === 'theme' || key === 'accent' || key === 'contrast' || key === 'pureBlack') {
         app.classList.add('switching');
         requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('switching')));
@@ -11656,7 +11658,7 @@
           else if (r.k === 'select' && !r.opts.some((o) => o[0] === v)) return no('Unknown value.');
           else if (r.k === 'swatches' && !ACCENTS.some((x) => x[0] === v)) return no('Unknown value.');
           else if (r.k === 'browser' && (typeof v !== 'string' || !/^[\w.-]{0,200}$/.test(v))) return no('Unknown value.');
-          setOne(a.key, v);
+          setOne(a.key, v, 'Settings window');
           return ok();
         }
         case 'run':
@@ -12432,11 +12434,13 @@
           case 'theme':
             return arg === 'classic' || (Sweeter.PALETTES && Sweeter.PALETTES[arg]) ? setOne('theme', arg) : undefined;
           case 'bigger':
-            return setOne('fontSize', Math.min(21, settings.fontSize + 1));
           case 'smaller':
-            return setOne('fontSize', Math.max(11, settings.fontSize - 1));
-          case 'actual':
-            return setOne('fontSize', 14);
+          case 'actual': {
+            // Said aloud, so a stray ⌘+ or ⌘− is seen.
+            const n = c === 'actual' ? 14 : Math.min(21, Math.max(11, settings.fontSize + (c === 'bigger' ? 1 : -1)));
+            setOne('fontSize', n, 'View menu');
+            return toast('Text size ' + n + ' pt');
+          }
           case 'markRead':
             return markAllRead(focusCol());
           case 'top':

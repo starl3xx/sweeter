@@ -470,6 +470,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         if item.tag == 5 { item.state = ViewController.shared?.pageState["alertsMuted"] as? Bool == true ? .on : .off }
         if item.tag == 6 { item.state = ViewController.shared?.pageState["snap"] as? Bool == true ? .on : .off }
+        // Text size only from the deck's own window: ⌘− or ⌘+ in the compose
+        // window, Settings, or the Live Video window changed the deck behind it.
+        if let command = item.representedObject as? String, ["bigger", "smaller", "actual"].contains(command) {
+            return NSApp.keyWindow != nil && NSApp.keyWindow === ViewController.shared?.view.window
+        }
         return true
     }
 

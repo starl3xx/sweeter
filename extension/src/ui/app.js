@@ -2871,11 +2871,13 @@
 
     // ---------- loading screen ----------
     // Columns stay hidden until every X Pro column has data (or 10 s pass),
-    // then arrive one after another.
+    // then arrive one after another. The count leaves out the columns Sweeter
+    // keeps out of sight (X Pro's Drafts column): “5 columns” and then 4 on
+    // screen read as one gone missing.
     function checkBoot() {
       if (!booting) return;
-      const total = xpro.domColumns().filter((d) => !d.picker).length;
-      const loaded = mapping.filter((m) => m.dom && store.get(m.key) && (store.get(m.key).sorted.length || store.get(m.key).kind === 'placeholder')).length;
+      const total = xpro.domColumns().filter((d) => !d.picker).length - mapping.filter((m) => m.dom && offStage(m.key)).length;
+      const loaded = mapping.filter((m) => m.dom && !offStage(m.key) && store.get(m.key) && (store.get(m.key).sorted.length || store.get(m.key).kind === 'placeholder')).length;
       const s = bootEl.querySelector('.boot-s');
       if (total) {
         s.textContent = loaded + ' of ' + total + (total === 1 ? ' column' : ' columns');

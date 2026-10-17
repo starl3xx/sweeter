@@ -1,6 +1,6 @@
 # Sweeter download stats
 
-Updated 2026-10-16 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
+Updated 2026-10-17 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
 
 ## Issues
 
@@ -42,10 +42,10 @@ Updated 2026-10-16 by `.github/workflows/stats.yml` on main. The CSV files here 
 
 ## Repo traffic, last 14 days
 
-86 views from 20 unique visitors. History: `views.csv`, `clones.csv`, `referrers.csv`.
+60 views from 18 unique visitors. History: `views.csv`, `clones.csv`, `referrers.csv`.
 
 | Referrer | Views | Unique |
 |---|---:|---:|
-| github.com | 10 | 2 |
-| starl3xx.fun | 8 | 1 |
+| github.com | 1 | 1 |
+| starl3xx.fun | 9 | 2 |
 | t.co | 8 | 7 |

@@ -5650,7 +5650,9 @@
         // moment to refresh before calling a column stale.
         const stale = (age > limit || !!err) && now - wokeAt > 40000;
         if (c.stl.hidden !== !stale) c.stl.hidden = !stale;
-        c.el.classList.toggle('stale', stale);
+        // Not "stale": that is the edited-post link (styles.js), whose
+        // margin and smaller text a stale column took on too.
+        c.el.classList.toggle('stalecol', stale);
         if (stale) {
           const t = err
             ? 'X refused X Pro’s last refresh of this column (HTTP ' + err + (err === 429 ? ', too many requests: X Pro is backing off' : '') + '). Last good refresh ' + ago(age) + ' ago; X Pro tries again by itself.'

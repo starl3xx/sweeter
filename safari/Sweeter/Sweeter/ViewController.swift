@@ -1706,6 +1706,7 @@ final class LiveVideoWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, W
         }
         // In a world of its own: x.com's scripts can't see or call it.
         config.userContentController.addUserScript(WKUserScript(source: Self.pipScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
+        config.userContentController.addUserScript(WKUserScript(source: Self.railScript, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient))
         let size = NSSize(width: 960, height: 600)
         let web = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         web.customUserAgent = ViewController.safariUserAgent()
@@ -1770,6 +1771,17 @@ final class LiveVideoWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, W
         }
         return nil
     }
+
+    /// x.com's navigation rail (Home, Search, Notifications…) would only
+    /// wander off the video, so it is hidden and the player takes its width
+    /// (834 → 922 pt at a 1280 pt window; the chat keeps its own).
+    static let railScript = """
+    (() => {
+      const style = document.createElement('style');
+      style.textContent = 'header[role="banner"]{display:none!important}';
+      (document.head || document.documentElement).appendChild(style);
+    })();
+    """
 
     /// p (outside a text field) or the title bar button: the video into
     /// Picture in Picture, or back.

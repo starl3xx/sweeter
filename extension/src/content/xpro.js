@@ -1390,8 +1390,18 @@
   // div[role=link] holding a User-Name) makes X Pro load TweetDetail and show
   // the conversation as a “stack” in the same column, closed by the button
   // with test ID “action-icon_Close stack”.
+  //
+  // `o.still()` says whether Sweeter still shows the conversation. Finding
+  // the post can take seconds (X Pro’s column may need scrolling), and a
+  // stack pressed after Sweeter closed its view would stay open: X Pro then
+  // stops refreshing the column under it.
 
   async function openDetail(o) {
+    const gone = (r) => {
+      if (!o.still || o.still()) return false;
+      r.restore();
+      return true;
+    };
     if (o.parentId) {
       const r = await reveal(o.parentId, o.mapping, o.hint);
       if (!r) return { ok: false, reason: 'notfound' };
@@ -1403,6 +1413,7 @@
       const byHandle = (d) => o.handle && (d.querySelector('[data-testid="User-Name"]').textContent || '').toLowerCase().includes('@' + o.handle.toLowerCase());
       const card = cards.find((d) => o.id && d.querySelector('a[href*="/status/' + o.id + '"]')) || cards.find(byHandle) || (cards.length === 1 ? cards[0] : null);
       if (!card) return { ok: false, reason: 'nobutton' };
+      if (gone(r)) return { ok: false, reason: 'closed' };
       card.click();
       return { ok: true };
     }
@@ -1411,6 +1422,7 @@
     const time = r.art.querySelector('a[href*="/status/' + o.id + '"] time');
     const link = time && time.closest('a');
     if (!link) return { ok: false, reason: 'nobutton' };
+    if (gone(r)) return { ok: false, reason: 'closed' };
     link.click();
     return { ok: true };
   }
@@ -1514,6 +1526,18 @@
     return null;
   }
 
+  // Which stack button a column shows: “back” while deeper than one level,
+  // “close” at one, nothing with no stack.
+  function stackState(w) {
+    if (!w) return '';
+    if (w.querySelector('[data-testid="action-icon_Go back in stack"]')) return 'back';
+    return w.querySelector('[data-testid="action-icon_Close stack"]') ? 'close' : '';
+  }
+
+  // `o.still()` says whether Sweeter’s sheet still wants this profile (see
+  // openDetail). The answer says whether X Pro `pushed` a stack level, and
+  // in which column (`col`): the caller closes it, even when X Pro is too
+  // slow to draw the person in time.
   async function openProfile(o) {
     const h = String(o.handle).toLowerCase();
     if (profileName(h)) return { ok: true, already: true };
@@ -1522,11 +1546,12 @@
       return links.find((a) => a.closest('[data-testid="Tweet-User-Avatar"]')) || links[0] || null;
     };
     let link = null;
+    let shown = null;
     if (o.postId) {
-      const r = await reveal(o.postId, o.mapping, o.hint);
-      if (r) {
-        link = pick(r.art);
-        if (!link) r.restore();
+      shown = await reveal(o.postId, o.mapping, o.hint);
+      if (shown) {
+        link = pick(shown.art);
+        if (!link) shown.restore();
       }
     }
     // A notification or a quote: any link to them in the column.
@@ -1535,9 +1560,16 @@
     if (!link && scope) link = pick(scope);
     if (!link) link = pick(document);
     if (!link) return { ok: false, reason: 'notfound' };
+    if (o.still && !o.still()) {
+      if (shown) shown.restore();
+      return { ok: false, reason: 'closed' };
+    }
+    const w = wrapOf(link);
+    const col = w ? w.getAttribute('data-rfd-draggable-id') : null;
+    const before = stackState(w);
     link.click();
-    const name = await waitFor(() => profileName(h), 6000);
-    return name ? { ok: true } : { ok: false, reason: 'noprofile' };
+    if (await waitFor(() => profileName(h), 6000)) return { ok: true, pushed: true, col };
+    return { ok: false, reason: 'noprofile', pushed: !!col && stackState(columnWrap(col)) !== before, col };
   }
 
   // `levels`: the profiles Sweeter pushed; with a conversation below them,

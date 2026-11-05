@@ -3487,10 +3487,11 @@
       // stack there: close a conversation another of them has open.
       const mine = mapOf(c);
       for (const o of cols.values()) if (o !== c && o.detail && mapOf(o) && mine && mapOf(o).id === mine.id) dropDetail(o);
-      c.detail = { id: post.id, post, parentId: parentId || null, failed: false, scrolled: false, lastMore: 0 };
+      const d = (c.detail = { id: post.id, post, parentId: parentId || null, failed: false, scrolled: false, lastMore: 0 });
       ensurePane(c);
       renderDetail(c, true);
-      const ask = () => xpro.openDetail({ id: post.id, handle: post.author.handle, parentId: parentId || null, mapping: mapOf(c), hint: hintFor(parentId || post.id, c.key) });
+      // Closed before X Pro found the post: X Pro opens nothing (still).
+      const ask = () => xpro.openDetail({ id: post.id, handle: post.author.handle, parentId: parentId || null, mapping: mapOf(c), hint: hintFor(parentId || post.id, c.key), still: () => c.detail === d });
       let r = await ask();
       // X Pro may still be redrawing a column it just closed: try once more.
       if (!r.ok && c.detail && c.detail.id === post.id) {
@@ -3904,7 +3905,7 @@
       ['videos', 'Videos', ['UserVideoTimeline']],
     ];
     let prof = null; // { handle, id, key, postId, tab, status, xpro, confirm, token }
-    let profStack = null; // { handle, key, levels } while X Pro has profile stacks open for Sweeter
+    let profStack = null; // { handle, key, col, levels } while X Pro has profile stacks open for Sweeter
     let profToken = 0;
 
     // The best copy of the person Sweeter has: X Pro’s profile, or the
@@ -3933,12 +3934,23 @@
       profScroll.scrollTop = 0;
       renderProfile();
       profScroll.focus({ preventScroll: true });
-      xpro.openProfile({ handle, postId: prof.postId, mapping: mappingFor(prof.key), hint: prof.postId && prof.key ? hintFor(prof.postId, prof.key) : null }).then((r) => {
-        if (r.ok && !r.already) {
+      const still = () => !!prof && prof.token === token;
+      xpro.openProfile({ handle, postId: prof.postId, mapping: mappingFor(prof.key), hint: prof.postId && prof.key ? hintFor(prof.postId, prof.key) : null, still }).then((r) => {
+        if (r.pushed) {
           if (profStack) profStack.levels++;
-          else profStack = { handle, key: prof ? prof.key : f.key || null, levels: 1 };
+          else profStack = { handle, key: prof ? prof.key : f.key || null, col: r.col || null, levels: 1 };
         }
-        if (!prof || prof.token !== token) return;
+        // The sheet closed while X Pro was still opening the person: close
+        // X Pro’s stack now, or the column under it stops refreshing.
+        if (!prof) {
+          if (profStack) {
+            holds.add('profile');
+            closeProfileStack();
+            settleAfterProfile();
+          }
+          return;
+        }
+        if (prof.token !== token) return;
         prof.xpro = r.ok;
         prof.status = r.ok ? 'ready' : 'failed';
         renderProfile();
@@ -3988,18 +4000,31 @@
       profBack.hidden = true;
       const pr = store.profile(p.handle);
       store.unwatch(p.handle, p.id || (pr && pr.id));
-      if (profStack) {
-        const under = Array.from(cols.values()).find((x) => x.key === profStack.key && x.detail) || null;
-        xpro.closeProfile(profStack.handle, mappingFor(profStack.key), !!(under && under.detail), profStack.levels);
-        profStack = null;
-      }
+      closeProfileStack();
+      settleAfterProfile();
+      app.focus({ preventScroll: true });
+      resumeWelcome();
+    }
+
+    // The profile stacks Sweeter opened in X Pro close with the sheet. One
+    // left open covers the column’s own timeline in X Pro, which then stops
+    // refreshing it, and Sweeter’s column goes stale. They close in the X Pro
+    // column they opened in; a conversation Sweeter shows there stays.
+    function closeProfileStack() {
+      if (!profStack) return;
+      const ps = profStack;
+      profStack = null;
+      const below = Array.from(cols.values()).some((x) => x.detail && (ps.col ? (mapOf(x) || {}).id === ps.col : x.key === ps.key));
+      xpro.closeProfile(ps.handle, ps.col ? { id: ps.col } : mappingFor(ps.key), below, ps.levels);
+    }
+
+    // The columns map again once X Pro has closed the stacks.
+    function settleAfterProfile() {
       setTimeout(() => {
         if (prof) return;
         holds.delete('profile');
         if (remap(true)) for (const cc of cols.values()) renderColumn(cc, false);
       }, 900);
-      app.focus({ preventScroll: true });
-      resumeWelcome();
     }
 
     // ---------- the article reader ----------

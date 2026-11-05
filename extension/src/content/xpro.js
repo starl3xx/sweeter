@@ -1394,14 +1394,11 @@
   // `o.still()` says whether Sweeter still shows the conversation. Finding
   // the post can take seconds (X Pro’s column may need scrolling), and a
   // stack pressed after Sweeter closed its view would stay open: X Pro then
-  // stops refreshing the column under it.
+  // stops refreshing the column under it. The column’s scroll stays where
+  // the search left it, as after a press: a newer open may be using it.
 
   async function openDetail(o) {
-    const gone = (r) => {
-      if (!o.still || o.still()) return false;
-      r.restore();
-      return true;
-    };
+    const gone = () => !!o.still && !o.still();
     if (o.parentId) {
       const r = await reveal(o.parentId, o.mapping, o.hint);
       if (!r) return { ok: false, reason: 'notfound' };
@@ -1413,7 +1410,7 @@
       const byHandle = (d) => o.handle && (d.querySelector('[data-testid="User-Name"]').textContent || '').toLowerCase().includes('@' + o.handle.toLowerCase());
       const card = cards.find((d) => o.id && d.querySelector('a[href*="/status/' + o.id + '"]')) || cards.find(byHandle) || (cards.length === 1 ? cards[0] : null);
       if (!card) return { ok: false, reason: 'nobutton' };
-      if (gone(r)) return { ok: false, reason: 'closed' };
+      if (gone()) return { ok: false, reason: 'closed' };
       card.click();
       return { ok: true };
     }
@@ -1422,7 +1419,7 @@
     const time = r.art.querySelector('a[href*="/status/' + o.id + '"] time');
     const link = time && time.closest('a');
     if (!link) return { ok: false, reason: 'nobutton' };
-    if (gone(r)) return { ok: false, reason: 'closed' };
+    if (gone()) return { ok: false, reason: 'closed' };
     link.click();
     return { ok: true };
   }
@@ -1560,10 +1557,8 @@
     if (!link && scope) link = pick(scope);
     if (!link) link = pick(document);
     if (!link) return { ok: false, reason: 'notfound' };
-    if (o.still && !o.still()) {
-      if (shown) shown.restore();
-      return { ok: false, reason: 'closed' };
-    }
+    // Its column’s scroll stays as the search left it (see openDetail).
+    if (o.still && !o.still()) return { ok: false, reason: 'closed' };
     const w = wrapOf(link);
     const col = w ? w.getAttribute('data-rfd-draggable-id') : null;
     const before = stackState(w);

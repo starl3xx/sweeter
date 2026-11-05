@@ -3494,11 +3494,12 @@
       const ask = () => xpro.openDetail({ id: post.id, handle: post.author.handle, parentId: parentId || null, mapping: mapOf(c), hint: hintFor(parentId || post.id, c.key), still: () => c.detail === d });
       let r = await ask();
       // X Pro may still be redrawing a column it just closed: try once more.
-      if (!r.ok && c.detail && c.detail.id === post.id) {
+      // Only for this view: one closed or opened again since has its own.
+      if (!r.ok && c.detail === d) {
         await new Promise((res) => setTimeout(res, 700));
         r = await ask();
       }
-      if (c.detail && c.detail.id === post.id && !r.ok) {
+      if (c.detail === d && !r.ok) {
         c.detail.failed = r.reason || 'unknown';
         if (native) native.log('conversation failed: ' + c.detail.failed + (parentId ? ' (quote)' : ''));
         renderDetail(c, false);
@@ -3907,6 +3908,7 @@
     let prof = null; // { handle, id, key, postId, tab, status, xpro, confirm, token }
     let profStack = null; // { handle, key, col, levels } while X Pro has profile stacks open for Sweeter
     let profToken = 0;
+    let settleTimer = 0; // settleAfterProfile
 
     // The best copy of the person Sweeter has: X Pro’s profile, or the
     // author record of any loaded post.
@@ -4018,9 +4020,12 @@
       xpro.closeProfile(ps.handle, ps.col ? { id: ps.col } : mappingFor(ps.key), below, ps.levels);
     }
 
-    // The columns map again once X Pro has closed the stacks.
+    // The columns map again once X Pro has closed the stacks: 900 ms after
+    // the LAST close (a late one restarts the wait), so the mapping never
+    // reads a column that still shows a stack.
     function settleAfterProfile() {
-      setTimeout(() => {
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
         if (prof) return;
         holds.delete('profile');
         if (remap(true)) for (const cc of cols.values()) renderColumn(cc, false);

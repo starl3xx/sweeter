@@ -1,6 +1,6 @@
 # Sweeter download stats
 
-Updated 2026-11-14 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
+Updated 2026-11-15 by `.github/workflows/stats.yml` on main. The CSV files here are the full daily history.
 
 ## Issues
 
@@ -47,4 +47,4 @@ Updated 2026-11-14 by `.github/workflows/stats.yml` on main. The CSV files here 
 
 | Referrer | Views | Unique |
 |---|---:|---:|
-| starl3xx.fun | 2 | 2 |
+| starl3xx.fun | 1 | 1 |
